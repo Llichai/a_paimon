@@ -1,0 +1,865 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.paimon.schema;
+
+import org.apache.paimon.CoreOptions;
+import org.apache.paimon.CoreOptions.ChangelogProducer;
+import org.apache.paimon.CoreOptions.MergeEngine;
+import org.apache.paimon.TableType;
+import org.apache.paimon.factories.FactoryUtil;
+import org.apache.paimon.format.FileFormat;
+import org.apache.paimon.mergetree.compact.aggregate.FieldAggregator;
+import org.apache.paimon.mergetree.compact.aggregate.factory.FieldAggregatorFactory;
+import org.apache.paimon.options.ConfigOption;
+import org.apache.paimon.options.Options;
+import org.apache.paimon.table.BucketMode;
+import org.apache.paimon.types.ArrayType;
+import org.apache.paimon.types.BigIntType;
+import org.apache.paimon.types.BlobType;
+import org.apache.paimon.types.DataField;
+import org.apache.paimon.types.DataType;
+import org.apache.paimon.types.IntType;
+import org.apache.paimon.types.LocalZonedTimestampType;
+import org.apache.paimon.types.MapType;
+import org.apache.paimon.types.MultisetType;
+import org.apache.paimon.types.RowType;
+import org.apache.paimon.types.TimestampType;
+import org.apache.paimon.utils.Pair;
+import org.apache.paimon.utils.Preconditions;
+import org.apache.paimon.utils.StringUtils;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static org.apache.paimon.CoreOptions.BUCKET_KEY;
+import static org.apache.paimon.CoreOptions.CHANGELOG_NUM_RETAINED_MAX;
+import static org.apache.paimon.CoreOptions.CHANGELOG_NUM_RETAINED_MIN;
+import static org.apache.paimon.CoreOptions.CHANGELOG_PRODUCER;
+import static org.apache.paimon.CoreOptions.DEFAULT_AGG_FUNCTION;
+import static org.apache.paimon.CoreOptions.FIELDS_PREFIX;
+import static org.apache.paimon.CoreOptions.FIELDS_SEPARATOR;
+import static org.apache.paimon.CoreOptions.INCREMENTAL_BETWEEN;
+import static org.apache.paimon.CoreOptions.INCREMENTAL_BETWEEN_TIMESTAMP;
+import static org.apache.paimon.CoreOptions.INCREMENTAL_TO_AUTO_TAG;
+import static org.apache.paimon.CoreOptions.PRIMARY_KEY;
+import static org.apache.paimon.CoreOptions.SCAN_FILE_CREATION_TIME_MILLIS;
+import static org.apache.paimon.CoreOptions.SCAN_MODE;
+import static org.apache.paimon.CoreOptions.SCAN_SNAPSHOT_ID;
+import static org.apache.paimon.CoreOptions.SCAN_TAG_NAME;
+import static org.apache.paimon.CoreOptions.SCAN_TIMESTAMP;
+import static org.apache.paimon.CoreOptions.SCAN_TIMESTAMP_MILLIS;
+import static org.apache.paimon.CoreOptions.SCAN_WATERMARK;
+import static org.apache.paimon.CoreOptions.SNAPSHOT_NUM_RETAINED_MAX;
+import static org.apache.paimon.CoreOptions.SNAPSHOT_NUM_RETAINED_MIN;
+import static org.apache.paimon.CoreOptions.STREAMING_READ_OVERWRITE;
+import static org.apache.paimon.table.PrimaryKeyTableUtils.createMergeFunctionFactory;
+import static org.apache.paimon.table.SpecialFields.KEY_FIELD_PREFIX;
+import static org.apache.paimon.table.SpecialFields.SYSTEM_FIELD_NAMES;
+import static org.apache.paimon.types.DataTypeRoot.ARRAY;
+import static org.apache.paimon.types.DataTypeRoot.MAP;
+import static org.apache.paimon.types.DataTypeRoot.MULTISET;
+import static org.apache.paimon.types.DataTypeRoot.ROW;
+import static org.apache.paimon.utils.Preconditions.checkArgument;
+import static org.apache.paimon.utils.Preconditions.checkState;
+
+/**
+ * Schema 验证工具
+ *
+ * <p>SchemaValidation 提供了对 {@link TableSchema} 的全面验证功能，确保 Schema 定义的合法性和一致性。
+ * 在创建表或修改 Schema 时，Paimon 会通过此类验证 Schema 是否符合各种约束条件。
+ *
+ * <p>核心验证功能：
+ * <ul>
+ *   <li>主键验证：{@link #validateOnlyContainPrimitiveType} - 主键只能是基本类型
+ *   <li>分区键验证：主键和分区键只能是基本类型（不能是 ROW、ARRAY、MAP、MULTISET）
+ *   <li>分桶验证：{@link #validateBucket} - 验证分桶配置的合法性
+ *   <li>合并函数验证：{@link #validateMergeFunction} - 验证聚合函数的合法性
+ *   <li>Sequence 字段验证：{@link #validateSequenceField} - 验证序列号字段
+ *   <li>启动模式验证：{@link #validateStartupMode} - 验证读取模式的配置
+ *   <li>Changelog 生成器验证：验证 changelog-producer 的配置
+ *   <li>字段前缀验证：{@link #validateFieldsPrefix} - 验证字段级别配置
+ * </ul>
+ *
+ * <p>主键类型限制：
+ * <pre>
+ * 支持的主键类型：
+ *   ✓ 基本类型：INT, BIGINT, STRING, DECIMAL, DATE, TIMESTAMP, 等
+ *   ✗ 复杂类型：ROW, ARRAY, MAP, MULTISET（不支持）
+ *
+ * 原因：
+ *   - 主键需要支持高效的哈希和比较操作
+ *   - 复杂类型的哈希计算成本高，且可能不稳定
+ *   - 分桶基于主键哈希，复杂类型会影响性能
+ * </pre>
+ *
+ * <p>分区键类型限制：
+ * <ul>
+ *   <li>与主键相同，只能是基本类型
+ *   <li>分区键用于目录组织，必须是简单的可比较类型
+ *   <li>不支持嵌套类型（ROW、ARRAY、MAP、MULTISET）
+ * </ul>
+ *
+ * <p>分桶（Bucket）验证：
+ * <pre>
+ * 1. 固定分桶（bucket > 0）：
+ *    - 对于 Append 表：必须指定 bucket-key
+ *    - 对于主键表：bucket-key 可选（默认使用主键）
+ *    - bucket-key 不能包含嵌套类型
+ *
+ * 2. 动态分桶（bucket = -1）：
+ *    - 不能指定 bucket-key
+ *    - 不支持 full-compaction.delta-commits（Append 表）
+ *
+ * 3. 延迟分桶（bucket = BucketMode.POSTPONE_BUCKET）：
+ *    - 只支持主键表
+ *    - 写入时暂不分桶，后续通过 Compaction 或 Procedure 分桶
+ * </pre>
+ *
+ * <p>Changelog 生成器验证：
+ * <ul>
+ *   <li>只有主键表支持 changelog-producer（非 NONE 模式）
+ *   <li>Append 表只能使用 NONE 模式
+ *   <li>FULL_COMPACTION 和 LOOKUP 模式不能与 streaming-read-overwrite = true 一起使用
+ *   <li>FIRST_ROW 合并引擎只支持 NONE 和 LOOKUP 模式
+ * </ul>
+ *
+ * <p>Sequence 字段验证：
+ * <ul>
+ *   <li>Sequence 字段必须存在于表 Schema 中
+ *   <li>不能在 Sequence 字段上定义聚合函数
+ *   <li>Sequence 字段不能重复定义
+ *   <li>不支持在跨分区更新的表上使用 Sequence 字段
+ *   <li>FIRST_ROW 合并引擎不支持 Sequence 字段
+ * </ul>
+ *
+ * <p>启动模式（Startup Mode）验证：
+ * <pre>
+ * 各种启动模式的配置要求：
+ *
+ * 1. FROM_TIMESTAMP：
+ *    - 必须指定：scan.timestamp-millis 或 scan.timestamp
+ *    - 不能指定：scan.snapshot-id, scan.tag-name, incremental.between 等
+ *
+ * 2. FROM_SNAPSHOT：
+ *    - 必须指定：scan.snapshot-id, scan.tag-name 或 scan.watermark 之一
+ *    - 不能指定：scan.timestamp-millis, incremental.between 等
+ *
+ * 3. INCREMENTAL：
+ *    - 必须指定：incremental.between, incremental.between-timestamp 或 incremental-to-auto-tag 之一
+ *    - 不能指定：scan.snapshot-id, scan.timestamp-millis 等
+ *
+ * 4. FROM_SNAPSHOT_FULL：
+ *    - 必须指定：scan.snapshot-id
+ *    - 不能指定其他扫描选项
+ *
+ * 5. FROM_FILE_CREATION_TIME：
+ *    - 必须指定：scan.file-creation-time-millis
+ *    - 不能指定其他扫描选项
+ * </pre>
+ *
+ * <p>字段命名限制：
+ * <ul>
+ *   <li>字段名不能与系统字段冲突（{@code SYSTEM_FIELD_NAMES}）
+ *   <li>字段名不能以 "_key_" 开头（{@code KEY_FIELD_PREFIX}）
+ *   <li>系统字段包括：_VALUE_KIND, _SEQUENCE_NUMBER, _ROWKIND 等
+ * </ul>
+ *
+ * <p>Deletion Vectors 验证：
+ * <ul>
+ *   <li>只支持 NONE、INPUT、LOOKUP 模式的 changelog-producer
+ *   <li>不支持 FIRST_ROW 合并引擎（因为不需要删除旧数据）
+ * </ul>
+ *
+ * <p>Row Tracking 验证：
+ * <ul>
+ *   <li>只支持 bucket = -1（动态分桶）
+ *   <li>不能定义主键（只支持 Append 表）
+ *   <li>Data Evolution 必须启用 row-tracking
+ *   <li>Data Evolution 不能与 deletion-vectors 一起使用
+ * </ul>
+ *
+ * <p>Incremental Clustering 验证：
+ * <ul>
+ *   <li>不能定义主键（只支持 Append 表）
+ *   <li>如果 bucket != -1，不能启用 bucket-append-ordered
+ *   <li>如果 bucket != -1，不能启用 deletion-vectors
+ * </ul>
+ *
+ * <p>Chain Table 验证（链表）：
+ * <ul>
+ *   <li>必须是 TABLE 类型（不能是视图）
+ *   <li>必须定义主键
+ *   <li>必须定义分区键
+ *   <li>bucket 必须 > 0（固定分桶）
+ *   <li>必须定义 sequence.field
+ *   <li>changelog-producer 只能是 NONE 或 INPUT
+ *   <li>必须定义 partition.timestamp-pattern 和 partition.timestamp-formatter
+ * </ul>
+ *
+ * <p>Snapshot 保留验证：
+ * <ul>
+ *   <li>snapshot.num-retained.min >= 1
+ *   <li>snapshot.num-retained.min <= snapshot.num-retained.max
+ *   <li>changelog.num-retained.min >= 1
+ *   <li>changelog.num-retained.min <= changelog.num-retained.max
+ * </ul>
+ *
+ * <p>文件格式验证：
+ * <ul>
+ *   <li>验证文件格式（ORC、Parquet、Avro）是否支持表的数据类型
+ *   <li>BLOB 类型需要特殊处理
+ * </ul>
+ *
+ * <p>使用场景：
+ * <pre>{@code
+ * // 1. 创建表时验证
+ * Schema schema = Schema.newBuilder()
+ *     .column("id", DataTypes.INT())
+ *     .column("data", DataTypes.ARRAY(DataTypes.INT()))  // ✗ 不能作为主键
+ *     .primaryKey("data")  // 验证失败！
+ *     .build();
+ * TableSchema tableSchema = TableSchema.create(0, schema);
+ * SchemaValidation.validateTableSchema(tableSchema);  // 抛出异常
+ *
+ * // 2. Schema 演化时验证
+ * SchemaManager schemaManager = ...;
+ * SchemaChange change = SchemaChange.addColumn("new_col", DataTypes.INT());
+ * TableSchema newSchema = SchemaManager.generateTableSchema(
+ *     oldSchema, Collections.singletonList(change), ...
+ * );
+ * SchemaValidation.validateTableSchema(newSchema);  // 验证新 Schema
+ *
+ * // 3. 修改表选项时验证
+ * SchemaManager.checkAlterTableOption(
+ *     options,
+ *     "bucket",
+ *     "4",
+ *     "-1"  // 验证失败：不能将 bucket 修改为 -1
+ * );
+ * }</pre>
+ *
+ * @see TableSchema 表结构
+ * @see SchemaManager Schema 管理器
+ * @see org.apache.paimon.CoreOptions 表选项定义
+ */
+public class SchemaValidation {
+
+    public static final List<Class<? extends DataType>> PRIMARY_KEY_UNSUPPORTED_LOGICAL_TYPES =
+            Arrays.asList(MapType.class, ArrayType.class, RowType.class, MultisetType.class);
+
+    /**
+     * Validate the {@link TableSchema} and {@link CoreOptions}.
+     *
+     * @param schema the schema to be validated
+     */
+    public static void validateTableSchema(TableSchema schema) {
+        CoreOptions options = new CoreOptions(schema.options());
+
+        validateOnlyContainPrimitiveType(schema.fields(), schema.primaryKeys(), "primary key");
+        validateOnlyContainPrimitiveType(schema.fields(), schema.partitionKeys(), "partition");
+        validateOnlyContainPrimitiveType(schema.fields(), options.upsertKey(), "upsert key");
+
+        if (!options.upsertKey().isEmpty() && !schema.primaryKeys().isEmpty()) {
+            throw new RuntimeException(
+                    String.format(
+                            "Cannot define 'upsert-key' %s with 'primary-key' %s.",
+                            options.upsertKey(), schema.primaryKeys()));
+        }
+
+        validateBucket(schema, options);
+
+        validateStartupMode(options);
+
+        validateFieldsPrefix(schema, options);
+
+        validateSequenceField(schema, options);
+
+        validateMergeFunction(schema);
+
+        ChangelogProducer changelogProducer = options.changelogProducer();
+        if (schema.primaryKeys().isEmpty() && changelogProducer != ChangelogProducer.NONE) {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Can not set %s on table without primary keys, please define primary keys.",
+                            CHANGELOG_PRODUCER.key()));
+        }
+        if (options.streamingReadOverwrite()
+                && (changelogProducer == ChangelogProducer.FULL_COMPACTION
+                        || changelogProducer == ChangelogProducer.LOOKUP)) {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Cannot set %s to true when changelog producer is %s or %s because it will read duplicated changes.",
+                            STREAMING_READ_OVERWRITE.key(),
+                            ChangelogProducer.FULL_COMPACTION,
+                            ChangelogProducer.LOOKUP));
+        }
+
+        checkArgument(
+                options.snapshotNumRetainMin() > 0,
+                SNAPSHOT_NUM_RETAINED_MIN.key() + " should be at least 1");
+        checkArgument(
+                options.snapshotNumRetainMin() <= options.snapshotNumRetainMax(),
+                SNAPSHOT_NUM_RETAINED_MIN.key()
+                        + " should not be larger than "
+                        + SNAPSHOT_NUM_RETAINED_MAX.key());
+
+        checkArgument(
+                options.changelogNumRetainMin() > 0,
+                CHANGELOG_NUM_RETAINED_MIN.key() + " should be at least 1");
+        checkArgument(
+                options.changelogNumRetainMin() <= options.changelogNumRetainMax(),
+                CHANGELOG_NUM_RETAINED_MIN.key()
+                        + " should not be larger than "
+                        + CHANGELOG_NUM_RETAINED_MAX.key());
+
+        FileFormat fileFormat =
+                FileFormat.fromIdentifier(options.formatType(), new Options(schema.options()));
+        fileFormat.validateDataFields(BlobType.splitBlob(new RowType(schema.fields())).getLeft());
+
+        // Check column names in schema
+        schema.fieldNames()
+                .forEach(
+                        f -> {
+                            checkState(
+                                    !SYSTEM_FIELD_NAMES.contains(f),
+                                    String.format(
+                                            "Field name[%s] in schema cannot be exist in %s",
+                                            f, SYSTEM_FIELD_NAMES));
+                            checkState(
+                                    !f.startsWith(KEY_FIELD_PREFIX),
+                                    String.format(
+                                            "Field name[%s] in schema cannot start with [%s]",
+                                            f, KEY_FIELD_PREFIX));
+                        });
+
+        if (schema.primaryKeys().isEmpty() && options.streamingReadOverwrite()) {
+            throw new RuntimeException(
+                    String.format(
+                            "Doesn't support streaming read the changes from overwrite when the primary keys are "
+                                    + "not defined. Please use %s to enable the streaming read overwrite commit for append table.",
+                            CoreOptions.STREAMING_READ_APPEND_OVERWRITE.key()));
+        }
+
+        if (schema.options().containsKey(CoreOptions.PARTITION_EXPIRATION_TIME.key())) {
+            if (schema.partitionKeys().isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Can not set 'partition.expiration-time' for non-partitioned table.");
+            }
+        }
+
+        String recordLevelTimeField = options.recordLevelTimeField();
+        if (recordLevelTimeField != null) {
+            Optional<DataField> field =
+                    schema.fields().stream()
+                            .filter(dataField -> dataField.name().equals(recordLevelTimeField))
+                            .findFirst();
+            if (!field.isPresent()) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Can not find time field %s for record level expire.",
+                                recordLevelTimeField));
+            }
+            DataType dataType = field.get().type();
+            if (!(dataType instanceof IntType
+                    || dataType instanceof BigIntType
+                    || dataType instanceof TimestampType
+                    || dataType instanceof LocalZonedTimestampType)) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "The record level time field type should be one of INT, BIGINT, or TIMESTAMP, but field type is %s.",
+                                dataType));
+            }
+        }
+
+        if (options.mergeEngine() == MergeEngine.FIRST_ROW) {
+            if (options.changelogProducer() != ChangelogProducer.LOOKUP
+                    && options.changelogProducer() != ChangelogProducer.NONE) {
+                throw new IllegalArgumentException(
+                        "Only support 'none' and 'lookup' changelog-producer on FIRST_ROW merge engine");
+            }
+        }
+
+        options.rowkindField()
+                .ifPresent(
+                        field ->
+                                checkArgument(
+                                        schema.fieldNames().contains(field),
+                                        "Rowkind field: '%s' can not be found in table schema.",
+                                        field));
+
+        if (options.deletionVectorsEnabled()) {
+            validateForDeletionVectors(options);
+        }
+
+        validateMergeFunctionFactory(schema);
+
+        validateRowTracking(schema, options);
+
+        validateIncrementalClustering(schema, options);
+
+        validateChainTable(schema, options);
+
+        validateChangelogReadSequenceNumber(schema, options);
+    }
+
+    public static void validateFallbackBranch(SchemaManager schemaManager, TableSchema schema) {
+        String fallbackBranch = schema.options().get(CoreOptions.SCAN_FALLBACK_BRANCH.key());
+        if (!StringUtils.isNullOrWhitespaceOnly(fallbackBranch)) {
+            checkArgument(
+                    schemaManager.copyWithBranch(fallbackBranch).latest().isPresent(),
+                    "Cannot set '%s' = '%s' because the branch '%s' isn't existed.",
+                    CoreOptions.SCAN_FALLBACK_BRANCH.key(),
+                    fallbackBranch,
+                    fallbackBranch);
+        }
+    }
+
+    private static void validateOnlyContainPrimitiveType(
+            List<DataField> fields, List<String> fieldNames, String errorMessageIntro) {
+        if (!fieldNames.isEmpty()) {
+            Map<String, DataField> rowFields = new HashMap<>();
+            for (DataField rowField : fields) {
+                rowFields.put(rowField.name(), rowField);
+            }
+            for (String fieldName : fieldNames) {
+                DataField rowField = rowFields.get(fieldName);
+                if (rowField == null) {
+                    throw new IllegalArgumentException("Cannot find field: " + fieldName);
+                }
+                DataType dataType = rowField.type();
+                if (PRIMARY_KEY_UNSUPPORTED_LOGICAL_TYPES.stream()
+                        .anyMatch(c -> c.isInstance(dataType))) {
+                    throw new UnsupportedOperationException(
+                            String.format(
+                                    "The type %s in %s field %s is unsupported",
+                                    dataType.getClass().getSimpleName(),
+                                    errorMessageIntro,
+                                    fieldName));
+                }
+            }
+        }
+    }
+
+    private static void validateStartupMode(CoreOptions options) {
+        if (options.startupMode() == CoreOptions.StartupMode.FROM_TIMESTAMP) {
+            checkExactOneOptionExistInMode(
+                    options, options.startupMode(), SCAN_TIMESTAMP_MILLIS, SCAN_TIMESTAMP);
+            checkOptionsConflict(
+                    options,
+                    Arrays.asList(
+                            SCAN_SNAPSHOT_ID,
+                            SCAN_FILE_CREATION_TIME_MILLIS,
+                            SCAN_TAG_NAME,
+                            INCREMENTAL_BETWEEN_TIMESTAMP,
+                            INCREMENTAL_BETWEEN,
+                            INCREMENTAL_TO_AUTO_TAG),
+                    Arrays.asList(SCAN_TIMESTAMP_MILLIS, SCAN_TIMESTAMP));
+        } else if (options.startupMode() == CoreOptions.StartupMode.FROM_SNAPSHOT) {
+            checkExactOneOptionExistInMode(
+                    options,
+                    options.startupMode(),
+                    SCAN_SNAPSHOT_ID,
+                    SCAN_TAG_NAME,
+                    SCAN_WATERMARK);
+            checkOptionsConflict(
+                    options,
+                    Arrays.asList(
+                            SCAN_TIMESTAMP_MILLIS,
+                            SCAN_TIMESTAMP,
+                            SCAN_FILE_CREATION_TIME_MILLIS,
+                            INCREMENTAL_BETWEEN_TIMESTAMP,
+                            INCREMENTAL_BETWEEN,
+                            INCREMENTAL_TO_AUTO_TAG),
+                    Arrays.asList(SCAN_SNAPSHOT_ID, SCAN_TAG_NAME));
+        } else if (options.startupMode() == CoreOptions.StartupMode.INCREMENTAL) {
+            checkExactOneOptionExistInMode(
+                    options,
+                    options.startupMode(),
+                    INCREMENTAL_BETWEEN,
+                    INCREMENTAL_BETWEEN_TIMESTAMP,
+                    INCREMENTAL_TO_AUTO_TAG);
+            checkOptionsConflict(
+                    options,
+                    Arrays.asList(
+                            SCAN_SNAPSHOT_ID,
+                            SCAN_TIMESTAMP_MILLIS,
+                            SCAN_FILE_CREATION_TIME_MILLIS,
+                            SCAN_TIMESTAMP,
+                            SCAN_TAG_NAME),
+                    Arrays.asList(
+                            INCREMENTAL_BETWEEN,
+                            INCREMENTAL_BETWEEN_TIMESTAMP,
+                            INCREMENTAL_TO_AUTO_TAG));
+        } else if (options.startupMode() == CoreOptions.StartupMode.FROM_SNAPSHOT_FULL) {
+            checkOptionExistInMode(options, SCAN_SNAPSHOT_ID, options.startupMode());
+            checkOptionsConflict(
+                    options,
+                    Arrays.asList(
+                            SCAN_TIMESTAMP_MILLIS,
+                            SCAN_TIMESTAMP,
+                            SCAN_FILE_CREATION_TIME_MILLIS,
+                            SCAN_TAG_NAME,
+                            INCREMENTAL_BETWEEN_TIMESTAMP,
+                            INCREMENTAL_BETWEEN,
+                            INCREMENTAL_TO_AUTO_TAG),
+                    Collections.singletonList(SCAN_SNAPSHOT_ID));
+        } else if (options.startupMode() == CoreOptions.StartupMode.FROM_FILE_CREATION_TIME) {
+            checkOptionExistInMode(
+                    options,
+                    SCAN_FILE_CREATION_TIME_MILLIS,
+                    CoreOptions.StartupMode.FROM_FILE_CREATION_TIME);
+            checkOptionsConflict(
+                    options,
+                    Arrays.asList(
+                            SCAN_SNAPSHOT_ID,
+                            SCAN_TIMESTAMP_MILLIS,
+                            SCAN_TAG_NAME,
+                            INCREMENTAL_BETWEEN_TIMESTAMP,
+                            INCREMENTAL_BETWEEN,
+                            INCREMENTAL_TO_AUTO_TAG),
+                    Collections.singletonList(SCAN_FILE_CREATION_TIME_MILLIS));
+        } else {
+            checkOptionNotExistInMode(options, SCAN_TIMESTAMP_MILLIS, options.startupMode());
+            checkOptionNotExistInMode(
+                    options, SCAN_FILE_CREATION_TIME_MILLIS, options.startupMode());
+            checkOptionNotExistInMode(options, SCAN_TIMESTAMP, options.startupMode());
+            checkOptionNotExistInMode(options, SCAN_SNAPSHOT_ID, options.startupMode());
+            checkOptionNotExistInMode(options, SCAN_TAG_NAME, options.startupMode());
+            checkOptionNotExistInMode(
+                    options, INCREMENTAL_BETWEEN_TIMESTAMP, options.startupMode());
+            checkOptionNotExistInMode(options, INCREMENTAL_BETWEEN, options.startupMode());
+            checkOptionNotExistInMode(options, INCREMENTAL_TO_AUTO_TAG, options.startupMode());
+        }
+    }
+
+    private static void checkOptionExistInMode(
+            CoreOptions options, ConfigOption<?> option, CoreOptions.StartupMode startupMode) {
+        checkArgument(
+                options.toConfiguration().contains(option),
+                String.format(
+                        "%s can not be null when you use %s for %s",
+                        option.key(), startupMode, SCAN_MODE.key()));
+    }
+
+    private static void checkOptionNotExistInMode(
+            CoreOptions options, ConfigOption<?> option, CoreOptions.StartupMode startupMode) {
+        checkArgument(
+                !options.toConfiguration().contains(option),
+                String.format(
+                        "%s must be null when you use %s for %s",
+                        option.key(), startupMode, SCAN_MODE.key()));
+    }
+
+    private static void checkExactOneOptionExistInMode(
+            CoreOptions options,
+            CoreOptions.StartupMode startupMode,
+            ConfigOption<?>... configOptions) {
+        checkArgument(
+                Arrays.stream(configOptions)
+                                .filter(op -> options.toConfiguration().contains(op))
+                                .count()
+                        == 1,
+                String.format(
+                        "must set only one key in [%s] when you use %s for %s",
+                        concatConfigKeys(Arrays.asList(configOptions)),
+                        startupMode,
+                        SCAN_MODE.key()));
+    }
+
+    private static void checkOptionsConflict(
+            CoreOptions options,
+            List<ConfigOption<?>> illegalOptions,
+            List<ConfigOption<?>> legalOptions) {
+        for (ConfigOption<?> illegalOption : illegalOptions) {
+            checkArgument(
+                    !options.toConfiguration().contains(illegalOption),
+                    "[%s] must be null when you set [%s]",
+                    illegalOption.key(),
+                    concatConfigKeys(legalOptions));
+        }
+    }
+
+    private static String concatConfigKeys(List<ConfigOption<?>> configOptions) {
+        return configOptions.stream().map(ConfigOption::key).collect(Collectors.joining(","));
+    }
+
+    private static void validateFieldsPrefix(TableSchema schema, CoreOptions options) {
+        List<String> fieldNames = schema.fieldNames();
+        options.toMap()
+                .keySet()
+                .forEach(
+                        k -> {
+                            if (k.startsWith(FIELDS_PREFIX)) {
+                                String[] fields = k.split("\\.")[1].split(FIELDS_SEPARATOR);
+                                for (String field : fields) {
+                                    checkArgument(
+                                            DEFAULT_AGG_FUNCTION.equals(field)
+                                                    || fieldNames.contains(field),
+                                            String.format(
+                                                    "Field %s can not be found in table schema.",
+                                                    field));
+                                }
+                            }
+                        });
+    }
+
+    private static void validateMergeFunction(TableSchema schema) {
+        if (schema.primaryKeys().isEmpty()) {
+            return;
+        }
+
+        createMergeFunctionFactory(schema);
+    }
+
+    private static void validateForDeletionVectors(CoreOptions options) {
+        checkArgument(
+                options.changelogProducer() == ChangelogProducer.NONE
+                        || options.changelogProducer() == ChangelogProducer.INPUT
+                        || options.changelogProducer() == ChangelogProducer.LOOKUP,
+                "Deletion vectors mode is only supported for NONE/INPUT/LOOKUP changelog producer now.");
+
+        checkArgument(
+                !options.mergeEngine().equals(MergeEngine.FIRST_ROW),
+                "First row merge engine does not need deletion vectors because there is no deletion of old data in this merge engine.");
+    }
+
+    private static void validateSequenceField(TableSchema schema, CoreOptions options) {
+        List<String> sequenceField = options.sequenceField();
+        if (!sequenceField.isEmpty()) {
+            Map<String, Integer> fieldCount =
+                    sequenceField.stream()
+                            .collect(Collectors.toMap(field -> field, field -> 1, Integer::sum));
+
+            sequenceField.forEach(
+                    field -> {
+                        checkArgument(
+                                schema.fieldNames().contains(field),
+                                "Sequence field: '%s' can not be found in table schema.",
+                                field);
+
+                        checkArgument(
+                                options.fieldAggFunc(field) == null,
+                                "Should not define aggregation on sequence field: '%s'.",
+                                field);
+
+                        checkArgument(
+                                fieldCount.get(field) == 1,
+                                "Sequence field '%s' is defined repeatedly.",
+                                field);
+                    });
+
+            if (options.mergeEngine() == MergeEngine.FIRST_ROW) {
+                throw new IllegalArgumentException(
+                        "Do not support use sequence field on FIRST_ROW merge engine.");
+            }
+
+            if (schema.crossPartitionUpdate()) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "You can not use sequence.field in cross partition update case "
+                                        + "(Primary key constraint '%s' not include all partition fields '%s').",
+                                schema.primaryKeys(), schema.partitionKeys()));
+            }
+        }
+    }
+
+    private static void validateBucket(TableSchema schema, CoreOptions options) {
+        int bucket = options.bucket();
+        if (bucket == -1) {
+            if (options.toMap().get(BUCKET_KEY.key()) != null) {
+                throw new RuntimeException(
+                        "Cannot define 'bucket-key' with bucket = -1, please remove the 'bucket-key' setting or specify a bucket number.");
+            }
+
+            if (schema.primaryKeys().isEmpty() && options.fullCompactionDeltaCommits() != null) {
+                throw new RuntimeException(
+                        "AppendOnlyTable of unaware or dynamic bucket does not support 'full-compaction.delta-commits'");
+            }
+        } else if (bucket < 1 && !isPostponeBucketTable(schema, bucket)) {
+            throw new RuntimeException("The number of buckets needs to be greater than 0.");
+        } else {
+            if (schema.primaryKeys().isEmpty() && schema.bucketKeys().isEmpty()) {
+                throw new RuntimeException(
+                        "You should define a 'bucket-key' for bucketed append mode.");
+            }
+
+            if (!schema.bucketKeys().isEmpty()) {
+                List<String> bucketKeys = schema.bucketKeys();
+                List<String> nestedFields =
+                        schema.fields().stream()
+                                .filter(
+                                        dataField ->
+                                                bucketKeys.contains(dataField.name())
+                                                        && (dataField.type().getTypeRoot() == ARRAY
+                                                                || dataField.type().getTypeRoot()
+                                                                        == MULTISET
+                                                                || dataField.type().getTypeRoot()
+                                                                        == MAP
+                                                                || dataField.type().getTypeRoot()
+                                                                        == ROW))
+                                .map(DataField::name)
+                                .collect(Collectors.toList());
+                if (!nestedFields.isEmpty()) {
+                    throw new RuntimeException(
+                            "nested type can not in bucket-key, in your table these key are "
+                                    + nestedFields);
+                }
+            }
+        }
+    }
+
+    private static boolean isPostponeBucketTable(TableSchema schema, int bucket) {
+        return !schema.primaryKeys().isEmpty() && bucket == BucketMode.POSTPONE_BUCKET;
+    }
+
+    private static void validateMergeFunctionFactory(TableSchema schema) {
+        if (schema.primaryKeys().isEmpty()) {
+            return;
+        }
+        CoreOptions options = new CoreOptions(schema.options());
+        switch (options.mergeEngine()) {
+            case DEDUPLICATE:
+            case FIRST_ROW:
+                return;
+            default:
+        }
+
+        for (int i = 0; i < schema.logicalRowType().getFieldNames().size(); i++) {
+            String fieldName = schema.logicalRowType().getFieldNames().get(i);
+            String aggFuncName = options.fieldAggFunc(fieldName);
+            aggFuncName = aggFuncName == null ? options.fieldsDefaultFunc() : aggFuncName;
+            if (aggFuncName != null) {
+                FactoryUtil.discoverFactory(
+                        FieldAggregator.class.getClassLoader(),
+                        FieldAggregatorFactory.class,
+                        aggFuncName);
+            }
+        }
+    }
+
+    private static void validateRowTracking(TableSchema schema, CoreOptions options) {
+        boolean rowTrackingEnabled = options.rowTrackingEnabled();
+        if (rowTrackingEnabled) {
+            checkArgument(
+                    options.bucket() == -1,
+                    "Cannot define %s for row tracking table, it only support bucket = -1",
+                    CoreOptions.BUCKET.key());
+            checkArgument(
+                    schema.primaryKeys().isEmpty(),
+                    "Cannot define %s for row tracking table.",
+                    PRIMARY_KEY.key());
+        }
+
+        if (options.dataEvolutionEnabled()) {
+            checkArgument(
+                    rowTrackingEnabled,
+                    "Data evolution config must enabled with row-tracking.enabled");
+            checkArgument(
+                    !options.deletionVectorsEnabled(),
+                    "Data evolution config must disabled with deletion-vectors.enabled");
+            checkArgument(
+                    !options.clusteringIncrementalEnabled(),
+                    "Data evolution config must disabled with clustering.incremental");
+        }
+
+        Pair<RowType, RowType> normalAndBlobType = BlobType.splitBlob(schema.logicalRowType());
+        List<String> blobNames = normalAndBlobType.getRight().getFieldNames();
+        if (!blobNames.isEmpty()) {
+            checkArgument(
+                    options.dataEvolutionEnabled(),
+                    "Data evolution config must enabled for table with BLOB type column.");
+            checkArgument(
+                    normalAndBlobType.getLeft().getFieldCount() > 0,
+                    "Table with BLOB type column must have other normal columns.");
+            checkArgument(
+                    !schema.partitionKeys().contains(blobNames.get(0)),
+                    "The BLOB type column can not be part of partition keys.");
+        }
+    }
+
+    private static void validateIncrementalClustering(TableSchema schema, CoreOptions options) {
+        if (options.clusteringIncrementalEnabled()) {
+            checkArgument(
+                    schema.primaryKeys().isEmpty(),
+                    "Cannot define %s for incremental clustering table.",
+                    PRIMARY_KEY.key());
+            if (options.bucket() != -1) {
+                checkArgument(
+                        !options.bucketAppendOrdered(),
+                        "%s must be false for incremental clustering table.",
+                        CoreOptions.BUCKET_APPEND_ORDERED.key());
+                checkArgument(
+                        !options.deletionVectorsEnabled(),
+                        "Cannot enable deletion-vectors for incremental clustering table which bucket is not -1.");
+            }
+        }
+    }
+
+    private static int requireField(String fieldName, List<String> fieldNames) {
+        int field = fieldNames.indexOf(fieldName);
+        if (field == -1) {
+            throw new IllegalArgumentException(
+                    String.format("Field %s can not be found in table schema.", fieldName));
+        }
+        return field;
+    }
+
+    public static void validateChainTable(TableSchema schema, CoreOptions options) {
+        if (options.isChainTable()) {
+            boolean isPrimaryTbl = schema.primaryKeys() != null && !schema.primaryKeys().isEmpty();
+            boolean isPartitionTbl =
+                    schema.partitionKeys() != null && !schema.partitionKeys().isEmpty();
+            ChangelogProducer changelogProducer = options.changelogProducer();
+            Preconditions.checkArgument(
+                    options.type() == TableType.TABLE, "Chain table must be table type.");
+            Preconditions.checkArgument(isPrimaryTbl, "Primary key is required for chain table.");
+            Preconditions.checkArgument(isPartitionTbl, "Chain table must be partition table.");
+            Preconditions.checkArgument(
+                    options.bucket() > 0, "Bucket number must be greater than 0 for chain table.");
+            Preconditions.checkArgument(
+                    options.sequenceField() != null, "Sequence field is required for chain table.");
+            Preconditions.checkArgument(
+                    changelogProducer == ChangelogProducer.NONE
+                            || changelogProducer == ChangelogProducer.INPUT,
+                    "Changelog producer must be none or input for chain table.");
+            Preconditions.checkArgument(
+                    options.partitionTimestampPattern() != null,
+                    "Partition timestamp pattern is required for chain table.");
+            Preconditions.checkArgument(
+                    options.partitionTimestampFormatter() != null,
+                    "Partition timestamp formatter is required for chain table.");
+        }
+    }
+
+    private static void validateChangelogReadSequenceNumber(
+            TableSchema schema, CoreOptions options) {
+        if (options.tableReadSequenceNumberEnabled()) {
+            checkArgument(
+                    !schema.primaryKeys().isEmpty(),
+                    "Cannot enable '%s' for non-primary-key table. "
+                            + "Sequence number is only available for primary key tables.",
+                    CoreOptions.TABLE_READ_SEQUENCE_NUMBER_ENABLED.key());
+        }
+    }
+}
