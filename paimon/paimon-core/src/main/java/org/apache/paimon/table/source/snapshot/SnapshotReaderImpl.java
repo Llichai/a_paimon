@@ -83,7 +83,90 @@ import static org.apache.paimon.operation.FileStoreScan.Plan.groupByPartFiles;
 import static org.apache.paimon.partition.PartitionPredicate.createPartitionPredicate;
 import static org.apache.paimon.partition.PartitionPredicate.splitPartitionPredicatesAndDataPredicates;
 
-/** Implementation of {@link SnapshotReader}. */
+/**
+ * {@link SnapshotReader} 的默认实现
+ *
+ * <p>该类负责将快照（Snapshot）中的文件元信息转换为可执行的读取分片（Split）。
+ *
+ * <p><b>核心功能：</b>
+ * <ol>
+ *   <li>读取快照的 Manifest 文件，获取文件列表
+ *   <li>应用各种过滤条件（分区、桶、层级、数据过滤等）
+ *   <li>将文件分组并生成读取分片
+ *   <li>处理删除向量（Deletion Vectors）
+ *   <li>支持批量和流式读取
+ * </ol>
+ *
+ * <p><b>读取流程：</b>
+ * <pre>
+ * 1. read() 调用
+ *    ↓
+ * 2. FileStoreScan.plan() - 扫描 Manifest，应用过滤条件
+ *    ↓
+ * 3. groupByPartFiles() - 按分区和桶分组文件
+ *    ↓
+ * 4. generateSplits() - 生成分片
+ *    ├── splitGenerator.splitForBatch() - 批量读取分片
+ *    └── splitGenerator.splitForStreaming() - 流式读取分片
+ *    ↓
+ * 5. scanDvIndex() - 扫描删除向量索引（如果启用）
+ *    ↓
+ * 6. 返回 Plan（包含分片列表）
+ * </pre>
+ *
+ * <p><b>支持的扫描模式：</b>
+ * <table border="1">
+ *   <tr>
+ *     <th>扫描模式</th>
+ *     <th>读取内容</th>
+ *     <th>方法</th>
+ *   </tr>
+ *   <tr>
+ *     <td>ScanMode.ALL</td>
+ *     <td>完整快照数据（baseManifestList）</td>
+ *     <td>read()</td>
+ *   </tr>
+ *   <tr>
+ *     <td>ScanMode.DELTA</td>
+ *     <td>增量数据（deltaManifestList）</td>
+ *     <td>read()</td>
+ *   </tr>
+ *   <tr>
+ *     <td>ScanMode.CHANGELOG</td>
+ *     <td>变更日志（changelogManifestList）</td>
+ *     <td>read()</td>
+ *   </tr>
+ *   <tr>
+ *     <td>-</td>
+ *     <td>文件变更（before/after）</td>
+ *     <td>readChanges()</td>
+ *   </tr>
+ *   <tr>
+ *     <td>-</td>
+ *     <td>增量差异（两个快照比较）</td>
+ *     <td>readIncrementalDiff()</td>
+ *   </tr>
+ * </table>
+ *
+ * <p><b>删除向量处理：</b>
+ * <ul>
+ *   <li>如果启用了删除向量（deletion-vectors.enabled=true），会扫描索引文件
+ *   <li>使用 {@link DVMetaCache} 缓存删除向量元信息
+ *   <li>为每个数据文件关联对应的删除文件
+ *   <li>读取时会跳过被标记删除的行
+ * </ul>
+ *
+ * <p><b>分片生成策略：</b>
+ * <ul>
+ *   <li>批量读取：按文件大小和数量划分分片
+ *   <li>流式读取：每个文件单独一个分片
+ *   <li>支持分布式读取：通过 withShard() 设置分片归属
+ * </ul>
+ *
+ * @see SnapshotReader
+ * @see org.apache.paimon.operation.FileStoreScan
+ * @see org.apache.paimon.table.source.SplitGenerator
+ */
 public class SnapshotReaderImpl implements SnapshotReader {
 
     private final FileStoreScan scan;

@@ -31,7 +31,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Optional;
 
-/** Consumer which contains next snapshot. */
+/** 包含下一个快照的消费者。 */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Consumer {
 
@@ -75,7 +75,7 @@ public class Consumer {
             try {
                 return content.map(Consumer::fromJson);
             } catch (Exception e) {
-                // retry
+                // 重试
                 exception = e;
                 try {
                     Thread.sleep(200);

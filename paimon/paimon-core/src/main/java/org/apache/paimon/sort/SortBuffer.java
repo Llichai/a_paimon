@@ -24,21 +24,52 @@ import org.apache.paimon.utils.MutableObjectIterator;
 
 import java.io.IOException;
 
-/** Sort buffer to sort records. */
+/**
+ * 用于对记录进行排序的排序缓冲区。
+ */
 public interface SortBuffer {
 
+    /**
+     * 获取缓冲区中的记录数。
+     *
+     * @return 记录数
+     */
     int size();
 
+    /**
+     * 清空缓冲区。
+     */
     void clear();
 
+    /**
+     * 获取缓冲区占用的内存大小。
+     *
+     * @return 占用字节数
+     */
     long getOccupancy();
 
-    /** Flush memory, return false if not supported. */
+    /**
+     * 刷新内存。
+     *
+     * @return 不支持返回false
+     * @throws IOException 如果遇到IO问题
+     */
     boolean flushMemory() throws IOException;
 
-    /** @return false if the buffer is full. */
+    /**
+     * 写入记录。
+     *
+     * @param record 内部行记录
+     * @return 缓冲区满返回false
+     * @throws IOException 如果遇到IO问题
+     */
     boolean write(InternalRow record) throws IOException;
 
-    /** @return iterator with sorting. */
+    /**
+     * 获取已排序的迭代器。
+     *
+     * @return 已排序的二进制行迭代器
+     * @throws IOException 如果遇到IO问题
+     */
     MutableObjectIterator<BinaryRow> sortedIterator() throws IOException;
 }

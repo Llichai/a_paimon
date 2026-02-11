@@ -23,8 +23,24 @@ import org.apache.paimon.table.source.ScanMode;
 import org.apache.paimon.utils.SnapshotManager;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_SNAPSHOT_FULL} startup mode
- * of a batch read.
+ * 连续全量快照起始扫描器
+ *
+ * <p>对应批量读取的 {@link CoreOptions.StartupMode#FROM_SNAPSHOT_FULL} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>先全量读取指定快照的数据
+ *   <li>扫描模式：ScanMode.ALL
+ *   <li>如果指定快照已过期，使用最早快照
+ * </ul>
+ *
+ * <p><b>与 StaticFromSnapshotStartingScanner 的区别：</b>
+ * <ul>
+ *   <li>Static：快照不存在时抛异常
+ *   <li>Continuous：快照不存在时使用最早快照（容错）
+ * </ul>
+ *
+ * @see CoreOptions.StartupMode#FROM_SNAPSHOT_FULL
  */
 public class ContinuousFromSnapshotFullStartingScanner extends ReadPlanStartingScanner {
 

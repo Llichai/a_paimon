@@ -27,9 +27,40 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.annotatio
 import java.util.Objects;
 
 /**
- * {@link org.apache.paimon.types.ArrayType} in Iceberg.
+ * Iceberg 中的 List 类型（对应 Paimon 的 {@link org.apache.paimon.types.ArrayType}）。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#schemas">Iceberg spec</a>.
+ * <p>表示 Iceberg Schema 中的 List 类型定义。
+ *
+ * <h3>字段说明</h3>
+ * <ul>
+ *   <li><b>type</b>：固定为 "list"
+ *   <li><b>element-id</b>：元素字段 ID
+ *   <li><b>element-required</b>：元素是否必填
+ *   <li><b>element</b>：元素类型（可为字符串或嵌套类型）
+ * </ul>
+ *
+ * <h3>JSON 示例</h3>
+ * <pre>
+ * {
+ *   "type": "list",
+ *   "element-id": 1,
+ *   "element-required": false,
+ *   "element": "string"
+ * }
+ * </pre>
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li>Schema 定义中的数组字段
+ *   <li>嵌套类型中的 List 成员
+ *   <li>JSON 序列化和反序列化
+ * </ul>
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#schemas">Iceberg Schema 规范</a>
+ *
+ * @see IcebergDataField
+ * @see org.apache.paimon.types.ArrayType
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergListType {

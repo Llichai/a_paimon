@@ -32,45 +32,77 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 /**
- * An abstract sortable, provide basic compare and swap. Support writing of index and normalizedKey.
+ * 提供基本比较和交换功能的抽象可排序对象。
+ *
+ * <p>支持索引和归一化键的写入。
  */
 public abstract class BinaryIndexedSortable implements IndexedSortable {
 
+    /** 偏移量长度(8字节) */
     public static final int OFFSET_LEN = 8;
 
     // put/compare/swap normalized key
+    /** 归一化键计算器 */
     private final NormalizedKeyComputer normalizedKeyComputer;
+    /** 二进制行序列化器 */
     protected final BinaryRowSerializer serializer;
 
     // if normalized key not fully determines, need compare record.
+    /** 记录比较器 */
     private final RecordComparator comparator;
 
+    /** 记录缓冲区 */
     protected final RandomAccessInputView recordBuffer;
+    /** 用于比较的记录缓冲区 */
     private final RandomAccessInputView recordBufferForComparison;
 
     // segments
+    /** 当前排序索引段 */
     protected MemorySegment currentSortIndexSegment;
+    /** 内存段池 */
     protected final MemorySegmentPool memorySegmentPool;
+    /** 排序索引段列表 */
     protected final ArrayList<MemorySegment> sortIndex;
 
     // normalized key attributes
+    /** 归一化键字节数 */
     private final int numKeyBytes;
+    /** 索引条目大小 */
     protected final int indexEntrySize;
+    /** 每段索引条目数 */
     private final int indexEntriesPerSegment;
+    /** 最后索引条目偏移量 */
     protected final int lastIndexEntryOffset;
+    /** 归一化键是否完全确定 */
     private final boolean normalizedKeyFullyDetermines;
+    /** 是否使用未反转的归一化键 */
     private final boolean useNormKeyUninverted;
 
     // for serialized comparison
+    /** 序列化器1 */
     protected final BinaryRowSerializer serializer1;
+    /** 序列化器2 */
     private final BinaryRowSerializer serializer2;
+    /** 行1 */
     protected final BinaryRow row1;
+    /** 行2 */
     private final BinaryRow row2;
 
     // runtime variables
+    /** 当前排序索引偏移量 */
     protected int currentSortIndexOffset;
+    /** 记录数 */
     protected int numRecords;
 
+    /**
+     * 构造二进制索引可排序对象。
+     *
+     * @param normalizedKeyComputer 归一化键计算器
+     * @param serializer 序列化器
+     * @param comparator 比较器
+     * @param recordBufferSegments 记录缓冲区段列表
+     * @param memorySegmentPool 内存段池
+     */
     public BinaryIndexedSortable(
             NormalizedKeyComputer normalizedKeyComputer,
             BinaryRowSerializer serializer,
@@ -111,11 +143,20 @@ public abstract class BinaryIndexedSortable implements IndexedSortable {
         sortIndex.add(currentSortIndexSegment);
     }
 
+    /**
+     * 获取下一个内存段。
+     *
+     * @return 内存段
+     */
     protected MemorySegment nextMemorySegment() {
         return this.memorySegmentPool.nextSegment();
     }
 
-    /** check if we need request next index memory. */
+    /**
+     * 检查是否需要请求下一个索引内存段。
+     *
+     * @return 可以继续返回true,需要新段但无法获取返回false
+     */
     protected boolean checkNextIndexOffset() {
         if (this.currentSortIndexOffset > this.lastIndexEntryOffset) {
             MemorySegment returnSegment = nextMemorySegment();
@@ -130,7 +171,12 @@ public abstract class BinaryIndexedSortable implements IndexedSortable {
         return true;
     }
 
-    /** Write of index and normalizedKey. */
+    /**
+     * 写入索引和归一化键。
+     *
+     * @param record 内部行记录
+     * @param currOffset 当前偏移量
+     */
     protected void writeIndexAndNormalizedKey(InternalRow record, long currOffset) {
         // add the pointer and the normalized key
         this.currentSortIndexSegment.putLong(this.currentSortIndexOffset, currOffset);
@@ -144,6 +190,13 @@ public abstract class BinaryIndexedSortable implements IndexedSortable {
         this.numRecords++;
     }
 
+    /**
+     * 比较两个索引位置的记录。
+     *
+     * @param i 第一个记录的索引
+     * @param j 第二个记录的索引
+     * @return 比较结果
+     */
     @Override
     public int compare(int i, int j) {
         final int segmentNumberI = i / this.indexEntriesPerSegment;
@@ -175,6 +228,13 @@ public abstract class BinaryIndexedSortable implements IndexedSortable {
         return compareRecords(pointerI, pointerJ);
     }
 
+    /**
+     * 比较两个指针位置的记录。
+     *
+     * @param pointer1 第一个记录的指针
+     * @param pointer2 第二个记录的指针
+     * @return 比较结果
+     */
     private int compareRecords(long pointer1, long pointer2) {
         this.recordBuffer.setReadPosition(pointer1);
         this.recordBufferForComparison.setReadPosition(pointer2);
@@ -188,6 +248,12 @@ public abstract class BinaryIndexedSortable implements IndexedSortable {
         }
     }
 
+    /**
+     * 交换两个索引位置的记录。
+     *
+     * @param i 第一个记录的索引
+     * @param j 第二个记录的索引
+     */
     @Override
     public void swap(int i, int j) {
         final int segmentNumberI = i / this.indexEntriesPerSegment;
@@ -230,7 +296,12 @@ public abstract class BinaryIndexedSortable implements IndexedSortable {
         return indexEntriesPerSegment;
     }
 
-    /** Spill: Write all records to a {@link AbstractPagedOutputView}. */
+    /**
+     * 将所有记录写入 {@link AbstractPagedOutputView}(溢出操作)。
+     *
+     * @param output 输出视图
+     * @throws IOException 如果遇到IO问题
+     */
     public void writeToOutput(AbstractPagedOutputView output) throws IOException {
         final int numRecords = this.numRecords;
         int currentMemSeg = 0;

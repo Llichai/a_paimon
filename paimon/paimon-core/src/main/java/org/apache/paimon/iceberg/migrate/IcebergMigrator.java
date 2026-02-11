@@ -76,32 +76,96 @@ import java.util.stream.Collectors;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.ThreadPoolUtils.createCachedThreadPool;
 
-/** migrate iceberg table to paimon table. */
+/**
+ * Iceberg 表迁移器类。
+ *
+ * <p>负责将 Iceberg 表迁移到 Paimon 表,包括:
+ * <ul>
+ *   <li>Schema 转换:将 Iceberg 的 Schema 转换为 Paimon Schema
+ *   <li>分区信息转换:将 Iceberg 分区规范转换为 Paimon 分区键
+ *   <li>数据文件迁移:通过文件重命名将 Iceberg 数据文件迁移到 Paimon 目录结构
+ *   <li>元数据提交:将迁移后的文件信息提交到 Paimon 表
+ * </ul>
+ *
+ * <p>迁移流程:
+ * <ol>
+ *   <li>读取 Iceberg 表的元数据(Snapshot、Schema、PartitionSpec)
+ *   <li>将 Iceberg Schema 转换为 Paimon Schema 并创建 Paimon 表
+ *   <li>读取 Iceberg 的 Manifest List 和 Manifest 文件获取数据文件列表
+ *   <li>按分区分组数据文件,创建迁移任务
+ *   <li>并行执行迁移任务:重命名数据文件到 Paimon 目录结构
+ *   <li>提交 CommitMessage 到 Paimon 表
+ *   <li>可选:删除原始 Iceberg 表
+ * </ol>
+ *
+ * <p>设计模式:
+ * <ul>
+ *   <li>策略模式:通过 IcebergMigrateMetadataFactory 支持不同类型的 Catalog
+ *   <li>工厂模式:使用 SPI 机制动态加载元数据访问器
+ *   <li>并行处理:使用线程池并行处理分区数据的迁移
+ * </ul>
+ *
+ * <p>限制和约束:
+ * <ul>
+ *   <li>目标 Paimon 表必须是 unaware-bucket 模式(bucket = -1)
+ *   <li>不支持为目标表定义主键
+ *   <li>不支持包含删除文件的 Iceberg 表
+ *   <li>不支持分析带有 'DELETE' 内容的 Manifest 文件
+ * </ul>
+ *
+ * @see IcebergMigrateMetadata 元数据访问接口
+ * @see MigrateTask 单个分区的迁移任务
+ */
 public class IcebergMigrator implements Migrator {
 
     private static final Logger LOG = LoggerFactory.getLogger(IcebergMigrator.class);
 
+    /** 线程池执行器,用于并行处理迁移任务 */
     private final ThreadPoolExecutor executor;
 
+    /** Paimon Catalog */
     private final Catalog paimonCatalog;
+    /** Paimon 数据库名 */
     private final String paimonDatabaseName;
+    /** Paimon 表名 */
     private final String paimonTableName;
+    /** Paimon 核心配置选项 */
     private final CoreOptions coreOptions;
 
+    /** Iceberg 数据库名 */
     private final String icebergDatabaseName;
+    /** Iceberg 表名 */
     private final String icebergTableName;
+    /** Iceberg 配置选项 */
     private final Options icebergOptions;
 
+    /** Iceberg 迁移元数据访问器 */
     private final IcebergMigrateMetadata icebergMigrateMetadata;
+    /** Iceberg 元数据路径工厂 */
     // metadata path factory for iceberg metadata
     private final IcebergPathFactory icebergMetaPathFactory;
+    /** Iceberg 最新元数据文件路径 */
     // latest metadata file path
     private final String icebergLatestMetadataLocation;
+    /** Iceberg 最新快照的元数据 */
     // metadata for newest iceberg snapshot
     private final IcebergMetadata icebergMetadata;
 
+    /** 是否删除原始 Iceberg 表 */
     private Boolean deleteOriginTable = true;
 
+    /**
+     * 构造 Iceberg 迁移器。
+     *
+     * @param paimonCatalog Paimon Catalog
+     * @param paimonDatabaseName Paimon 数据库名
+     * @param paimonTableName Paimon 表名
+     * @param icebergDatabaseName Iceberg 数据库名
+     * @param icebergTableName Iceberg 表名
+     * @param icebergOptions Iceberg 配置选项
+     * @param parallelism 并行度
+     * @param options 表配置选项
+     */
     public IcebergMigrator(
             Catalog paimonCatalog,
             String paimonDatabaseName,

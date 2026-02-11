@@ -57,8 +57,9 @@ import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /**
- * A special predicate to filter partition only, just like {@link Predicate}, this should be thread
- * safe.
+ * 专门用于过滤分区的特殊谓词,类似 {@link Predicate},此接口是线程安全的。
+ *
+ * <p>提供基于具体分区值和统计信息的两种测试方式,用于高效的分区过滤。
  *
  * @since 1.3.0
  */
@@ -66,24 +67,35 @@ import static org.apache.paimon.utils.Preconditions.checkNotNull;
 public interface PartitionPredicate extends Serializable {
 
     /**
-     * Test based on the specific partition.
+     * 基于具体分区进行测试。
      *
-     * @return return true when hit, false when not hit.
+     * @param partition 分区数据
+     * @return 匹配返回true,不匹配返回false
      */
     boolean test(BinaryRow partition);
 
     /**
-     * Test based on the statistical information to determine whether a hit is possible.
+     * 基于统计信息判断是否可能匹配。
      *
-     * @return return true is likely to hit (there may also be false positives), return false is
-     *     absolutely not possible to hit.
+     * <p>用于根据统计数据快速过滤,可能存在假阳性但不会有假阴性。
+     *
+     * @param rowCount 行数
+     * @param minValues 最小值
+     * @param maxValues 最大值
+     * @param nullCounts null值计数
+     * @return true表示可能匹配(可能存在假阳性),false表示绝对不匹配
      */
     boolean test(
             long rowCount, InternalRow minValues, InternalRow maxValues, InternalArray nullCounts);
 
     /**
-     * Compared to the multiple method, this approach can accept filtering of partially partitioned
-     * fields.
+     * 从谓词创建分区谓词。
+     *
+     * <p>相比 fromMultiple 方法,此方法可以接受部分分区字段的过滤。
+     *
+     * @param partitionType 分区类型
+     * @param predicate 谓词
+     * @return 分区谓词,如果无法创建则返回null
      */
     @Nullable
     static PartitionPredicate fromPredicate(RowType partitionType, Predicate predicate) {
@@ -94,13 +106,25 @@ public interface PartitionPredicate extends Serializable {
         return new DefaultPartitionPredicate(predicate);
     }
 
-    /** Create {@link PartitionPredicate} from multiple partitions. */
+    /**
+     * 从多个分区创建 {@link PartitionPredicate}。
+     *
+     * @param partitionType 分区类型
+     * @param partitions 分区列表
+     * @return 分区谓词
+     */
     @Nullable
     static PartitionPredicate fromMultiple(RowType partitionType, List<BinaryRow> partitions) {
         return fromMultiple(partitionType, new HashSet<>(partitions));
     }
 
-    /** Create {@link PartitionPredicate} from multiple partitions. */
+    /**
+     * 从多个分区创建 {@link PartitionPredicate}。
+     *
+     * @param partitionType 分区类型
+     * @param partitions 分区集合
+     * @return 分区谓词
+     */
     @Nullable
     static PartitionPredicate fromMultiple(RowType partitionType, Set<BinaryRow> partitions) {
         if (partitionType.getFieldCount() == 0 || partitions.isEmpty()) {
@@ -111,7 +135,12 @@ public interface PartitionPredicate extends Serializable {
                 new RowDataToObjectArrayConverter(partitionType), partitions);
     }
 
-    /** Creates {@link PartitionPredicate} that combines multiple predicates using logical AND. */
+    /**
+     * 创建使用逻辑AND组合多个谓词的 {@link PartitionPredicate}。
+     *
+     * @param predicates 谓词列表
+     * @return 组合后的分区谓词
+     */
     @Nullable
     static PartitionPredicate and(List<PartitionPredicate> predicates) {
         if (predicates.isEmpty()) {
@@ -125,6 +154,7 @@ public interface PartitionPredicate extends Serializable {
         return new AndPartitionPredicate(predicates);
     }
 
+    /** 总是返回false的分区谓词 */
     PartitionPredicate ALWAYS_FALSE =
             new PartitionPredicate() {
                 @Override
@@ -142,6 +172,7 @@ public interface PartitionPredicate extends Serializable {
                 }
             };
 
+    /** 总是返回true的分区谓词 */
     PartitionPredicate ALWAYS_TRUE =
             new PartitionPredicate() {
                 @Override
@@ -159,7 +190,9 @@ public interface PartitionPredicate extends Serializable {
                 }
             };
 
-    /** A {@link PartitionPredicate} using {@link Predicate}. */
+    /**
+     * 使用 {@link Predicate} 的 {@link PartitionPredicate} 实现。
+     */
     class DefaultPartitionPredicate implements PartitionPredicate {
 
         private static final long serialVersionUID = 1L;
@@ -210,8 +243,9 @@ public interface PartitionPredicate extends Serializable {
     }
 
     /**
-     * A {@link PartitionPredicate} optimizing for multiple partitions. Its FieldStats filtering
-     * effect may not be as good as {@link DefaultPartitionPredicate}.
+     * 针对多个分区优化的 {@link PartitionPredicate} 实现。
+     *
+     * <p>其字段统计信息过滤效果可能不如 {@link DefaultPartitionPredicate}。
      */
     class MultiplePartitionPredicate implements PartitionPredicate {
 
@@ -313,7 +347,9 @@ public interface PartitionPredicate extends Serializable {
         }
     }
 
-    /** AND-combines multiple {@link PartitionPredicate}s. */
+    /**
+     * 使用AND逻辑组合多个 {@link PartitionPredicate}。
+     */
     class AndPartitionPredicate implements PartitionPredicate {
 
         private static final long serialVersionUID = 1L;

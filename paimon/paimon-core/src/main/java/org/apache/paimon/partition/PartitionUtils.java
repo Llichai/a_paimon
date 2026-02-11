@@ -32,9 +32,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** Utils to fetch partition map information from data schema and row type. */
+/**
+ * 从数据模式和行类型中获取分区映射信息的工具类。
+ *
+ * <p>提供分区字段的映射、过滤和转换等功能。
+ */
 public class PartitionUtils {
 
+    /**
+     * 从数据字段中剪裁分区字段。
+     *
+     * @param dataSchema 数据表模式
+     * @param dataFields 数据字段列表
+     * @return 分区映射信息和非分区字段列表
+     */
     public static Pair<Pair<int[], RowType>, List<DataField>> trimPartitionFields(
             TableSchema dataSchema, List<DataField> dataFields) {
         if (dataSchema.partitionKeys().isEmpty()) {
@@ -46,12 +57,28 @@ public class PartitionUtils {
                 dataSchema.projectedLogicalRowType(dataSchema.partitionKeys()));
     }
 
+    /**
+     * 获取分区映射。
+     *
+     * @param partitionKeys 分区键列表
+     * @param dataFields 数据字段列表
+     * @param partitionType 分区类型
+     * @return 分区索引映射和分区类型
+     */
     public static Pair<int[], RowType> getPartitionMapping(
             List<String> partitionKeys, List<DataField> dataFields, RowType partitionType) {
         return getPartitionMapping2fieldsWithoutPartition(partitionKeys, dataFields, partitionType)
                 .getLeft();
     }
 
+    /**
+     * 获取分区映射和非分区字段。
+     *
+     * @param partitionKeys 分区键列表
+     * @param dataFields 数据字段列表
+     * @param partitionType 分区类型
+     * @return 分区映射信息和非分区字段列表
+     */
     public static Pair<Pair<int[], RowType>, List<DataField>>
             getPartitionMapping2fieldsWithoutPartition(
                     List<String> partitionKeys, List<DataField> dataFields, RowType partitionType) {
@@ -83,10 +110,23 @@ public class PartitionUtils {
         return Pair.of(partitionMapping, fieldsWithoutPartition);
     }
 
+    /**
+     * 创建分区信息对象。
+     *
+     * @param pair 分区映射对
+     * @param binaryRow 二进制行
+     * @return 分区信息,如果pair为null则返回null
+     */
     public static PartitionInfo create(@Nullable Pair<int[], RowType> pair, BinaryRow binaryRow) {
         return pair == null ? null : new PartitionInfo(pair.getLeft(), pair.getRight(), binaryRow);
     }
 
+    /**
+     * 构建分区名称字符串。
+     *
+     * @param partitionSpec 分区规格映射
+     * @return 分区名称,格式为 key1=value1/key2=value2
+     */
     public static String buildPartitionName(Map<String, String> partitionSpec) {
         if (partitionSpec.isEmpty()) {
             return "";

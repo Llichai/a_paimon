@@ -39,7 +39,65 @@ import java.util.stream.Collectors;
 import static org.apache.paimon.CoreOptions.INCREMENTAL_BETWEEN;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Get incremental data by {@link SnapshotReader#readIncrementalDiff}. */
+/**
+ * 增量 Diff 起始扫描器
+ *
+ * <p>通过 {@link SnapshotReader#readIncrementalDiff} 获取两个快照之间的数据差异。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>比较两个快照的完整数据（baseManifestList）
+ *   <li>返回增量分片（IncrementalSplit），包含 before/after 文件
+ *   <li>支持跨桶数变更检查
+ * </ul>
+ *
+ * <p><b>与 IncrementalDeltaStartingScanner 的区别：</b>
+ * <table border="1">
+ *   <tr>
+ *     <th>对比项</th>
+ *     <th>IncrementalDiffStartingScanner</th>
+ *     <th>IncrementalDeltaStartingScanner</th>
+ *   </tr>
+ *   <tr>
+ *     <td>读取内容</td>
+ *     <td>完整快照比较（baseManifestList）</td>
+ *     <td>增量文件聚合（deltaManifestList）</td>
+ *   </tr>
+ *   <tr>
+ *     <td>结果格式</td>
+ *     <td>IncrementalSplit（before/after）</td>
+ *     <td>DataSplit（after only）</td>
+ *   </tr>
+ *   <tr>
+ *     <td>使用场景</td>
+ *     <td>标签间比较、完整差异查询</td>
+ *     <td>流式增量读取</td>
+ *   </tr>
+ *   <tr>
+ *     <td>性能</td>
+ *     <td>较慢（读取全部文件）</td>
+ *     <td>较快（只读取增量文件）</td>
+ *   </tr>
+ * </table>
+ *
+ * <p><b>创建方法：</b>
+ * <ul>
+ *   <li>{@link #betweenTags}：两个标签之间的差异
+ *   <li>{@link #betweenSnapshotIds}：两个快照 ID 之间的差异
+ *   <li>{@link #betweenTimestamps}：两个时间戳之间的差异
+ *   <li>{@link #toEndAutoTag}：从前一个自动标签到指定标签的差异
+ * </ul>
+ *
+ * <p><b>桶数一致性检查：</b>
+ * <ul>
+ *   <li>如果起始和结束快照使用了不同的 schema
+ *   <li>会检查桶数（bucket）配置是否一致
+ *   <li>桶数不同会抛出 {@link TimeTravelUtil.InconsistentTagBucketException}
+ * </ul>
+ *
+ * @see SnapshotReader#readIncrementalDiff
+ * @see IncrementalDeltaStartingScanner
+ */
 public class IncrementalDiffStartingScanner extends AbstractStartingScanner {
 
     private static final Logger LOG = LoggerFactory.getLogger(IncrementalDiffStartingScanner.class);

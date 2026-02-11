@@ -51,7 +51,47 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-/** {@link RecordWriter} for {@code bucket = -2} tables. */
+/**
+ * 延迟分桶表（bucket = -2）的 {@link RecordWriter} 实现。
+ *
+ * <p><b>设计目标：</b>
+ * 在延迟分桶模式下，数据写入不立即决定桶号，而是先写入临时桶 -2。
+ * 该 Writer 负责将数据高效地写入文件，支持内存缓冲和磁盘溢出。
+ *
+ * <p><b>两种写入模式：</b>
+ * <ul>
+ *   <li><b>DirectSinkWriter</b>：直接写入模式，不使用写缓冲区，适合低延迟场景
+ *   <li><b>BufferedSinkWriter</b>：缓冲写入模式，使用内存缓冲区，支持溢出到磁盘，
+ *       适合高吞吐场景
+ * </ul>
+ *
+ * <p><b>缓冲区溢出机制：</b>
+ * 当启用缓冲写入模式时：
+ * <ul>
+ *   <li>数据先写入内存缓冲区
+ *   <li>缓冲区满时自动溢出到磁盘（使用 IOManager）
+ *   <li>支持压缩以减少磁盘空间占用
+ *   <li>最终刷新时将所有数据合并写入文件
+ * </ul>
+ *
+ * <p><b>Retract 验证：</b>
+ * 对于撤回（-U）记录，第一次遇到时会通过 MergeFunction 验证其合法性。
+ * 这确保了撤回记录能够被正确处理。
+ *
+ * <p><b>动态模式切换：</b>
+ * 支持从直接写入模式动态切换到缓冲写入模式（通过 {@link #toBufferedWriter()}），
+ * 这在内存压力增大时特别有用。
+ *
+ * <p><b>文件管理：</b>
+ * <ul>
+ *   <li>新写入的文件存储在 files 列表中
+ *   <li>支持恢复写入（通过 restoreIncrement）
+ *   <li>提交时返回所有文件的元数据
+ * </ul>
+ *
+ * @see PostponeBucketFileStoreWrite
+ * @see BucketFiles
+ */
 public class PostponeBucketWriter implements RecordWriter<KeyValue>, MemoryOwner {
 
     private final FileIO fileIO;

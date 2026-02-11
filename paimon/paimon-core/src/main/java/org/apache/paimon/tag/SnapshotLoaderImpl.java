@@ -29,7 +29,7 @@ import org.apache.paimon.utils.SnapshotLoader;
 import java.io.IOException;
 import java.util.Optional;
 
-/** Implementation of {@link SnapshotLoader}. */
+/** {@link SnapshotLoader} 的实现。 */
 public class SnapshotLoaderImpl implements SnapshotLoader {
 
     private final CatalogLoader catalogLoader;

@@ -29,11 +29,18 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * A partition expiration policy that compares the last update time of the partition to the current
- * time.
+ * 基于分区最后更新时间的过期策略。
+ *
+ * <p>将分区的最后更新时间与当前时间进行比较,判断分区是否过期。
  */
 public class PartitionUpdateTimeExpireStrategy extends PartitionExpireStrategy {
 
+    /**
+     * 构造分区更新时间过期策略。
+     *
+     * @param options 核心配置选项
+     * @param partitionType 分区类型
+     */
     public PartitionUpdateTimeExpireStrategy(CoreOptions options, RowType partitionType) {
         super(partitionType, options.partitionDefaultName());
     }

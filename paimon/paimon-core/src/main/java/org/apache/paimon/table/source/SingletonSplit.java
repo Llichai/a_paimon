@@ -18,7 +18,28 @@
 
 package org.apache.paimon.table.source;
 
-/** Singleton split use for system table, in which, scan always just produce one split. */
+/**
+ * 单例分片，用于系统表，扫描总是只产生一个分片。
+ *
+ * <p>SingletonSplit 是一个抽象基类，用于那些不需要分片的表（如系统表、元数据表）。
+ * 这些表的扫描总是返回单个 Split。
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li><b>系统表</b>: 如快照表、文件表等，数据量很小，不需要分片</li>
+ *   <li><b>元数据表</b>: 如分区表、标签表等</li>
+ *   <li><b>聚合结果表</b>: 全局聚合的结果，只有一行数据</li>
+ * </ul>
+ *
+ * <h3>特点</h3>
+ * <ul>
+ *   <li>rowCount() 固定返回 1（表示单个分片）</li>
+ *   <li>不支持并行读取（只有一个分片）</li>
+ *   <li>简化了系统表的实现</li>
+ * </ul>
+ *
+ * @see Split 分片接口
+ */
 public abstract class SingletonSplit implements Split {
 
     @Override

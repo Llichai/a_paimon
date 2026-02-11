@@ -39,7 +39,76 @@ import java.util.OptionalLong;
 import static org.apache.paimon.utils.SerializationUtils.deserializeBinaryRow;
 import static org.apache.paimon.utils.SerializationUtils.serializeBinaryRow;
 
-/** Incremental split for batch and streaming. */
+/**
+ * 增量分片，用于批量和流式的增量读取场景。
+ *
+ * <p>IncrementalSplit 表示两个版本之间的数据变化，包含变化前的文件（beforeFiles）
+ * 和变化后的文件（afterFiles）。通过对比这两组文件，可以计算出增量数据。
+ *
+ * <h3>核心概念</h3>
+ * <ul>
+ *   <li><b>beforeFiles</b>: 变化前的数据文件（旧版本）</li>
+ *   <li><b>afterFiles</b>: 变化后的数据文件（新版本）</li>
+ *   <li><b>增量读取</b>: 通过合并读取两组文件，计算出数据的变化（INSERT、UPDATE、DELETE）</li>
+ * </ul>
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li><b>增量批量读取</b>: 读取两个快照之间的变化数据</li>
+ *   <li><b>流式读取</b>: 持续读取新产生的数据变化</li>
+ *   <li><b>CDC 场景</b>: 捕获数据库的变化（Change Data Capture）</li>
+ * </ul>
+ *
+ * <h3>增量计算逻辑</h3>
+ * <p>对于主键表，增量计算的逻辑：
+ * <ol>
+ *   <li>读取 beforeFiles，获取每个主键的旧值</li>
+ *   <li>读取 afterFiles，获取每个主键的新值</li>
+ *   <li>对比新旧值，生成增量记录：
+ *       <ul>
+ *         <li>只在 afterFiles 中 -> INSERT</li>
+ *         <li>只在 beforeFiles 中 -> DELETE</li>
+ *         <li>新旧都有且值不同 -> UPDATE（先 DELETE 旧值，再 INSERT 新值）</li>
+ *       </ul>
+ *   </li>
+ * </ol>
+ *
+ * <h3>删除向量</h3>
+ * <p>IncrementalSplit 也支持删除向量：
+ * <ul>
+ *   <li><b>beforeDeletionFiles</b>: beforeFiles 对应的删除向量</li>
+ *   <li><b>afterDeletionFiles</b>: afterFiles 对应的删除向量</li>
+ * </ul>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 增量扫描（读取快照 5 到快照 10 之间的变化）
+ * TableScan scan = table.newScan()
+ *     .withStartSnapshot(5)
+ *     .withEndSnapshot(10);
+ * Plan plan = scan.plan();
+ *
+ * // 读取增量数据
+ * for (Split split : plan.splits()) {
+ *     if (split instanceof IncrementalSplit) {
+ *         IncrementalSplit incSplit = (IncrementalSplit) split;
+ *         List<DataFileMeta> before = incSplit.beforeFiles();
+ *         List<DataFileMeta> after = incSplit.afterFiles();
+ *         // 计算增量...
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h3>与 DataSplit 的区别</h3>
+ * <ul>
+ *   <li><b>DataSplit</b>: 表示单个时间点的数据（批量扫描）</li>
+ *   <li><b>IncrementalSplit</b>: 表示两个时间点之间的变化（增量扫描）</li>
+ * </ul>
+ *
+ * @see Split 分片接口
+ * @see DataSplit 标准数据分片
+ * @see TableScan 生成 Split 的扫描接口
+ */
 public class IncrementalSplit implements Split {
 
     private static final long serialVersionUID = 1L;

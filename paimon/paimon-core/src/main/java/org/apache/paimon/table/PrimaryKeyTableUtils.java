@@ -42,19 +42,112 @@ import static org.apache.paimon.mergetree.compact.PartialUpdateMergeFunction.SEQ
 import static org.apache.paimon.table.SpecialFields.KEY_FIELD_ID_START;
 import static org.apache.paimon.table.SpecialFields.KEY_FIELD_PREFIX;
 
-/** Utils for creating changelog table with primary keys. */
+/**
+ * 主键表工具类 - 提供主键表相关的工具方法
+ *
+ * <p>PrimaryKeyTableUtils 提供了与主键表（Primary Key Table）相关的工具方法，包括：
+ * <ul>
+ *   <li>主键字段名称前缀处理
+ *   <li>MergeFunction 工厂创建
+ *   <li>主键字段提取器
+ *   <li>主键 Upsert 删除能力校验
+ * </ul>
+ *
+ * <p><b>主键字段命名规范：</b>
+ * <ul>
+ *   <li>主键字段在内部存储时会添加前缀 {@link SpecialFields#KEY_FIELD_PREFIX}（"_KEY_"）
+ *   <li>主键字段 ID 会加上 {@link SpecialFields#KEY_FIELD_ID_START}（偏移量）
+ *   <li>这样可以区分主键字段和值字段，避免冲突
+ * </ul>
+ *
+ * <p><b>为什么需要主键字段前缀？</b>
+ * <ul>
+ *   <li>主键字段和值字段可能同名（如 id 既是主键又是值字段）
+ *   <li>在 KeyValue 存储中，需要明确区分 Key 和 Value
+ *   <li>通过前缀可以避免字段名冲突
+ * </ul>
+ *
+ * <p><b>MergeFunction 类型：</b>
+ * <ul>
+ *   <li><b>DEDUPLICATE</b>：去重，保留最新记录
+ *   <li><b>PARTIAL_UPDATE</b>：部分更新，只更新指定字段
+ *   <li><b>AGGREGATE</b>：聚合，对字段进行聚合操作（SUM、MAX、MIN 等）
+ *   <li><b>FIRST_ROW</b>：保留第一条记录（First-Win）
+ * </ul>
+ *
+ * <p><b>主键 Upsert 删除能力：</b>
+ * <ul>
+ *   <li>某些 Merge Engine 默认不支持通过主键 Upsert 实现删除
+ *   <li>需要配置特定选项才能启用删除能力
+ *   <li>{@link #validatePKUpsertDeletable} 用于校验表是否支持主键删除
+ * </ul>
+ *
+ * <p><b>示例用法：</b>
+ * <pre>{@code
+ * // 1. 添加主键字段前缀
+ * RowType keyType = new RowType(...); // [id, name]
+ * RowType prefixedKeyType = PrimaryKeyTableUtils.addKeyNamePrefix(keyType);
+ * // 结果：[_KEY_id, _KEY_name]
+ *
+ * // 2. 创建 MergeFunction 工厂
+ * TableSchema schema = ...;
+ * MergeFunctionFactory<KeyValue> factory =
+ *     PrimaryKeyTableUtils.createMergeFunctionFactory(schema);
+ *
+ * // 3. 校验主键删除能力
+ * Table table = ...;
+ * PrimaryKeyTableUtils.validatePKUpsertDeletable(table);
+ * // 如果不支持，会抛出 UnsupportedOperationException
+ * }</pre>
+ *
+ * @see org.apache.paimon.mergetree.compact.MergeFunctionFactory
+ * @see SpecialFields
+ */
 public class PrimaryKeyTableUtils {
 
+    /**
+     * 为 RowType 的所有字段添加主键前缀
+     *
+     * @param type 原始 RowType
+     * @return 添加前缀后的 RowType
+     */
     public static RowType addKeyNamePrefix(RowType type) {
         return new RowType(addKeyNamePrefix(type.getFields()));
     }
 
+    /**
+     * 为字段列表添加主键前缀
+     *
+     * <p>转换规则：
+     * <ul>
+     *   <li>字段名：name → _KEY_name
+     *   <li>字段 ID：id → id + KEY_FIELD_ID_START
+     * </ul>
+     *
+     * @param keyFields 主键字段列表
+     * @return 添加前缀后的字段列表
+     */
     public static List<DataField> addKeyNamePrefix(List<DataField> keyFields) {
         return keyFields.stream()
                 .map(f -> f.newName(KEY_FIELD_PREFIX + f.name()).newId(f.id() + KEY_FIELD_ID_START))
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 根据表 Schema 创建 MergeFunction 工厂
+     *
+     * <p>根据表的 merge-engine 配置，选择对应的 MergeFunction 实现：
+     * <ul>
+     *   <li><b>deduplicate</b> → {@link DeduplicateMergeFunction}
+     *   <li><b>partial-update</b> → {@link PartialUpdateMergeFunction}
+     *   <li><b>aggregate</b> → {@link AggregateMergeFunction}
+     *   <li><b>first-row</b> → {@link FirstRowMergeFunction}
+     * </ul>
+     *
+     * @param tableSchema 表的 Schema
+     * @return MergeFunctionFactory 实例
+     * @throws UnsupportedOperationException 如果 merge-engine 不支持
+     */
     public static MergeFunctionFactory<KeyValue> createMergeFunctionFactory(
             TableSchema tableSchema) {
         RowType rowType = tableSchema.logicalRowType();
@@ -76,20 +169,43 @@ public class PrimaryKeyTableUtils {
         }
     }
 
-    /** Primary key fields extractor. */
+    /**
+     * 主键字段提取器 - 用于从 TableSchema 提取主键和值字段
+     *
+     * <p>该提取器实现了 {@link KeyValueFieldsExtractor} 接口，用于：
+     * <ul>
+     *   <li>提取主键字段（添加前缀）
+     *   <li>提取值字段（保持原样）
+     * </ul>
+     *
+     * <p>单例模式，通过 {@link #EXTRACTOR} 获取实例。
+     */
     public static class PrimaryKeyFieldsExtractor implements KeyValueFieldsExtractor {
 
         private static final long serialVersionUID = 1L;
 
+        /** 单例实例 */
         public static final PrimaryKeyFieldsExtractor EXTRACTOR = new PrimaryKeyFieldsExtractor();
 
         private PrimaryKeyFieldsExtractor() {}
 
+        /**
+         * 提取主键字段（添加前缀）
+         *
+         * @param schema 表 Schema
+         * @return 添加前缀后的主键字段列表
+         */
         @Override
         public List<DataField> keyFields(TableSchema schema) {
             return addKeyNamePrefix(schema.trimmedPrimaryKeysFields());
         }
 
+        /**
+         * 提取值字段（所有字段）
+         *
+         * @param schema 表 Schema
+         * @return 值字段列表
+         */
         @Override
         public List<DataField> valueFields(TableSchema schema) {
             return schema.fields();
@@ -97,8 +213,44 @@ public class PrimaryKeyTableUtils {
     }
 
     /**
-     * This method checks if a table is properly configured to handle delete operations by primary
-     * key upsert. It checks primary key and merge-engine.
+     * 校验表是否支持通过主键 Upsert 实现删除
+     *
+     * <p>该方法检查：
+     * <ol>
+     *   <li>表是否有主键
+     *   <li>Merge Engine 是否支持删除
+     *   <li>是否配置了必要的删除选项
+     * </ol>
+     *
+     * <p><b>各 Merge Engine 的删除支持：</b>
+     * <ul>
+     *   <li><b>DEDUPLICATE</b>：默认支持（直接删除记录）
+     *   <li><b>PARTIAL_UPDATE</b>：
+     *       <ul>
+     *         <li>需要配置 {@code partial-update.remove-record-on-delete=true}
+     *         <li>或配置 {@code partial-update.remove-record-on-sequence-group}
+     *       </ul>
+     *   <li><b>AGGREGATE</b>：
+     *       <ul>
+     *         <li>需要配置 {@code aggregation.remove-record-on-delete=true}
+     *       </ul>
+     *   <li><b>FIRST_ROW</b>：不支持删除
+     * </ul>
+     *
+     * <p><b>示例：</b>
+     * <pre>{@code
+     * // PARTIAL_UPDATE 表启用删除
+     * table.options().put("partial-update.remove-record-on-delete", "true");
+     * PrimaryKeyTableUtils.validatePKUpsertDeletable(table); // 通过
+     *
+     * // AGGREGATE 表未启用删除
+     * PrimaryKeyTableUtils.validatePKUpsertDeletable(table);
+     * // 抛出异常：Merge engine aggregate doesn't support batch delete by default.
+     * //         To support batch delete, please set aggregation.remove-record-on-delete to true.
+     * }</pre>
+     *
+     * @param table 要校验的表
+     * @throws UnsupportedOperationException 如果表不支持主键删除
      */
     public static void validatePKUpsertDeletable(Table table) {
         if (table.primaryKeys().isEmpty()) {

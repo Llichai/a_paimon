@@ -25,23 +25,30 @@ import java.util.Iterator;
 import java.util.Queue;
 
 /**
- * This class implements a priority-queue, which maintains a partial ordering of its elements such
- * that the least element can always be found in constant time. Put()'s and pop()'s require
- * log(size) time.
+ * 部分排序优先级队列实现。
+ *
+ * <p>维护元素的部分排序,使得最小元素始终可以在常量时间内找到。
+ * put() 和 pop() 操作需要 log(size) 时间。
  */
 public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Queue<T> {
-    /** The heap, organized as an array. */
+    /** 堆,以数组形式组织 */
     private final T[] heap;
 
-    /** The comparator used to establish the order between the streams. */
+    /** 用于在流之间建立顺序的比较器 */
     private final Comparator<T> comparator;
 
-    /** The maximum size of the heap. */
+    /** 堆的最大大小 */
     private final int capacity;
 
-    /** The current number of elements in the queue. */
+    /** 队列中的当前元素数量 */
     private int size;
 
+    /**
+     * 构造部分排序优先级队列。
+     *
+     * @param comparator 比较器
+     * @param capacity 容量
+     */
     @SuppressWarnings("unchecked")
     public PartialOrderPriorityQueue(Comparator<T> comparator, int capacity) {
         this.comparator = comparator;
@@ -51,28 +58,31 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
     }
 
     /**
-     * Determines the ordering of objects in this priority queue.
+     * 确定此优先级队列中对象的顺序。
      *
-     * @param a The first element.
-     * @param b The second element.
-     * @return True, if a &lt; b, false otherwise.
+     * @param a 第一个元素
+     * @param b 第二个元素
+     * @return a < b 返回true,否则返回false
      */
     private boolean lessThan(T a, T b) {
         return comparator.compare(a, b) < 0;
     }
 
     /**
-     * Returns the remaining capacity of the backing array.
+     * 返回后备数组的剩余容量。
      *
-     * @return The remaining capacity of the backing array.
+     * @return 剩余容量
      */
     public int remainingCapacity() {
         return capacity - size;
     }
 
     /**
-     * Adds a buffer to a PriorityQueue in log(size) time. If one tries to add more objects than
-     * maxSize from initialize a RuntimeException (ArrayIndexOutOfBound) is thrown.
+     * 在 log(size) 时间内向优先级队列添加缓冲区。
+     *
+     * <p>如果尝试添加超过 maxSize 的对象,会抛出 RuntimeException (ArrayIndexOutOfBound)。
+     *
+     * @param element 要添加的元素
      */
     public final void put(T element) {
         size++;
@@ -81,11 +91,12 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
     }
 
     /**
-     * Adds element to the PriorityQueue in log(size) time if either the PriorityQueue is not full,
-     * or not lessThan(element, top()).
+     * 在 log(size) 时间内向优先级队列添加元素。
      *
-     * @param element The element to insert,
-     * @return True, if element is added, false otherwise.
+     * <p>仅在优先级队列未满,或元素不小于 top() 时添加。
+     *
+     * @param element 要插入的元素
+     * @return 添加成功返回true,否则返回false
      */
     public boolean offer(T element) {
         if (size < capacity) {
@@ -101,10 +112,9 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
     }
 
     /**
-     * Returns the least element of the PriorityQueue in constant time, but does not remove it from
-     * the priority queue.
+     * 在常量时间内返回优先级队列的最小元素,但不从队列中移除它。
      *
-     * @return The least element.
+     * @return 最小元素
      */
     public final T peek() {
         if (size > 0) {
@@ -115,9 +125,9 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
     }
 
     /**
-     * Removes and returns the least element of the PriorityQueue in log(size) time.
+     * 在 log(size) 时间内移除并返回优先级队列的最小元素。
      *
-     * @return The least element.
+     * @return 最小元素
      */
     public final T poll() {
         if (size > 0) {
@@ -132,21 +142,25 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
         }
     }
 
-    /** Should be called when the Object at top changes values. */
+    /**
+     * 当顶部对象的值发生变化时应调用此方法。
+     */
     public final void adjustTop() {
         downHeap();
     }
 
     /**
-     * Returns the number of elements currently stored in the PriorityQueue.
+     * 返回当前存储在优先级队列中的元素数量。
      *
-     * @return The number of elements in the queue.
+     * @return 队列中的元素数量
      */
     public final int size() {
         return size;
     }
 
-    /** Removes all entries from the PriorityQueue. */
+    /**
+     * 从优先级队列中移除所有条目。
+     */
     public final void clear() {
         for (int i = 0; i <= size; i++) {
             heap[i] = null;
@@ -154,6 +168,9 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
         size = 0;
     }
 
+    /**
+     * 向上调整堆。
+     */
     private void upHeap() {
         int i = size;
         T node = heap[i]; // save bottom node
@@ -166,6 +183,9 @@ public class PartialOrderPriorityQueue<T> extends AbstractQueue<T> implements Qu
         heap[i] = node; // install saved node
     }
 
+    /**
+     * 向下调整堆。
+     */
     private void downHeap() {
         int i = 1;
         T node = heap[i]; // save top node

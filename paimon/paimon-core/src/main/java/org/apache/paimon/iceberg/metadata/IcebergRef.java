@@ -28,9 +28,21 @@ import javax.annotation.Nullable;
 import java.util.Objects;
 
 /**
- * Iceberg's ref metadata.
+ * Iceberg 引用元数据类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#snapshot-references">Iceberg spec</a>.
+ * <p>表示 Iceberg 快照的引用(标签或分支)。
+ * 当前 Paimon 仅支持标签(tag)类型的引用。
+ *
+ * <p>属性说明:
+ * <ul>
+ *   <li>snapshotId: 引用指向的快照 ID
+ *   <li>type: 引用类型,当前仅支持 "tag"
+ *   <li>maxRefAgeMs: 引用的最大存活时间,由 Paimon 管理,设为 Long.MAX_VALUE
+ * </ul>
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#snapshot-references">Iceberg 规范</a>
+ *
+ * @see IcebergSnapshot 快照类
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergRef {

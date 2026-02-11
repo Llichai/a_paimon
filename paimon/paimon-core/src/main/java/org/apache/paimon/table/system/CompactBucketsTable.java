@@ -69,10 +69,27 @@ import static org.apache.paimon.utils.SerializationUtils.newBytesType;
 import static org.apache.paimon.utils.SerializationUtils.serializeBinaryRow;
 
 /**
- * A table to produce modified partitions and buckets (also including files in streaming mode) for
- * each snapshot.
+ * 压缩分桶表(内部使用)。
  *
- * <p>Only used internally by dedicated compact job sources.
+ * <p>用于为每个快照生成已修改的分区和分桶信息(在流式模式下还包括文件信息)。
+ * 此表仅供专用的压缩作业(Dedicated Compact Job)内部使用。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>_SNAPSHOT_ID (BIGINT NOT NULL): 快照 ID</li>
+ *   <li>_PARTITION (BYTES NOT NULL): 分区(序列化的 BinaryRow)</li>
+ *   <li>_BUCKET (INT NOT NULL): 分桶编号</li>
+ *   <li>_FILES (BYTES NOT NULL): 文件列表(序列化的 DataFileMeta 列表)</li>
+ *   <li>_DATABASE_NAME (VARCHAR): 数据库名称</li>
+ *   <li>_TABLE_NAME (VARCHAR NOT NULL): 表名称</li>
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <p>在连续压缩模式({@code isContinuous = true})下,序列化的文件信息仅在流式作业中有用。
+ * 批式压缩作业只需要知道哪些分桶需要压缩,不需要关注增量的新文件。
+ *
+ * @see DataTable
+ * @see ReadonlyTable
  */
 public class CompactBucketsTable implements DataTable, ReadonlyTable {
 

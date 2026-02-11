@@ -34,7 +34,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-/** Tag creation for batch mode. */
+/** 批处理模式的标签创建。 */
 public class TagBatchCreation {
 
     private static final Logger LOG = LoggerFactory.getLogger(TagBatchCreation.class);
@@ -69,7 +69,7 @@ public class TagBatchCreation {
                         : BATCH_WRITE_TAG_PREFIX
                                 + localDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         try {
-            // If the tag already exists, delete the tag
+            // 如果标签已存在,删除标签
             tagManager.deleteTag(
                     tagName, tagDeletion, snapshotManager, table.store().createTagCallbacks(table));
             // Create a new tag
@@ -93,7 +93,7 @@ public class TagBatchCreation {
                         table.store().createTagCallbacks(table));
             }
         }
-        // Expire the tag
+        // 使标签过期
         expireTag();
     }
 

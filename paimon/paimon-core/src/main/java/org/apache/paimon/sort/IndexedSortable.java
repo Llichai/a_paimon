@@ -18,59 +18,67 @@
 
 package org.apache.paimon.sort;
 
-/** Indexed sortable to provide compare and swap. */
+/**
+ * 提供比较和交换功能的索引可排序接口。
+ */
 public interface IndexedSortable {
 
     /**
-     * Compare items at the given addresses consistent with the semantics of {@link
-     * java.util.Comparator#compare(Object, Object)}.
+     * 比较给定地址的项,符合 {@link java.util.Comparator#compare(Object, Object)} 的语义。
+     *
+     * @param i 第一个项的索引
+     * @param j 第二个项的索引
+     * @return 比较结果
      */
     int compare(int i, int j);
 
     /**
-     * Compare records at the given addresses consistent with the semantics of {@link
-     * java.util.Comparator#compare(Object, Object)}.
+     * 比较给定地址的记录,符合 {@link java.util.Comparator#compare(Object, Object)} 的语义。
      *
-     * @param segmentNumberI index of memory segment containing first record
-     * @param segmentOffsetI offset into memory segment containing first record
-     * @param segmentNumberJ index of memory segment containing second record
-     * @param segmentOffsetJ offset into memory segment containing second record
-     * @return a negative integer, zero, or a positive integer as the first argument is less than,
-     *     equal to, or greater than the second.
+     * @param segmentNumberI 包含第一个记录的内存段索引
+     * @param segmentOffsetI 第一个记录在内存段中的偏移量
+     * @param segmentNumberJ 包含第二个记录的内存段索引
+     * @param segmentOffsetJ 第二个记录在内存段中的偏移量
+     * @return 比较结果(负数表示小于,零表示等于,正数表示大于)
      */
     int compare(int segmentNumberI, int segmentOffsetI, int segmentNumberJ, int segmentOffsetJ);
 
-    /** Swap items at the given addresses. */
+    /**
+     * 交换给定地址的项。
+     *
+     * @param i 第一个项的索引
+     * @param j 第二个项的索引
+     */
     void swap(int i, int j);
 
     /**
-     * Swap records at the given addresses.
+     * 交换给定地址的记录。
      *
-     * @param segmentNumberI index of memory segment containing first record
-     * @param segmentOffsetI offset into memory segment containing first record
-     * @param segmentNumberJ index of memory segment containing second record
-     * @param segmentOffsetJ offset into memory segment containing second record
+     * @param segmentNumberI 包含第一个记录的内存段索引
+     * @param segmentOffsetI 第一个记录在内存段中的偏移量
+     * @param segmentNumberJ 包含第二个记录的内存段索引
+     * @param segmentOffsetJ 第二个记录在内存段中的偏移量
      */
     void swap(int segmentNumberI, int segmentOffsetI, int segmentNumberJ, int segmentOffsetJ);
 
     /**
-     * Gets the number of elements in the sortable.
+     * 获取可排序对象中的元素数量。
      *
-     * @return The number of elements.
+     * @return 元素数量
      */
     int size();
 
     /**
-     * Gets the size of each record, the number of bytes separating the head of successive records.
+     * 获取每条记录的大小(相邻记录头之间的字节数)。
      *
-     * @return The record size
+     * @return 记录大小
      */
     int recordSize();
 
     /**
-     * Gets the number of elements in each memory segment.
+     * 获取每个内存段中的元素数量。
      *
-     * @return The number of records per segment
+     * @return 每段记录数
      */
     int recordsPerSegment();
 }

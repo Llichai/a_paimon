@@ -47,7 +47,64 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * An abstraction layer above {@link MergeFileSplitRead} to provide reading of {@link InternalRow}.
+ * 主键表读取实现，位于 {@link MergeFileSplitRead} 之上，提供 {@link InternalRow} 的读取功能。
+ *
+ * <p>KeyValueTableRead 是主键表的读取实现，负责将底层的 {@link KeyValue} 数据
+ * 合并并转换为 {@link InternalRow}。
+ *
+ * <h3>主键表 vs 追加表</h3>
+ * <ul>
+ *   <li><b>KeyValueTableRead（主键表）</b>:
+ *       <ul>
+ *         <li>读取 KeyValue 数据</li>
+ *         <li>需要合并相同主键的多个版本</li>
+ *         <li>支持 UPDATE 和 DELETE 操作</li>
+ *         <li>使用 MergeFunctionWrapper 合并数据</li>
+ *       </ul>
+ *   </li>
+ *   <li><b>AppendTableRead（追加表）</b>:
+ *       <ul>
+ *         <li>直接读取 InternalRow 数据</li>
+ *         <li>不需要合并（只有 INSERT）</li>
+ *         <li>读取性能更高</li>
+ *       </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h3>读取提供者（SplitReadProvider）</h3>
+ * <p>KeyValueTableRead 支持多种读取模式，通过不同的 SplitReadProvider 实现：
+ * <ul>
+ *   <li><b>PrimaryKeyTableRawFileSplitReadProvider</b>: 原始文件读取（批量扫描，rawConvertible=true）</li>
+ *   <li><b>MergeFileSplitReadProvider</b>: 合并文件读取（标准主键表读取）</li>
+ *   <li><b>IncrementalChangelogReadProvider</b>: 增量 Changelog 读取（读取变更日志）</li>
+ *   <li><b>IncrementalDiffReadProvider</b>: 增量 Diff 读取（增量批量扫描）</li>
+ * </ul>
+ *
+ * <h3>使用流程</h3>
+ * <pre>{@code
+ * // 1. 创建读取器
+ * KeyValueTableRead read = new KeyValueTableRead(...);
+ *
+ * // 2. 配置读取参数
+ * read.withFilter(predicate)          // 设置过滤条件
+ *     .withReadType(projectedType)    // 设置列裁剪
+ *     .executeFilter();               // 启用过滤执行
+ *
+ * // 3. 从 Split 创建读取器
+ * RecordReader<InternalRow> reader = read.createReader(split);
+ *
+ * // 4. 读取数据
+ * reader.forEachRemaining(row -> process(row));
+ * }</pre>
+ *
+ * <h3>forceKeepDelete 标志</h3>
+ * <p>默认情况下，主键表读取会过滤掉已删除的记录（RowKind.DELETE）。
+ * 如果设置 forceKeepDelete = true，删除记录也会被返回（用于 CDC 场景）。
+ *
+ * @see AbstractDataTableRead 抽象基类
+ * @see AppendTableRead 追加表读取实现
+ * @see MergeFileSplitRead 底层合并文件读取
+ * @see SplitReadProvider 分片读取提供者
  */
 public final class KeyValueTableRead extends AbstractDataTableRead {
 

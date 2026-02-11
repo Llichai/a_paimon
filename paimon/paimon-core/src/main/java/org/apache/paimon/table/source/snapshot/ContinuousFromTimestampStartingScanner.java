@@ -26,8 +26,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_TIMESTAMP} startup mode of a
- * streaming read.
+ * 连续时间戳起始扫描器
+ *
+ * <p>对应流式读取的 {@link CoreOptions.StartupMode#FROM_TIMESTAMP} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>从指定时间戳之后开始流式读取
+ *   <li>查找早于指定时间的最新快照
+ *   <li>从该快照的下一个开始读取
+ *   <li>支持 changelog 解耦模式
+ * </ul>
+ *
+ * <p><b>查找逻辑：</b>
+ * <pre>
+ * 1. earlierThanTimeMills() 查找 snapshot.timeMillis() < startupMillis 的最大快照 ID
+ * 2. 返回 NextSnapshot(snapshotId + 1)
+ * </pre>
+ *
+ * @see CoreOptions.StartupMode#FROM_TIMESTAMP
+ * @see CoreOptions#SCAN_TIMESTAMP
+ * @see CoreOptions#SCAN_TIMESTAMP_MILLIS
  */
 public class ContinuousFromTimestampStartingScanner extends AbstractStartingScanner {
 

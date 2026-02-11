@@ -25,7 +25,29 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.OptionalLong;
 
-/** A wrapper class for {@link Split} that adds query authorization information. */
+/**
+ * {@link Split} 的包装类，添加查询授权信息。
+ *
+ * <p>QueryAuthSplit 用于实现细粒度的数据访问控制，在 Split 基础上添加授权结果，
+ * 包括：列级别权限、行级别过滤等。
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li><b>列级别权限</b>: 限制可访问的列</li>
+ *   <li><b>行级别权限</b>: 添加额外的过滤条件</li>
+ *   <li><b>数据脱敏</b>: 对敏感列进行脱敏处理</li>
+ * </ul>
+ *
+ * <h3>工作流程</h3>
+ * <ol>
+ *   <li>扫描阶段：生成 Split</li>
+ *   <li>授权阶段：将 Split 包装为 QueryAuthSplit，添加授权信息</li>
+ *   <li>读取阶段：根据授权信息过滤列和行</li>
+ * </ol>
+ *
+ * @see Split 分片接口
+ * @see TableQueryAuthResult 查询授权结果
+ */
 public class QueryAuthSplit implements Split {
 
     private static final long serialVersionUID = 1L;

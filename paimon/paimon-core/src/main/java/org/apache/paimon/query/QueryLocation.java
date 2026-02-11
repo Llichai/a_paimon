@@ -22,13 +22,30 @@ import org.apache.paimon.data.BinaryRow;
 
 import java.net.InetSocketAddress;
 
-/** An interface to get query location. */
+/**
+ * 查询位置接口。
+ *
+ * <p>用于获取查询服务的网络位置，支持主键查找等查询操作的路由。
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>主键查找：根据分区和桶定位到具体的查询服务节点
+ *   <li>负载均衡：将查询请求路由到不同的服务实例
+ *   <li>分布式查询：在集群环境中定位数据所在节点
+ * </ul>
+ *
+ * @see QueryLocationImpl
+ * @see QueryServer
+ */
 public interface QueryLocation {
 
     /**
-     * Get location from partition and bucket.
+     * 根据分区和桶获取查询服务的位置。
      *
-     * @param forceUpdate whether to refresh location cache.
+     * @param partition 分区键
+     * @param bucket 桶编号
+     * @param forceUpdate 是否强制刷新位置缓存
+     * @return 查询服务的网络地址
      */
     InetSocketAddress getLocation(BinaryRow partition, int bucket, boolean forceUpdate);
 }

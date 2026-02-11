@@ -57,11 +57,49 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-/** To construct file meta data for external files. */
+/**
+ * 文件元数据构造工具类。
+ *
+ * <p>用于为外部文件构造文件元数据，主要功能包括：
+ * <ul>
+ *   <li>从外部文件系统读取文件并构造 {@link DataFileMeta}
+ *   <li>提取文件统计信息（行数、列统计等）
+ *   <li>创建提交消息（{@link CommitMessage}）
+ *   <li>处理分区值的序列化
+ *   <li>文件重命名和路径管理
+ * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>数据迁移：从 Hive、Iceberg 等系统迁移数据到 Paimon
+ *   <li>外部表注册：将现有文件注册为 Paimon 表
+ *   <li>文件元数据重建：重新构造损坏的元数据
+ * </ul>
+ *
+ * <p><b>注意事项：</b>
+ * <ul>
+ *   <li>文件重命名操作会记录回滚信息，支持失败回滚
+ *   <li>自动提取文件统计信息以优化查询性能
+ *   <li>支持多种文件格式（通过 {@link FileFormat}）
+ * </ul>
+ */
 public class FileMetaUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(FileMetaUtils.class);
 
+    /**
+     * 为指定位置的外部文件构造文件元数据列表。
+     *
+     * @param fileIO 文件 IO 操作接口
+     * @param format 文件格式（如 "parquet"、"orc"、"avro" 等）
+     * @param location 文件所在位置
+     * @param paimonTable Paimon 目标表
+     * @param filter 文件过滤器，用于筛选需要处理的文件
+     * @param dir 目标目录
+     * @param rollback 回滚映射，记录文件重命名操作以支持回滚
+     * @return 构造的文件元数据列表
+     * @throws IOException 如果文件读取失败
+     */
     public static List<DataFileMeta> construct(
             FileIO fileIO,
             String format,
@@ -85,6 +123,14 @@ public class FileMetaUtils {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 创建提交消息（用于非分桶表）。
+     *
+     * @param partition 分区键
+     * @param totalBuckets 总桶数
+     * @param dataFileMetas 数据文件元数据列表
+     * @return 提交消息对象
+     */
     public static CommitMessage createCommitMessage(
             BinaryRow partition, int totalBuckets, List<DataFileMeta> dataFileMetas) {
         return new CommitMessageImpl(
@@ -96,6 +142,16 @@ public class FileMetaUtils {
                         Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
     }
 
+    /**
+     * 创建提交消息（用于分桶表，包含索引文件）。
+     *
+     * @param partition 分区键
+     * @param bucket 桶编号
+     * @param totalBuckets 总桶数
+     * @param dataFileMetas 数据文件元数据列表
+     * @param indexFileMetas 索引文件元数据列表
+     * @return 提交消息对象
+     */
     public static CommitMessage createCommitMessage(
             BinaryRow partition,
             int bucket,

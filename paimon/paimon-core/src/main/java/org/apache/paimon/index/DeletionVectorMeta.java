@@ -29,7 +29,12 @@ import java.util.Objects;
 
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
-/** Metadata of deletion vector. */
+/**
+ * 删除向量元数据。
+ *
+ * <p>存储删除向量在文件中的位置信息,用于快速定位和读取删除向量数据。
+ * 删除向量记录了哪些行已被删除,用于实现高效的删除操作。
+ */
 public class DeletionVectorMeta {
 
     public static final RowType SCHEMA =

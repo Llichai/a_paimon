@@ -18,9 +18,29 @@
 
 package org.apache.paimon.operation.commit;
 
-/** Success {@link CommitResult}. */
+/**
+ * 成功提交结果
+ *
+ * <p>表示提交操作成功完成。
+ *
+ * <h2>使用场景</h2>
+ * <p>当提交操作成功时返回该结果：
+ * <ul>
+ *   <li>快照已成功写入
+ *   <li>Manifest文件已持久化
+ *   <li>所有文件变更已记录
+ * </ul>
+ *
+ * @see CommitResult 提交结果接口
+ * @see RetryCommitResult 重试提交结果
+ */
 public class SuccessCommitResult implements CommitResult {
 
+    /**
+     * 判断提交是否成功
+     *
+     * @return 始终返回true，表示提交成功
+     */
     @Override
     public boolean isSuccess() {
         return true;

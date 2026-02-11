@@ -21,7 +21,11 @@ package org.apache.paimon.privilege;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-/** Thrown when tries to perform an operation but the current user does not have the privilege. */
+/**
+ * 无权限异常。
+ *
+ * <p>当尝试执行操作但当前用户没有相应权限时抛出。
+ */
 public class NoPrivilegeException extends RuntimeException {
     private final String user;
     private final String objectType;

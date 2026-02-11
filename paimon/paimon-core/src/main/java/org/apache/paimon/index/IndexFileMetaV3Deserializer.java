@@ -37,7 +37,12 @@ import java.util.List;
 import static org.apache.paimon.index.IndexFileMetaSerializer.rowArrayDataToDvMetas;
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
-/** A {@link VersionedObjectSerializer} for {@link IndexFileMeta}. */
+/**
+ * {@link IndexFileMeta} 的 V3 版本反序列化器。
+ *
+ * <p>用于反序列化最新版本的索引文件元数据。
+ * V3 版本包含完整的字段,包括 cardinality 和 externalPath。
+ */
 public class IndexFileMetaV3Deserializer implements Serializable {
 
     private static final long serialVersionUID = 1L;

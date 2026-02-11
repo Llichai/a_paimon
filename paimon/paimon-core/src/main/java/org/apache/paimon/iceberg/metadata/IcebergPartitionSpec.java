@@ -27,13 +27,21 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Partition spec in Iceberg's metadata.
+ * Iceberg 元数据中的分区规范类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#partition-specs">Iceberg spec</a>.
+ * <p>定义了 Iceberg 表的分区规范,包含一组分区字段。
+ * 每个分区字段指定了如何从数据字段派生分区值。
+ *
+ * <p>Paimon 当前不支持分区演化,因此 spec-id 始终为 0。
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#partition-specs">Iceberg 规范</a>
+ *
+ * @see IcebergPartitionField 分区字段类
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergPartitionSpec {
 
+    /** 规范 ID,Paimon 不支持分区演化,固定为 0 */
     // always 0, Paimon does not support partition evolution
     public static final int SPEC_ID = 0;
 

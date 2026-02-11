@@ -22,8 +22,20 @@ import org.apache.paimon.catalog.Identifier;
 
 import java.io.Serializable;
 
-/** Check if current user has privilege to perform related operations. */
+/**
+ * 权限检查器接口。
+ *
+ * <p>检查当前用户是否有权限执行相关操作。
+ */
 public interface PrivilegeChecker extends Serializable {
+    /**
+     * 断言可以查询或插入。
+     *
+     * <p>要求用户至少具有SELECT或INSERT权限之一。
+     *
+     * @param identifier 表标识符
+     * @throws NoPrivilegeException 如果两个权限都没有
+     */
     default void assertCanSelectOrInsert(Identifier identifier) {
         try {
             assertCanSelect(identifier);
@@ -41,27 +53,39 @@ public interface PrivilegeChecker extends Serializable {
         }
     }
 
+    /** 断言可以查询表 */
     void assertCanSelect(Identifier identifier);
 
+    /** 断言可以插入表 */
     void assertCanInsert(Identifier identifier);
 
+    /** 断言可以修改表 */
     void assertCanAlterTable(Identifier identifier);
 
+    /** 断言可以删除表 */
     void assertCanDropTable(Identifier identifier);
 
+    /** 断言可以创建表 */
     void assertCanCreateTable(String databaseName);
 
+    /** 断言可以删除数据库 */
     void assertCanDropDatabase(String databaseName);
 
+    /** 断言可以修改数据库 */
     void assertCanAlterDatabase(String databaseName);
 
+    /** 断言可以创建数据库 */
     void assertCanCreateDatabase();
 
+    /** 断言可以创建用户 */
     void assertCanCreateUser();
 
+    /** 断言可以删除用户 */
     void assertCanDropUser();
 
+    /** 断言可以授权 */
     void assertCanGrant(String identifier, PrivilegeType privilege);
 
+    /** 断言可以撤销权限 */
     void assertCanRevoke();
 }

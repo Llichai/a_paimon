@@ -38,7 +38,68 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * An abstraction layer above {@link MergeFileSplitRead} to provide reading of {@link InternalRow}.
+ * 追加表读取实现，位于 {@link MergeFileSplitRead} 之上，提供 {@link InternalRow} 的读取功能。
+ *
+ * <p>AppendTableRead 是追加表的读取实现，可以直接读取 {@link InternalRow} 数据，
+ * 不需要像主键表那样进行 KeyValue 合并。
+ *
+ * <h3>追加表 vs 主键表</h3>
+ * <ul>
+ *   <li><b>AppendTableRead（追加表）</b>:
+ *       <ul>
+ *         <li>直接读取 InternalRow 数据</li>
+ *         <li>不需要合并（只有 INSERT 操作）</li>
+ *         <li>读取性能更高</li>
+ *         <li>适用于日志、事件流等场景</li>
+ *       </ul>
+ *   </li>
+ *   <li><b>KeyValueTableRead（主键表）</b>:
+ *       <ul>
+ *         <li>读取 KeyValue 数据</li>
+ *         <li>需要合并相同主键的多个版本</li>
+ *         <li>支持 UPDATE 和 DELETE 操作</li>
+ *         <li>适用于维度表、CDC 场景</li>
+ *       </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h3>读取提供者（SplitReadProvider）</h3>
+ * <p>AppendTableRead 支持多种读取模式，通过不同的 SplitReadProvider 实现：
+ * <ul>
+ *   <li>标准追加表读取</li>
+ *   <li>数据演化（Data Evolution）读取</li>
+ *   <li>原始文件（RawFile）读取</li>
+ * </ul>
+ *
+ * <h3>使用流程</h3>
+ * <pre>{@code
+ * // 1. 创建读取器
+ * AppendTableRead read = new AppendTableRead(...);
+ *
+ * // 2. 配置读取参数
+ * read.withFilter(predicate)          // 设置过滤条件
+ *     .withReadType(projectedType)    // 设置列裁剪
+ *     .withLimit(1000)                // 设置行数限制
+ *     .executeFilter();               // 启用过滤执行
+ *
+ * // 3. 从 Split 创建读取器
+ * RecordReader<InternalRow> reader = read.createReader(split);
+ *
+ * // 4. 读取数据
+ * reader.forEachRemaining(row -> process(row));
+ * }</pre>
+ *
+ * <h3>性能优势</h3>
+ * <p>由于追加表不需要合并数据，读取性能通常优于主键表：
+ * <ul>
+ *   <li>无需 KeyValue 合并逻辑</li>
+ *   <li>无需维护合并状态</li>
+ *   <li>可以直接流式读取文件</li>
+ * </ul>
+ *
+ * @see AbstractDataTableRead 抽象基类
+ * @see KeyValueTableRead 主键表读取实现
+ * @see SplitReadProvider 分片读取提供者
  */
 public final class AppendTableRead extends AbstractDataTableRead {
 

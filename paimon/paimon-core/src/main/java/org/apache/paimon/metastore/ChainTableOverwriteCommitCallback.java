@@ -39,19 +39,53 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * A {@link CommitCallback} implementation to maintain chain table snapshot branch for overwrite
- * commits.
+ * 用于维护链表表快照分支的覆盖提交回调实现。
  *
- * <p>When the following conditions are met, this callback will truncate the corresponding
- * partitions on the snapshot branch:
- *
+ * <p><b>链表表（Chain Table）：</b>
+ * 链表表是一种特殊的表结构,由多个表链接而成，通常包含：
  * <ul>
- *   <li>The committed snapshot kind is {@link CommitKind#OVERWRITE};
- *   <li>The table is a chain table and current branch is delta branch.
+ *   <li>Delta 分支：增量数据分支，存储最新的变更
+ *   <li>Snapshot 分支：快照数据分支，存储完整的历史快照
  * </ul>
  *
- * <p>This callback is designed to be idempotent. It may be invoked multiple times for the same
- * logical commit, but truncating the same partitions on the snapshot branch repeatedly is safe.
+ * <p><b>触发条件：</b>
+ * 当满足以下所有条件时，此回调会截断快照分支的对应分区：
+ * <ul>
+ *   <li>提交的快照类型为 {@link CommitKind#OVERWRITE}（覆盖写入）
+ *   <li>表是链表表（Chain Table）
+ *   <li>当前分支是 Delta 分支
+ * </ul>
+ *
+ * <p><b>工作原理：</b>
+ * <ol>
+ *   <li>检测到覆盖写入提交
+ *   <li>从提交中提取被覆盖的分区列表
+ *   <li>切换到快照分支表
+ *   <li>在快照分支中截断（truncate）这些分区
+ *   <li>保持 Delta 和 Snapshot 分支的数据一致性
+ * </ol>
+ *
+ * <p><b>幂等性保证：</b>
+ * 此回调设计为幂等的。对于同一个逻辑提交，可能会被多次调用，
+ * 但重复截断相同的分区是安全的操作。
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>数据重写：当 Delta 分支覆盖写入时，同步清理 Snapshot 分支
+ *   <li>分区覆盖：保持两个分支的分区数据一致
+ *   <li>增量合并：定期将 Delta 合并到 Snapshot 时的一致性维护
+ * </ul>
+ *
+ * <p><b>注意事项：</b>
+ * <ul>
+ *   <li>只在成功提交后执行，失败不会触发
+ *   <li>retry 方法为空实现，依赖成功回调的幂等性
+ *   <li>不会影响 Delta 分支的数据
+ * </ul>
+ *
+ * @see CommitCallback
+ * @see ChainGroupReadTable
+ * @see FallbackReadFileStoreTable
  */
 public class ChainTableOverwriteCommitCallback implements CommitCallback {
 

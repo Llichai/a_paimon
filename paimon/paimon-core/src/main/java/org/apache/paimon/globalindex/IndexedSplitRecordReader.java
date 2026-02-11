@@ -34,12 +34,57 @@ import java.util.Map;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Return value with score. */
+/**
+ * 索引分片记录读取器。
+ *
+ * <p>为 {@link IndexedSplit} 提供记录读取功能，支持返回带分数的记录。
+ *
+ * <h3>核心功能：</h3>
+ * <ul>
+ *   <li>读取索引分片中的记录
+ *   <li>为每条记录分配对应的分数
+ *   <li>处理RowId字段的投影
+ *   <li>返回 {@link ScoreRecordIterator} 以支持分数获取
+ * </ul>
+ *
+ * <h3>工作流程：</h3>
+ * <ol>
+ *   <li>读取原始记录
+ *   <li>提取记录的RowId
+ *   <li>从rowIdToScore映射中获取对应分数
+ *   <li>如需投影则去除RowId字段
+ *   <li>返回带分数的记录
+ * </ol>
+ *
+ * <h3>RowId处理：</h3>
+ * <ul>
+ *   <li>若读取类型中不含RowId，会自动添加到实际读取类型
+ *   <li>读取后使用 {@link ProjectedRow} 将RowId投影掉
+ *   <li>确保用户无需感知内部的RowId字段
+ * </ul>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>向量相似度搜索结果读取
+ *   <li>TopN查询的有序记录读取
+ *   <li>全局索引过滤后的精确数据读取
+ * </ul>
+ *
+ * @see IndexedSplit
+ * @see ScoreRecordIterator
+ */
 public class IndexedSplitRecordReader implements RecordReader<InternalRow> {
 
+    /** 底层记录读取器 */
     private final RecordReader<InternalRow> reader;
+
+    /** RowId到分数的映射 */
     @Nullable private final Map<Long, Float> rowIdToScore;
+
+    /** RowId字段的索引位置 */
     private final int rowIdIndex;
+
+    /** 投影行对象，用于去除RowId字段 */
     private final ProjectedRow projectedRow;
 
     public IndexedSplitRecordReader(RecordReader<InternalRow> reader, Info info) {

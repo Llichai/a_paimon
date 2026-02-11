@@ -24,7 +24,32 @@ import org.apache.paimon.utils.SnapshotManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** {@link StartingScanner} used internally for stand-alone streaming compact job sources. */
+/**
+ * 连续压缩器起始扫描器
+ *
+ * <p>专门用于独立的流式压缩作业（Compaction Job）。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>查找最新的压缩快照（commitKind == COMPACT）
+ *   <li>从该压缩快照的下一个开始读取
+ *   <li>如果没有压缩快照，从最早快照开始
+ * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>流式压缩作业需要跟踪最新的压缩进度
+ *   <li>避免重复压缩已压缩的数据
+ * </ul>
+ *
+ * <p><b>查找逻辑：</b>
+ * <pre>
+ * 1. 从 latestSnapshotId 向前遍历到 earliestSnapshotId
+ * 2. 找到第一个 commitKind == COMPACT 的快照
+ * 3. 返回 NextSnapshot(compactSnapshotId + 1)
+ * 4. 如果没找到，返回 NextSnapshot(earliestSnapshotId)
+ * </pre>
+ */
 public class ContinuousCompactorStartingScanner extends AbstractStartingScanner {
 
     private static final Logger LOG =

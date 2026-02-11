@@ -29,15 +29,29 @@ import org.apache.paimon.shade.guava30.com.google.common.base.Suppliers;
 
 import java.util.Optional;
 
-/** Factory to create a {@link PartitionExpireStrategy}. */
+/**
+ * 用于创建 {@link PartitionExpireStrategy} 的工厂接口。
+ *
+ * <p>允许通过 SPI 机制自定义分区过期策略的创建逻辑。
+ */
 public interface PartitionExpireStrategyFactory {
 
+    /**
+     * 创建分区过期策略。
+     *
+     * @param catalogLoader catalog加载器
+     * @param identifier 表标识符
+     * @param options 核心配置选项
+     * @param partitionType 分区类型
+     * @return 分区过期策略实例
+     */
     PartitionExpireStrategy create(
             CatalogLoader catalogLoader,
             Identifier identifier,
             CoreOptions options,
             RowType partitionType);
 
+    /** 单例工厂实例,通过SPI机制发现并缓存 */
     Supplier<Optional<PartitionExpireStrategyFactory>> INSTANCE =
             Suppliers.memoize(
                     () ->

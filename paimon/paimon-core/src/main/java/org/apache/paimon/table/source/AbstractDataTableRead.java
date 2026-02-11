@@ -38,7 +38,63 @@ import java.util.Set;
 
 import static org.apache.paimon.predicate.PredicateVisitor.collectFieldNames;
 
-/** A {@link InnerTableRead} for data table. */
+/**
+ * 抽象数据表读取类，为数据表提供通用的读取功能。
+ *
+ * <p>AbstractDataTableRead 是所有数据表读取实现的抽象基类，封装了通用的读取逻辑，
+ * 包括：过滤执行、列裁剪、查询授权等。
+ *
+ * <h3>架构层次</h3>
+ * <pre>
+ * InnerTableRead (接口)
+ *     ↓
+ * AbstractDataTableRead (抽象基类，通用逻辑)
+ *     ↓
+ * ├── KeyValueTableRead (主键表读取)
+ * └── AppendTableRead (追加表读取)
+ * </pre>
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>过滤执行</b>: 在读取阶段执行过滤条件（精确过滤）</li>
+ *   <li><b>列裁剪</b>: 只读取需要的列，减少 IO 量</li>
+ *   <li><b>查询授权</b>: 支持细粒度的数据访问控制</li>
+ *   <li><b>投影下推</b>: 将列投影下推到底层读取器</li>
+ * </ul>
+ *
+ * <h3>过滤执行流程</h3>
+ * <ol>
+ *   <li>调用 {@link #withFilter(Predicate)} 设置过滤条件</li>
+ *   <li>调用 {@link #executeFilter()} 启用过滤执行</li>
+ *   <li>读取数据时，过滤器会在返回前过滤每一行</li>
+ * </ol>
+ *
+ * <h3>列裁剪流程</h3>
+ * <ol>
+ *   <li>调用 {@link #withReadType(RowType)} 或 {@link #withProjection(int[])} 设置要读取的列</li>
+ *   <li>调用 {@link #applyReadType(RowType)} 将列裁剪应用到底层读取器</li>
+ *   <li>只读取指定的列，减少 IO 量</li>
+ * </ol>
+ *
+ * <h3>查询授权</h3>
+ * <p>如果 Split 是 {@link QueryAuthSplit}，读取器会应用授权规则：
+ * <ul>
+ *   <li>限制可访问的列（列级别权限）</li>
+ *   <li>添加额外的过滤条件（行级别权限）</li>
+ * </ul>
+ *
+ * <h3>子类实现</h3>
+ * <p>子类需要实现以下方法：
+ * <ul>
+ *   <li>{@link #applyReadType(RowType)}: 应用列裁剪到底层读取器</li>
+ *   <li>{@link #reader(Split)}: 创建底层数据读取器</li>
+ *   <li>{@link #innerWithFilter(Predicate)}: 应用过滤条件到底层读取器</li>
+ * </ul>
+ *
+ * @see InnerTableRead 表读取接口
+ * @see KeyValueTableRead 主键表读取实现
+ * @see AppendTableRead 追加表读取实现
+ */
 public abstract class AbstractDataTableRead implements InnerTableRead {
 
     private RowType readType;

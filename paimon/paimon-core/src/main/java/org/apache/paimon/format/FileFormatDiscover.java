@@ -25,7 +25,7 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** A class to discover {@link FileFormat}. */
+/** 用于发现 {@link FileFormat} 的类。 */
 @ThreadSafe
 public interface FileFormatDiscover {
 

@@ -65,7 +65,49 @@ import java.util.function.Function;
 import static org.apache.paimon.format.FileFormat.fileFormat;
 import static org.apache.paimon.utils.FileStorePathFactory.createFormatPathFactories;
 
-/** {@link FileStoreWrite} for {@code bucket = -2} tables. */
+/**
+ * 延迟分桶表（bucket = -2）的 {@link FileStoreWrite} 实现。
+ *
+ * <p><b>延迟分桶模式：</b>
+ * 在延迟分桶模式下，数据写入时不立即确定所属的桶，而是先写入特殊的桶 -2。
+ * 后续通过 compaction 过程，根据数据的键值将记录重新分配到正确的桶中。
+ *
+ * <p><b>设计目标：</b>
+ * <ul>
+ *   <li>提高写入吞吐量：避免写入时的昂贵shuffle操作
+ *   <li>延迟数据分布：将数据分布决策推迟到读取或compaction时
+ *   <li>优化小文件问题：合并小文件以减少文件数量
+ *   <li>支持流式写入：适合CDC等流式场景
+ * </ul>
+ *
+ * <p><b>关键特性：</b>
+ * <ul>
+ *   <li>使用Avro格式存储（如果schema兼容）
+ *   <li>每个writer有唯一的文件前缀，保证compaction时的顺序性
+ *   <li>忽略历史文件，只关注新写入的数据
+ *   <li>支持缓冲区溢出到磁盘
+ *   <li>序列号跨文件无意义（因为没有merge）
+ * </ul>
+ *
+ * <p><b>文件命名格式：</b>
+ * {@code <prefix>-u-<commitUser>-s-<writeId>-w-<seq>}
+ * <ul>
+ *   <li>prefix: 数据文件前缀
+ *   <li>commitUser: 提交用户标识
+ *   <li>writeId: writer唯一标识（线程相关）
+ *   <li>seq: 序列号
+ * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>CDC数据同步：保持写入顺序的CDC场景
+ *   <li>高吞吐写入：需要极高写入性能的场景
+ *   <li>动态分桶：桶数量需要动态调整的场景
+ * </ul>
+ *
+ * @see PostponeBucketWriter
+ * @see BucketFiles
+ */
 public class PostponeBucketFileStoreWrite extends MemoryFileStoreWrite<KeyValue> {
 
     private static final Logger LOG = LoggerFactory.getLogger(PostponeBucketFileStoreWrite.class);

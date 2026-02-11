@@ -52,7 +52,116 @@ import static org.apache.paimon.CoreOptions.ChangelogProducer.FULL_COMPACTION;
 import static org.apache.paimon.CoreOptions.ChangelogProducer.LOOKUP;
 import static org.apache.paimon.CoreOptions.StreamScanMode.FILE_MONITOR;
 
-/** {@link StreamTableScan} implementation for streaming planning. */
+/**
+ * 数据表的流式扫描实现，用于持续读取新产生的数据。
+ *
+ * <p>DataTableStreamScan 实现了 {@link StreamTableScan} 接口，支持持续跟踪表的新快照，
+ * 适用于流式处理场景（如 Flink、Spark Streaming）。
+ *
+ * <h3>流式扫描 vs 批量扫描</h3>
+ * <ul>
+ *   <li><b>批量扫描（DataTableBatchScan）</b>:
+ *       <ul>
+ *         <li>只执行一次扫描</li>
+ *         <li>读取单个快照的完整数据</li>
+ *         <li>适用于批处理、离线分析</li>
+ *       </ul>
+ *   </li>
+ *   <li><b>流式扫描（DataTableStreamScan）</b>:
+ *       <ul>
+ *         <li>持续跟踪新快照</li>
+ *         <li>每次返回新产生的数据变化</li>
+ *         <li>支持检查点和故障恢复</li>
+ *         <li>适用于实时处理、CDC</li>
+ *       </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h3>核心组件</h3>
+ * <ul>
+ *   <li><b>StartingScanner</b>: 起始扫描器，确定从哪个快照开始读取</li>
+ *   <li><b>FollowUpScanner</b>: 跟随扫描器，持续读取后续快照的变化</li>
+ *   <li><b>BoundedChecker</b>: 边界检查器，判断流式扫描是否应该结束</li>
+ *   <li><b>NextSnapshotFetcher</b>: 下一个快照获取器，查找下一个要读取的快照</li>
+ * </ul>
+ *
+ * <h3>流式扫描模式（StreamScanMode）</h3>
+ * <ul>
+ *   <li><b>COMPACT_BUCKET_TABLE</b>: 紧凑桶表模式（默认）
+ *       <ul>
+ *         <li>读取快照的 Delta 数据（新增/变化的文件）</li>
+ *         <li>适用于主键表和追加表</li>
+ *       </ul>
+ *   </li>
+ *   <li><b>FILE_MONITOR</b>: 文件监控模式
+ *       <ul>
+ *         <li>监控文件系统的变化</li>
+ *         <li>适用于外部系统写入的场景</li>
+ *       </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h3>两阶段读取（Full Phase + Incremental Phase）</h3>
+ * <p>流式扫描通常分为两个阶段：
+ * <ol>
+ *   <li><b>Full Phase（全量阶段）</b>:
+ *       <ul>
+ *         <li>首次启动时，读取起始快照的完整数据</li>
+ *         <li>使用 StartingScanner 确定起始快照</li>
+ *       </ul>
+ *   </li>
+ *   <li><b>Incremental Phase（增量阶段）</b>:
+ *       <ul>
+ *         <li>持续读取后续快照的变化数据</li>
+ *         <li>使用 FollowUpScanner 跟踪新快照</li>
+ *       </ul>
+ *   </li>
+ * </ol>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 创建流式扫描
+ * DataTableStreamScan scan = new DataTableStreamScan(...);
+ *
+ * // 恢复上次进度
+ * scan.restore(savedNextSnapshot);
+ *
+ * // 持续读取新数据
+ * while (true) {
+ *     try {
+ *         Plan plan = scan.plan();
+ *         processPlan(plan);
+ *
+ *         // 保存检查点
+ *         Long nextSnapshot = scan.checkpoint();
+ *         saveCheckpoint(nextSnapshot);
+ *     } catch (EndOfScanException e) {
+ *         // 扫描结束（如果设置了结束条件）
+ *         break;
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h3>FollowUpScanner 类型</h3>
+ * <ul>
+ *   <li><b>DeltaFollowUpScanner</b>: 读取 Delta 数据（默认）</li>
+ *   <li><b>ChangelogFollowUpScanner</b>: 读取 Changelog 数据</li>
+ *   <li><b>AllDeltaFollowUpScanner</b>: 读取所有 Delta 数据（包括 Compaction 产生的）</li>
+ * </ul>
+ *
+ * <h3>有界流扫描</h3>
+ * <p>流式扫描也可以设置边界条件，扫描到指定位置后结束：
+ * <ul>
+ *   <li>扫描到指定快照 ID</li>
+ *   <li>扫描到指定时间戳</li>
+ *   <li>扫描到指定水位线</li>
+ * </ul>
+ *
+ * @see StreamTableScan 流式表扫描接口
+ * @see DataTableBatchScan 批量扫描实现
+ * @see StartingScanner 起始扫描器
+ * @see FollowUpScanner 跟随扫描器
+ */
 public class DataTableStreamScan extends AbstractDataTableScan implements StreamDataTableScan {
 
     private static final Logger LOG = LoggerFactory.getLogger(DataTableStreamScan.class);

@@ -30,7 +30,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** When we need to overwrite the table, we should use this to avoid loading index. */
+/**
+ * 简单的哈希Bucket分配器。
+ *
+ * <p>用于表覆盖写场景,无需加载已有索引。
+ * 比 {@link HashBucketAssigner} 更轻量,适用于全量数据重写的场景。
+ *
+ * <p>主要特点:
+ * <ul>
+ *   <li>不需要读取现有索引文件</li>
+ *   <li>内存中动态构建哈希到bucket的映射</li>
+ *   <li>支持bucket数量上限控制</li>
+ * </ul>
+ */
 public class SimpleHashBucketAssigner implements BucketAssigner {
 
     private final int numAssigners;
@@ -75,7 +87,11 @@ public class SimpleHashBucketAssigner implements BucketAssigner {
         return partitionIndex.keySet();
     }
 
-    /** Simple partition bucket hash assigner. */
+    /**
+     * 简单的分区bucket哈希分配器。
+     *
+     * <p>每个分区维护独立的哈希到bucket映射。
+     */
     private class SimplePartitionIndex {
 
         public final Int2ShortHashMap hash2Bucket = new Int2ShortHashMap();

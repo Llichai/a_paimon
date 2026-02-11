@@ -33,12 +33,30 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** Record merger for sort of BinaryRow. */
+/**
+ * 用于 BinaryRow 排序的记录合并器。
+ *
+ * <p>提供二进制行的外部合并排序功能。
+ */
 public class BinaryExternalMerger extends AbstractBinaryExternalMerger<BinaryRow> {
 
+    /** 二进制行序列化器 */
     private final BinaryRowSerializer serializer;
+    /** 记录比较器 */
     private final RecordComparator comparator;
 
+    /**
+     * 构造二进制外部合并器。
+     *
+     * @param ioManager IO管理器
+     * @param pageSize 页大小
+     * @param maxFanIn 最大合并扇入数
+     * @param channelManager 溢出通道管理器
+     * @param serializer 二进制行序列化器
+     * @param comparator 记录比较器
+     * @param compressionCodecFactory 压缩编解码工厂
+     * @param compressionBlockSize 压缩块大小
+     */
     public BinaryExternalMerger(
             IOManager ioManager,
             int pageSize,

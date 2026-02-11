@@ -42,21 +42,21 @@ import java.util.OptionalLong;
 import java.util.stream.Collectors;
 
 /**
- * Global stats, supports the following stats.
+ * 全局统计信息,支持以下统计指标。
  *
  * <ul>
- *   <li>mergedRecordCount: the total number of records after merge
- *   <li>mergedRecordSize: the size of the mergedRecordCount in bytes
- *   <li>colStats: column stats map
+ *   <li>mergedRecordCount: 合并后的记录总数
+ *   <li>mergedRecordSize: mergedRecordCount 的字节大小
+ *   <li>colStats: 列统计信息映射
  * </ul>
  */
 @Experimental
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Statistics {
 
-    // ID of the snapshot this statistics collected from
+    // 统计信息来自的快照 ID
     private static final String FIELD_SNAPSHOT_ID = "snapshotId";
-    // Schema ID of the snapshot this statistics collected from
+    // 统计信息来自的快照的模式 ID
     private static final String FIELD_SCHEMA_ID = "schemaId";
     private static final String FIELD_MERGED_RECORD_COUNT = "mergedRecordCount";
     private static final String FIELD_MERGED_RECORD_SIZE = "mergedRecordSize";

@@ -36,26 +36,42 @@ import java.util.ArrayList;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * In memory sort buffer for binary row.
+ * 二进制行的内存排序缓冲区。
  *
+ * <p>在内存中对数据进行排序,支持以下操作:
  * <ul>
- *   <li>{@link #clear}: Clean all memory.
- *   <li>{@link #tryInitialize}: initialize memory before write and read in buffer.
+ *   <li>{@link #clear}: 清理所有内存
+ *   <li>{@link #tryInitialize}: 在缓冲区写入和读取前初始化内存
  * </ul>
  */
 public class BinaryInMemorySortBuffer extends BinaryIndexedSortable implements SortBuffer {
 
+    /** 最小所需缓冲区数量 */
     private static final int MIN_REQUIRED_BUFFERS = 3;
 
+    /** 输入序列化器 */
     private final AbstractRowDataSerializer<InternalRow> inputSerializer;
+    /** 记录缓冲区段列表 */
     private final ArrayList<MemorySegment> recordBufferSegments;
+    /** 记录收集器 */
     private final SimpleCollectingOutputView recordCollector;
 
+    /** 当前数据缓冲区偏移量 */
     private long currentDataBufferOffset;
+    /** 排序索引字节数 */
     private long sortIndexBytes;
+    /** 是否已初始化 */
     private boolean isInitialized;
 
-    /** Create a memory sorter in `insert` way. */
+    /**
+     * 创建内存排序器(插入方式)。
+     *
+     * @param normalizedKeyComputer 归一化键计算器
+     * @param serializer 序列化器
+     * @param comparator 比较器
+     * @param memoryPool 内存池
+     * @return 内存排序缓冲区
+     */
     public static BinaryInMemorySortBuffer createBuffer(
             NormalizedKeyComputer normalizedKeyComputer,
             AbstractRowDataSerializer<InternalRow> serializer,
@@ -98,6 +114,9 @@ public class BinaryInMemorySortBuffer extends BinaryIndexedSortable implements S
     // Memory Segment
     // -------------------------------------------------------------------------
 
+    /**
+     * 将内存段归还到内存池。
+     */
     private void returnToSegmentPool() {
         // return all memory
         this.memorySegmentPool.returnAll(this.sortIndex);
@@ -106,11 +125,18 @@ public class BinaryInMemorySortBuffer extends BinaryIndexedSortable implements S
         this.recordBufferSegments.clear();
     }
 
+    /**
+     * 获取缓冲区段数量。
+     *
+     * @return 缓冲区段数量
+     */
     public int getBufferSegmentCount() {
         return this.recordBufferSegments.size();
     }
 
-    /** Try to initialize the sort buffer if all contained data is discarded. */
+    /**
+     * 尝试初始化排序缓冲区(如果所有包含的数据已被丢弃)。
+     */
     private void tryInitialize() {
         if (!isInitialized) {
             // grab first buffer
@@ -148,18 +174,23 @@ public class BinaryInMemorySortBuffer extends BinaryIndexedSortable implements S
         return false;
     }
 
+    /**
+     * 判断缓冲区是否为空。
+     *
+     * @return 空返回true,否则返回false
+     */
     boolean isEmpty() {
         return this.numRecords == 0;
     }
 
     /**
-     * Writes a given record to this sort buffer. The written record will be appended and take the
-     * last logical position.
+     * 将给定记录写入此排序缓冲区。
      *
-     * @param record The record to be written.
-     * @return True, if the record was successfully written, false, if the sort buffer was full.
-     * @throws IOException Thrown, if an error occurred while serializing the record into the
-     *     buffers.
+     * <p>写入的记录将被追加并占据最后的逻辑位置。
+     *
+     * @param record 要写入的记录
+     * @return 成功写入返回true,缓冲区满返回false
+     * @throws IOException 如果将记录序列化到缓冲区时发生错误
      */
     @Override
     public boolean write(InternalRow record) throws IOException {
@@ -189,6 +220,14 @@ public class BinaryInMemorySortBuffer extends BinaryIndexedSortable implements S
         return true;
     }
 
+    /**
+     * 从缓冲区获取记录。
+     *
+     * @param reuse 可重用的二进制行对象
+     * @param pointer 记录指针
+     * @return 二进制行
+     * @throws IOException 如果遇到IO问题
+     */
     private BinaryRow getRecordFromBuffer(BinaryRow reuse, long pointer) throws IOException {
         this.recordBuffer.setReadPosition(pointer);
         return this.serializer.mapFromPages(reuse, this.recordBuffer);
@@ -197,9 +236,9 @@ public class BinaryInMemorySortBuffer extends BinaryIndexedSortable implements S
     // -------------------------------------------------------------------------
 
     /**
-     * Gets an iterator over all records in this buffer in their logical order.
+     * 获取遍历此缓冲区中所有记录的迭代器(按逻辑顺序)。
      *
-     * @return An iterator returning the records in their logical order.
+     * @return 按逻辑顺序返回记录的迭代器
      */
     private MutableObjectIterator<BinaryRow> iterator() {
         tryInitialize();

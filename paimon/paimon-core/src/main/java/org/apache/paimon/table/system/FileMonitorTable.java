@@ -73,7 +73,31 @@ import static org.apache.paimon.utils.SerializationUtils.deserializeBinaryRow;
 import static org.apache.paimon.utils.SerializationUtils.newBytesType;
 import static org.apache.paimon.utils.SerializationUtils.serializeBinaryRow;
 
-/** A table to produce modified files for snapshots. */
+/**
+ * 文件监控表(实验性)。
+ *
+ * <p>用于生成快照的修改文件信息。适用于需要监控文件变化的场景。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>_SNAPSHOT_ID (BIGINT NOT NULL): 快照 ID</li>
+ *   <li>_PARTITION (BYTES NOT NULL): 分区(序列化的 BinaryRow)</li>
+ *   <li>_BUCKET (INT NOT NULL): 分桶编号</li>
+ *   <li>_BEFORE_FILES (BYTES NOT NULL): 修改前的文件列表(序列化)</li>
+ *   <li>_DATA_FILES (BYTES NOT NULL): 修改后的文件列表(序列化)</li>
+ * </ul>
+ *
+ * <h2>配置</h2>
+ * <p>此表自动应用以下配置:
+ * <ul>
+ *   <li>stream-scan.mode = file-monitor</li>
+ *   <li>scan.bounded.watermark = null</li>
+ * </ul>
+ *
+ * @see DataTable
+ * @see ReadonlyTable
+ * @since 实验性功能
+ */
 @Experimental
 public class FileMonitorTable implements DataTable, ReadonlyTable {
 

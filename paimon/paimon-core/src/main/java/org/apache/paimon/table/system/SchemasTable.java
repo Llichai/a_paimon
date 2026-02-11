@@ -79,7 +79,27 @@ import java.util.stream.LongStream;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing schemas of table. */
+/**
+ * Schema 系统表。
+ *
+ * <p>用于展示表的所有 Schema 版本历史。每次表结构变更(添加列、修改类型等)都会生成新的 Schema 版本。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>schema_id (BIGINT NOT NULL): Schema 版本 ID(主键)</li>
+ *   <li>fields (STRING NOT NULL): 字段列表(JSON格式)</li>
+ *   <li>partition_keys (STRING NOT NULL): 分区键列表(JSON格式)</li>
+ *   <li>primary_keys (STRING NOT NULL): 主键列表(JSON格式)</li>
+ *   <li>options (STRING NOT NULL): 配置选项(JSON格式)</li>
+ *   <li>comment (STRING): 注释</li>
+ *   <li>update_time (TIMESTAMP(3) NOT NULL): 更新时间</li>
+ * </ul>
+ *
+ * <h2>过滤优化</h2>
+ * <p>支持对 schema_id 的等值、范围和 IN 过滤。
+ *
+ * @see ReadonlyTable
+ */
 public class SchemasTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

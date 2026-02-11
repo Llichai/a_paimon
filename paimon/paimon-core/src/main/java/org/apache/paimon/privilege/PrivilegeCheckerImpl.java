@@ -24,7 +24,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Default implementation of {@link PrivilegeChecker}. */
+/**
+ * {@link PrivilegeChecker} 的默认实现。
+ *
+ * <p>基于用户的权限映射表进行权限检查。
+ */
 public class PrivilegeCheckerImpl implements PrivilegeChecker {
 
     private static final long serialVersionUID = 1L;

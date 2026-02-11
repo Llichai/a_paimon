@@ -85,9 +85,83 @@ import java.util.stream.Collectors;
 import static org.apache.paimon.CoreOptions.TABLE_READ_SEQUENCE_NUMBER_ENABLED;
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for reading audit log of table. */
+/**
+ * 审计日志表。
+ *
+ * <p>用于读取表的审计日志(Audit Log),提供完整的变更历史记录。审计日志包含所有的数据变更操作,
+ * 包括插入(+I)、更新(+U/-U)和删除(-D)操作。
+ *
+ * <h2>特性</h2>
+ * <ul>
+ *   <li><b>完整变更历史</b>: 记录表的所有数据变更操作</li>
+ *   <li><b>行级变更</b>: 每条记录都包含 {@code _ROW_KIND} 字段标识操作类型</li>
+ *   <li><b>序列号支持</b>: 可选包含 {@code _SEQUENCE_NUMBER} 字段用于排序</li>
+ *   <li><b>时间旅行</b>: 支持查询特定快照或时间点的审计日志</li>
+ *   <li><b>流式读取</b>: 支持流式消费增量变更</li>
+ * </ul>
+ *
+ * <h2>表结构 (Schema)</h2>
+ * <p>审计日志表的 Schema 由以下部分组成:
+ * <ul>
+ *   <li><b>_ROW_KIND</b> (STRING): 行操作类型
+ *     <ul>
+ *       <li>+I (INSERT): 插入操作</li>
+ *       <li>-U (UPDATE_BEFORE): 更新前的旧值</li>
+ *       <li>+U (UPDATE_AFTER): 更新后的新值</li>
+ *       <li>-D (DELETE): 删除操作</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>_SEQUENCE_NUMBER</b> (BIGINT, 可选): 序列号,用于确定操作顺序<br>
+ *       需要设置 {@code table-read.sequence-number.enabled = true}
+ *   </li>
+ *   <li><b>数据字段</b>: 原表的所有字段</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- 查询所有审计日志
+ * SELECT * FROM my_table$audit_log;
+ *
+ * -- 查询特定类型的操作
+ * SELECT * FROM my_table$audit_log WHERE _ROW_KIND = '+I';
+ *
+ * -- 统计各类操作数量
+ * SELECT _ROW_KIND, COUNT(*) FROM my_table$audit_log GROUP BY _ROW_KIND;
+ *
+ * -- 流式消费增量变更(Flink SQL)
+ * SELECT * FROM my_table$audit_log /*+ OPTIONS('scan.mode'='latest') */;
+ * }</pre>
+ *
+ * <h2>配置选项</h2>
+ * <table border="1">
+ *   <tr><th>选项</th><th>默认值</th><th>描述</th></tr>
+ *   <tr>
+ *     <td>table-read.sequence-number.enabled</td>
+ *     <td>false</td>
+ *     <td>是否在输出中包含序列号字段</td>
+ *   </tr>
+ * </table>
+ *
+ * <h2>与 Binlog 表的区别</h2>
+ * <ul>
+ *   <li><b>审计日志表</b>: 每条变更记录一行,UPDATE 操作分为两行(-U 和 +U)</li>
+ *   <li><b>Binlog 表</b>: UPDATE 操作合并为一行,使用数组表示前后值</li>
+ * </ul>
+ *
+ * <h2>注意事项</h2>
+ * <ul>
+ *   <li>审计日志表保留所有删除操作的记录(不会被 compaction 清除)</li>
+ *   <li>输出的 {@code _ROW_KIND} 始终为 INSERT,实际的操作类型在字段值中体现</li>
+ *   <li>不支持通过 hint 动态设置 {@code table-read.sequence-number.enabled}</li>
+ * </ul>
+ *
+ * @see DataTable
+ * @see ReadonlyTable
+ * @see BinlogTable
+ */
 public class AuditLogTable implements DataTable, ReadonlyTable {
 
+    /** 系统表名称常量。 */
     public static final String AUDIT_LOG = "audit_log";
 
     protected final FileStoreTable wrapped;

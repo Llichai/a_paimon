@@ -50,7 +50,31 @@ import java.util.Optional;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for reading row id of table. */
+/**
+ * 行跟踪表。
+ *
+ * <p>用于读取包含行 ID 的表数据。行跟踪功能为每一行分配唯一的 ID,用于精确的行级操作。
+ *
+ * <h2>前置条件</h2>
+ * <p>表必须启用行跟踪功能:
+ * <pre>{@code
+ * 'row-tracking.enabled' = 'true'
+ * }</pre>
+ *
+ * <h2>表结构</h2>
+ * <p>在原表字段基础上,自动添加行跟踪相关的系统字段(如 _ROW_ID)。
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * SELECT _ROW_ID, * FROM my_table$row_tracking;
+ * }</pre>
+ *
+ * <h2>主键</h2>
+ * <p>行跟踪表没有主键(主键列表为空)。
+ *
+ * @see DataTable
+ * @see ReadonlyTable
+ */
 public class RowTrackingTable implements DataTable, ReadonlyTable {
 
     public static final String ROW_TRACKING = "row_tracking";

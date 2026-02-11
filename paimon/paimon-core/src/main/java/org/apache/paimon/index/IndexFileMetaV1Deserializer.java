@@ -38,7 +38,12 @@ import java.util.List;
 
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
-/** Serializer for {@link IndexFileMeta} with 0.9 version. */
+/**
+ * {@link IndexFileMeta} 的 V1 版本反序列化器。
+ *
+ * <p>用于反序列化 0.9 版本的索引文件元数据。
+ * V1 版本不包含 cardinality 字段和 externalPath 字段。
+ */
 public class IndexFileMetaV1Deserializer implements Serializable {
 
     private static final long serialVersionUID = 1L;

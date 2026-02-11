@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Converter for array of {@link SimpleColStats}. */
+/** {@link SimpleColStats} 数组的转换器。 */
 public class SimpleStatsEvolution {
 
     private final List<String> fieldNames;
@@ -155,7 +155,7 @@ public class SimpleStatsEvolution {
         return new Result(minValues, maxValues, nullCounts);
     }
 
-    /** Result to {@link SimpleStats} evolution. */
+    /** {@link SimpleStats} 演化的结果。 */
     public static class Result {
 
         private final InternalRow minValues;

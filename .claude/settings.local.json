@@ -8,7 +8,9 @@
       "Bash(git remote add:*)",
       "Bash(git push:*)",
       "Bash(Remove-Item -Recurse -Force \"paimon\\\\.git\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git diff:*)"
     ]
   }
 }

@@ -33,7 +33,13 @@ import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.List;
 
-/** An Index Maintainer for dynamic bucket to maintain key hashcode in a bucket. */
+/**
+ * 动态bucket索引维护器。
+ *
+ * <p>维护动态bucket中的键哈希码索引。
+ * 通过记录每个bucket中已存在的键哈希值,可以快速判断新数据应该分配到哪个bucket,
+ * 避免重复扫描数据文件,提高写入性能。
+ */
 public class DynamicBucketIndexMaintainer {
 
     private final HashIndexFile indexFile;
@@ -67,6 +73,13 @@ public class DynamicBucketIndexMaintainer {
         }
     }
 
+    /**
+     * 通知有新记录写入。
+     *
+     * <p>将新记录的键哈希值添加到索引中。
+     *
+     * @param record 键值记录
+     */
     public void notifyNewRecord(KeyValue record) {
         InternalRow key = record.key();
         if (!(key instanceof BinaryRow)) {
@@ -78,6 +91,13 @@ public class DynamicBucketIndexMaintainer {
         }
     }
 
+    /**
+     * 准备提交索引变更。
+     *
+     * <p>将索引变更写入文件。
+     *
+     * @return 索引文件元数据列表
+     */
     public List<IndexFileMeta> prepareCommit() {
         if (modified) {
             IndexFileMeta entry;
@@ -97,7 +117,11 @@ public class DynamicBucketIndexMaintainer {
         return hashcode.size() == 0;
     }
 
-    /** Factory to restore {@link DynamicBucketIndexMaintainer}. */
+    /**
+     * 创建 {@link DynamicBucketIndexMaintainer} 的工厂类。
+     *
+     * <p>负责恢复和创建索引维护器实例。
+     */
     public static class Factory {
 
         private final IndexFileHandler handler;

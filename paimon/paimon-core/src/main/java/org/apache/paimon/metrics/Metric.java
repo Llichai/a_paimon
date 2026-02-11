@@ -21,12 +21,36 @@ package org.apache.paimon.metrics;
 import org.apache.paimon.annotation.Public;
 
 /**
- * An interface to indicate a class is a metric.
+ * 指标接口。
+ *
+ * <p>标记接口，用于指示一个类是指标。
+ *
+ * <h3>指标类型：</h3>
+ * <ul>
+ *   <li>{@link Counter}: 计数器，累计值
+ *   <li>{@link Gauge}: 仪表盘，瞬时值
+ *   <li>{@link Histogram}: 直方图，数值分布
+ * </ul>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>性能监控
+ *   <li>运维指标采集
+ *   <li>系统状态观测
+ * </ul>
  *
  * @since 0.5.0
  */
 @Public
 public interface Metric {
+    /**
+     * 获取指标类型。
+     *
+     * <p>默认不支持自定义指标类型，子类应重写此方法。
+     *
+     * @return 指标类型
+     * @throws UnsupportedOperationException 如果是自定义指标类型
+     */
     default MetricType getMetricType() {
         throw new UnsupportedOperationException("Custom metric types are not supported.");
     }

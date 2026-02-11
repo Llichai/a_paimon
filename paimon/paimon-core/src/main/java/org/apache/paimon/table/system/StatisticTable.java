@@ -58,7 +58,25 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing statistic of table. */
+/**
+ * 统计表。
+ *
+ * <p>用于展示表的统计信息,包括记录数、数据大小和列级统计(colstat)。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>snapshot_id (BIGINT NOT NULL): 快照 ID(主键)</li>
+ *   <li>schema_id (BIGINT NOT NULL): Schema 版本 ID</li>
+ *   <li>mergedRecordCount (BIGINT): 合并后的记录数</li>
+ *   <li>mergedRecordSize (BIGINT): 合并后的记录大小(字节)</li>
+ *   <li>colstat (STRING): 列级统计信息(JSON格式)</li>
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <p>统计信息用于查询优化器进行成本估算和执行计划优化。
+ *
+ * @see ReadonlyTable
+ */
 public class StatisticTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

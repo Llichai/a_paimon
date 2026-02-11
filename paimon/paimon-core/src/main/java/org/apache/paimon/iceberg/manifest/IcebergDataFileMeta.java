@@ -38,9 +38,48 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Iceberg data file meta.
+ * Iceberg 数据文件元数据。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#manifests">Iceberg spec</a>.
+ * <p>表示 Iceberg Manifest 中单个数据文件或删除文件的元信息。
+ *
+ * <h3>功能说明</h3>
+ * <ul>
+ *   <li>存储数据文件的路径、格式、大小等基本信息
+ *   <li>记录数据统计信息（空值计数、最小最大值）
+ *   <li>支持数据文件和删除文件（Position Deletes）
+ *   <li>用于分区裁剪和查询优化
+ * </ul>
+ *
+ * <h3>内容类型（Content）</h3>
+ * <ul>
+ *   <li><b>DATA (0)</b>：普通数据文件
+ *   <li><b>POSITION_DELETES (1)</b>：位置删除文件（Deletion Vector）
+ *   <li><b>EQUALITY_DELETES (2)</b>：相等删除文件
+ * </ul>
+ *
+ * <h3>统计信息</h3>
+ * <ul>
+ *   <li><b>nullValueCounts</b>：每列空值数量（字段ID -> 计数）
+ *   <li><b>lowerBounds</b>：每列最小值（字段ID -> 字节）
+ *   <li><b>upperBounds</b>：每列最大值（字段ID -> 字节）
+ * </ul>
+ *
+ * <h3>删除文件信息</h3>
+ * <p>对于 Position Deletes：
+ * <ul>
+ *   <li><b>referencedDataFile</b>：关联的数据文件路径
+ *   <li><b>contentOffset</b>：在删除文件中的偏移量
+ *   <li><b>contentSizeInBytes</b>：删除内容大小
+ * </ul>
+ *
+ * <h3>Schema 支持</h3>
+ * <p>提供了与 Paimon RowType 的转换方法，字段ID遵循 Iceberg 规范。
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#manifests">Iceberg Manifest 规范</a>
+ *
+ * @see IcebergManifestEntry
+ * @see IcebergManifestFile
  */
 public class IcebergDataFileMeta {
 

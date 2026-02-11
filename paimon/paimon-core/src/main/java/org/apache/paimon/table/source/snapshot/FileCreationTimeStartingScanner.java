@@ -26,8 +26,32 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_FILE_CREATION_TIME} startup
- * mode.
+ * 文件创建时间起始扫描器
+ *
+ * <p>对应 {@link CoreOptions.StartupMode#FROM_FILE_CREATION_TIME} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>使用最新快照，但只读取创建时间大于等于指定时间的文件
+ *   <li>扫描模式：ScanMode.ALL
+ *   <li>通过 ManifestEntry 过滤器实现文件级别过滤
+ * </ul>
+ *
+ * <p><b>过滤逻辑：</b>
+ * <pre>
+ * withManifestEntryFilter(entry ->
+ *     entry.file().creationTimeEpochMillis() >= startupMillis)
+ * </pre>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>只读取最近写入的文件
+ *   <li>基于文件创建时间的增量读取
+ *   <li>与快照时间不同，这是文件级别的时间过滤
+ * </ul>
+ *
+ * @see CoreOptions.StartupMode#FROM_FILE_CREATION_TIME
+ * @see org.apache.paimon.io.DataFileMeta#creationTimeEpochMillis
  */
 public class FileCreationTimeStartingScanner extends ReadPlanStartingScanner {
 

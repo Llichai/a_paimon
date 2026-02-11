@@ -29,9 +29,26 @@ import javax.annotation.Nullable;
 import java.util.Objects;
 
 /**
- * Snapshot in Iceberg's metadata.
+ * Iceberg 元数据中的快照类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#snapshots">Iceberg spec</a>.
+ * <p>表示 Iceberg 表在某个时间点的完整状态快照。
+ *
+ * <p>主要属性:
+ * <ul>
+ *   <li>sequenceNumber: 序列号,用于标识快照的顺序
+ *   <li>snapshotId: 快照的唯一标识符
+ *   <li>parentSnapshotId: 父快照 ID(可选)
+ *   <li>timestampMs: 快照创建时间戳(毫秒)
+ *   <li>summary: 快照摘要信息,包含操作类型等
+ *   <li>manifestList: Manifest List 文件路径
+ *   <li>schemaId: 使用的 Schema ID
+ *   <li>firstRowId: 首行 ID(可选,用于行级别跟踪)
+ *   <li>addedRows: 新增行数(可选)
+ * </ul>
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#snapshots">Iceberg 规范</a>
+ *
+ * @see IcebergSnapshotSummary 快照摘要类
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergSnapshot {

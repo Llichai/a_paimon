@@ -38,7 +38,18 @@ import java.util.function.IntPredicate;
 
 import static org.apache.paimon.index.HashIndexFile.HASH_INDEX;
 
-/** Bucket Index Per Partition. */
+/**
+ * 分区级别的Bucket索引。
+ *
+ * <p>为每个分区维护哈希到bucket的映射关系。
+ * 主要功能包括:
+ * <ul>
+ *   <li>记录哪些键哈希值分配到了哪个bucket</li>
+ *   <li>跟踪每个bucket的数据行数</li>
+ *   <li>根据目标行数自动分配新bucket</li>
+ *   <li>支持bucket数量上限控制</li>
+ * </ul>
+ */
 public class PartitionIndex {
 
     public final Int2ShortHashMap hash2Bucket;
@@ -67,6 +78,23 @@ public class PartitionIndex {
         this.accessed = true;
     }
 
+    /**
+     * 为哈希值分配bucket。
+     *
+     * <p>分配策略:
+     * <ol>
+     *   <li>如果哈希值已存在,返回之前分配的bucket</li>
+     *   <li>尝试从现有未满的bucket中分配</li>
+     *   <li>如果未达到上限,创建新bucket</li>
+     *   <li>如果达到上限,随机选择一个现有bucket</li>
+     * </ol>
+     *
+     * @param hash 键哈希值
+     * @param bucketFilter bucket过滤器
+     * @param maxBucketsNum 最大bucket数量
+     * @param maxBucketId 当前最大bucket ID
+     * @return 分配的bucket ID
+     */
     public int assign(int hash, IntPredicate bucketFilter, int maxBucketsNum, int maxBucketId) {
         accessed = true;
 
@@ -117,6 +145,16 @@ public class PartitionIndex {
         return bucket;
     }
 
+    /**
+     * 从索引文件加载分区索引。
+     *
+     * @param indexFileHandler 索引文件处理器
+     * @param partition 分区
+     * @param targetBucketRowNumber 目标bucket行数
+     * @param loadFilter 加载过滤器,用于过滤要加载的哈希值
+     * @param bucketFilter bucket过滤器,用于过滤要统计的bucket
+     * @return 分区索引
+     */
     public static PartitionIndex loadIndex(
             IndexFileHandler indexFileHandler,
             BinaryRow partition,

@@ -26,13 +26,27 @@ import java.util.List;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Binary version of {@code MergeIterator}. Use {@code RecordComparator} to compare record. */
+/**
+ * {@code MergeIterator} 的二进制版本。
+ *
+ * <p>使用 {@code RecordComparator} 来比较记录。
+ */
 public class BinaryMergeIterator<Entry> implements MutableObjectIterator<Entry> {
 
     // heap over the head elements of the stream
+    /** 流头元素的堆 */
     private final PartialOrderPriorityQueue<HeadStream<Entry>> heap;
+    /** 当前头流 */
     private HeadStream<Entry> currHead;
 
+    /**
+     * 构造二进制合并迭代器。
+     *
+     * @param iterators 迭代器列表
+     * @param reusableEntries 可重用条目列表
+     * @param comparator 比较器
+     * @throws IOException 如果遇到IO问题
+     */
     public BinaryMergeIterator(
             List<MutableObjectIterator<Entry>> iterators,
             List<Entry> reusableEntries,
@@ -72,11 +86,25 @@ public class BinaryMergeIterator<Entry> implements MutableObjectIterator<Entry> 
         }
     }
 
+    /**
+     * 头流,保存迭代器和当前头元素。
+     *
+     * @param <Entry> 条目类型
+     */
     private static final class HeadStream<Entry> {
 
+        /** 条目迭代器 */
         private final MutableObjectIterator<Entry> iterator;
+        /** 头元素 */
         private Entry head;
 
+        /**
+         * 构造头流。
+         *
+         * @param iterator 条目迭代器
+         * @param head 头元素
+         * @throws IOException 如果遇到IO问题
+         */
         private HeadStream(MutableObjectIterator<Entry> iterator, Entry head) throws IOException {
             this.iterator = iterator;
             this.head = head;
@@ -85,10 +113,21 @@ public class BinaryMergeIterator<Entry> implements MutableObjectIterator<Entry> 
             }
         }
 
+        /**
+         * 获取头元素。
+         *
+         * @return 头元素
+         */
         private Entry getHead() {
             return this.head;
         }
 
+        /**
+         * 检查是否没有更多头元素。
+         *
+         * @return 没有更多元素返回true
+         * @throws IOException 如果遇到IO问题
+         */
         private boolean noMoreHead() throws IOException {
             return (this.head = this.iterator.next(head)) == null;
         }

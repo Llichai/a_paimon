@@ -55,8 +55,65 @@ import java.util.Objects;
 import static org.apache.paimon.iceberg.manifest.IcebergConversions.toByteBuffer;
 
 /**
- * This file includes several Iceberg {@link ManifestEntry}s, representing the additional changes
- * since last snapshot.
+ * Iceberg Manifest 文件管理器。
+ *
+ * <p>管理 Iceberg Manifest 文件的读写，包含自上次快照以来的额外变更。
+ *
+ * <h3>功能说明</h3>
+ * <ul>
+ *   <li>写入 Manifest Entry 到 Avro 文件
+ *   <li>读取 Manifest 文件获取 Entry 列表
+ *   <li>支持滚动写入（按大小分割文件）
+ *   <li>收集分区统计信息
+ *   <li>生成 Manifest File Meta
+ * </ul>
+ *
+ * <h3>文件格式</h3>
+ * <ul>
+ *   <li><b>格式</b>：Avro
+ *   <li><b>压缩</b>：可配置（通过 manifest.compression）
+ *   <li><b>内容</b>：{@link IcebergManifestEntry} 列表
+ *   <li><b>命名映射</b>：兼容 Iceberg 的字段名称映射
+ * </ul>
+ *
+ * <h3>滚动写入策略</h3>
+ * <ul>
+ *   <li>单个 Manifest 文件不超过目标大小
+ *   <li>自动分割为多个文件
+ *   <li>每个文件独立维护统计信息
+ * </ul>
+ *
+ * <h3>统计信息收集</h3>
+ * <p>每个 Manifest 文件收集：
+ * <ul>
+ *   <li>添加/保留/删除的文件数量
+ *   <li>添加/保留/删除的行数
+ *   <li>最小序列号
+ *   <li>分区字段的统计（空值、最小最大值）
+ * </ul>
+ *
+ * <h3>内部写入器</h3>
+ * <p>{@link IcebergManifestEntryWriter} 实现：
+ * <ul>
+ *   <li>按 Entry 状态统计文件和行数
+ *   <li>跟踪最小序列号
+ *   <li>收集分区统计信息
+ *   <li>生成 {@link IcebergManifestFileMeta}
+ * </ul>
+ *
+ * <h3>Avro 字段映射</h3>
+ * <p>使用 avro.row-name-mapping 配置字段名称映射以兼容 Iceberg：
+ * <pre>
+ * manifest_entry:真实Record名称
+ * manifest_entry_data_file:r2（字段ID 2）
+ * r2_partition:r102（分区字段）
+ * kv_name_r2_null_value_counts:k121_v122（Map字段）
+ * ...
+ * </pre>
+ *
+ * @see IcebergManifestEntry
+ * @see IcebergManifestFileMeta
+ * @see org.apache.paimon.utils.ObjectsFile
  */
 public class IcebergManifestFile extends ObjectsFile<IcebergManifestEntry> {
 

@@ -50,9 +50,55 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * {@link DataField} in Iceberg.
+ * Iceberg 中的数据字段表示。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#schemas">Iceberg spec</a>.
+ * <p>对应 Paimon 的 {@link DataField}，用于 Iceberg 元数据中的字段定义。
+ *
+ * <h3>功能说明</h3>
+ * <ul>
+ *   <li>表示表 Schema 中的单个字段
+ *   <li>支持基本类型和复杂类型（List、Map、Struct）
+ *   <li>与 Paimon DataField 双向转换
+ *   <li>支持 JSON 序列化和反序列化
+ * </ul>
+ *
+ * <h3>字段信息</h3>
+ * <ul>
+ *   <li><b>id</b>：字段唯一标识（全局唯一）
+ *   <li><b>name</b>：字段名称
+ *   <li><b>required</b>：是否必填（非空）
+ *   <li><b>type</b>：字段类型（可为字符串或复杂类型对象）
+ *   <li><b>doc</b>：字段文档说明
+ * </ul>
+ *
+ * <h3>类型转换</h3>
+ * <p>Paimon 类型到 Iceberg 类型的映射：
+ * <ul>
+ *   <li>BOOLEAN -> "boolean"
+ *   <li>INTEGER/TINYINT/SMALLINT -> "int"
+ *   <li>BIGINT -> "long"
+ *   <li>FLOAT -> "float"
+ *   <li>DOUBLE -> "double"
+ *   <li>DATE -> "date"
+ *   <li>CHAR/VARCHAR -> "string"
+ *   <li>BINARY/VARBINARY -> "binary"
+ *   <li>DECIMAL -> "decimal(p,s)"
+ *   <li>TIMESTAMP -> "timestamp" 或 "timestamp_ns"
+ *   <li>ARRAY -> {@link IcebergListType}
+ *   <li>MAP -> {@link IcebergMapType}
+ *   <li>ROW -> {@link IcebergStructType}
+ * </ul>
+ *
+ * <h3>字段ID分配</h3>
+ * <p>使用 {@link org.apache.paimon.table.SpecialFields} 为嵌套类型元素分配唯一ID。
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#schemas">Iceberg Schema 规范</a>
+ *
+ * @see DataField
+ * @see IcebergSchema
+ * @see IcebergListType
+ * @see IcebergMapType
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergDataField {

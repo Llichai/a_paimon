@@ -57,7 +57,22 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing consumers of table. */
+/**
+ * 消费者系统表。
+ *
+ * <p>用于展示表的消费者进度信息。消费者机制用于跟踪流式读取的进度。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>consumer_id (STRING NOT NULL): 消费者 ID(主键)</li>
+ *   <li>next_snapshot_id (BIGINT NOT NULL): 下一个要消费的快照 ID</li>
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <p>消费者表记录了每个消费者的消费进度,确保流式处理的 exactly-once 语义。
+ *
+ * @see ReadonlyTable
+ */
 public class ConsumersTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

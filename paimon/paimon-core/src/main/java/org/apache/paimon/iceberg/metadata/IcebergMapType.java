@@ -27,9 +27,44 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.annotatio
 import java.util.Objects;
 
 /**
- * {@link org.apache.paimon.types.MapType} in Iceberg.
+ * Iceberg 中的 Map 类型（对应 Paimon 的 {@link org.apache.paimon.types.MapType}）。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#schemas">Iceberg spec</a>.
+ * <p>表示 Iceberg Schema 中的 Map 类型定义。
+ *
+ * <h3>字段说明</h3>
+ * <ul>
+ *   <li><b>type</b>：固定为 "map"
+ *   <li><b>key-id</b>：键字段 ID
+ *   <li><b>key</b>：键类型（可为字符串或嵌套类型）
+ *   <li><b>value-id</b>：值字段 ID
+ *   <li><b>value-required</b>：值是否必填
+ *   <li><b>value</b>：值类型（可为字符串或嵌套类型）
+ * </ul>
+ *
+ * <h3>JSON 示例</h3>
+ * <pre>
+ * {
+ *   "type": "map",
+ *   "key-id": 1,
+ *   "key": "string",
+ *   "value-id": 2,
+ *   "value-required": false,
+ *   "value": "int"
+ * }
+ * </pre>
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li>Schema 定义中的 Map 字段
+ *   <li>嵌套类型中的 Map 成员
+ *   <li>JSON 序列化和反序列化
+ * </ul>
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#schemas">Iceberg Schema 规范</a>
+ *
+ * @see IcebergDataField
+ * @see org.apache.paimon.types.MapType
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergMapType {

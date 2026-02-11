@@ -27,9 +27,21 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * {@link org.apache.paimon.types.RowType} in Iceberg.
+ * Iceberg 中的结构体类型类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#schemas">Iceberg spec</a>.
+ * <p>表示 Iceberg 的 STRUCT 类型,对应 Paimon 的 {@link org.apache.paimon.types.RowType}。
+ * 包含一个字段列表,每个字段都是 {@link IcebergDataField}。
+ *
+ * <p>用途:
+ * <ul>
+ *   <li>表示嵌套的结构体类型字段
+ *   <li>表示表的顶层 Schema 结构
+ * </ul>
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#schemas">Iceberg 规范</a>
+ *
+ * @see IcebergDataField 字段定义类
+ * @see org.apache.paimon.types.RowType Paimon 行类型
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergStructType {

@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** Converter for array of {@link SimpleColStats}. */
+/** {@link SimpleColStats} 数组的转换器。 */
 public class SimpleStatsConverter {
 
     private final RowType rowType;
@@ -44,8 +44,7 @@ public class SimpleStatsConverter {
     }
 
     public SimpleStatsConverter(RowType type, boolean denseStore) {
-        // as stated in RollingFile.Writer#finish, col stats are not collected currently so
-        // min/max values are all nulls
+        // 如 RollingFile.Writer#finish 所述,目前不收集列统计信息,因此最小值/最大值都为 null
         this.rowType =
                 type.copy(
                         type.getFields().stream()

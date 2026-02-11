@@ -26,7 +26,42 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
 
-/** JsonDeserializer for iceberg data types. */
+/**
+ * Iceberg 数据类型的 JSON 反序列化器。
+ *
+ * <p>从 JSON 节点反序列化 Iceberg 类型定义，支持基本类型和复杂类型。
+ *
+ * <h3>支持的类型</h3>
+ * <ul>
+ *   <li><b>文本节点</b>：基本类型字符串（如 "int", "string", "decimal(10,2)"）
+ *   <li><b>对象节点</b>：复杂类型，根据 "type" 字段区分：
+ *     <ul>
+ *       <li>"map" -> {@link IcebergMapType}
+ *       <li>"list" -> {@link IcebergListType}
+ *       <li>"struct" -> {@link IcebergStructType}
+ *     </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h3>反序列化流程</h3>
+ * <ol>
+ *   <li>判断 JSON 节点类型（文本/对象）
+ *   <li>文本节点：直接返回字符串
+ *   <li>对象节点：解析 "type" 字段并转换为相应的类型对象
+ * </ol>
+ *
+ * <h3>异常处理</h3>
+ * <ul>
+ *   <li>缺少 "type" 字段：抛出 IOException
+ *   <li>未知类型：抛出 IOException
+ *   <li>非预期节点类型：抛出 IOException
+ * </ul>
+ *
+ * @see IcebergDataField
+ * @see IcebergMapType
+ * @see IcebergListType
+ * @see IcebergStructType
+ */
 public class IcebergDataTypeDeserializer extends JsonDeserializer<Object> {
     @Override
     public Object deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {

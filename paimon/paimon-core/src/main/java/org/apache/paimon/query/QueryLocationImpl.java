@@ -27,13 +27,35 @@ import java.util.Optional;
 import static org.apache.paimon.service.ServiceManager.PRIMARY_KEY_LOOKUP;
 import static org.apache.paimon.table.sink.ChannelComputer.select;
 
-/** An implementation of {@link QueryLocation} to get location from {@link ServiceManager}. */
+/**
+ * {@link QueryLocation} 的实现类，从 {@link ServiceManager} 获取查询服务位置。
+ *
+ * <p>通过 {@link ServiceManager} 管理的服务发现机制，获取主键查找服务的地址列表，
+ * 并根据分区和桶号计算出具体的服务节点。
+ *
+ * <p><b>工作原理：</b>
+ * <ol>
+ *   <li>从 ServiceManager 获取服务地址数组
+ *   <li>使用 ChannelComputer.select 根据分区和桶计算目标节点索引
+ *   <li>返回对应的服务地址
+ *   <li>支持地址缓存和强制更新
+ * </ol>
+ *
+ * @see ServiceManager
+ */
 public class QueryLocationImpl implements QueryLocation {
 
+    /** 服务管理器，用于获取服务地址。 */
     private final ServiceManager manager;
 
+    /** 地址缓存，避免频繁读取文件系统。 */
     private InetSocketAddress[] addressesCache;
 
+    /**
+     * 构造函数。
+     *
+     * @param manager 服务管理器
+     */
     public QueryLocationImpl(ServiceManager manager) {
         this.manager = manager;
     }

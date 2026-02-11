@@ -20,7 +20,12 @@ package org.apache.paimon.privilege;
 
 import org.apache.paimon.catalog.Identifier;
 
-/** Allows current user to perform all operations. */
+/**
+ * 全权限检查器。
+ *
+ * <p>允许当前用户执行所有操作,不进行任何权限检查。
+ * 通常用于root用户或禁用权限系统的场景。
+ */
 public class AllGrantedPrivilegeChecker implements PrivilegeChecker {
 
     @Override

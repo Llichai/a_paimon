@@ -28,8 +28,27 @@ import java.io.FileNotFoundException;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_SNAPSHOT} or {@link
- * CoreOptions.StartupMode#FROM_SNAPSHOT_FULL} startup mode of a batch read.
+ * 静态快照起始扫描器
+ *
+ * <p>对应批量读取的 {@link CoreOptions.StartupMode#FROM_SNAPSHOT} 或
+ * {@link CoreOptions.StartupMode#FROM_SNAPSHOT_FULL} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>读取指定快照 ID 的完整数据
+ *   <li>扫描模式：ScanMode.ALL
+ *   <li>验证快照 ID 是否在可用范围内
+ * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>时间旅行：读取历史某个时刻的数据
+ *   <li>数据复现：重新读取指定版本的数据
+ * </ul>
+ *
+ * @see CoreOptions.StartupMode#FROM_SNAPSHOT
+ * @see CoreOptions.StartupMode#FROM_SNAPSHOT_FULL
+ * @see CoreOptions#SCAN_SNAPSHOT_ID
  */
 public class StaticFromSnapshotStartingScanner extends ReadPlanStartingScanner {
 

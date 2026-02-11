@@ -58,7 +58,28 @@ import java.util.function.Function;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing Aggregation of table. */
+/**
+ * 聚合字段系统表。
+ *
+ * <p>用于展示表的聚合字段配置。对于使用聚合合并引擎(Aggregation Merge Engine)的表,
+ * 此表显示每个字段配置的聚合函数。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>field_name (STRING NOT NULL): 字段名称(主键)</li>
+ *   <li>field_type (STRING NOT NULL): 字段类型</li>
+ *   <li>function (STRING): 聚合函数名称(如 sum, max, min 等)</li>
+ *   <li>function_options (STRING): 聚合函数选项配置</li>
+ *   <li>comment (STRING): 字段注释</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * SELECT * FROM my_table$aggregation_fields;
+ * }</pre>
+ *
+ * @see ReadonlyTable
+ */
 public class AggregationFieldsTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

@@ -31,17 +31,58 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.List;
 
-/** The extractor to get partition, index field and row id from records. */
+/**
+ * RowId和索引字段提取器。
+ *
+ * <p>用于从记录中提取全局索引构建所需的关键字段：
+ * <ul>
+ *   <li>RowId: 记录的全局唯一标识
+ *   <li>分区键: 记录所属分区
+ *   <li>索引字段: 需要建立索引的字段值
+ * </ul>
+ *
+ * <h3>核心功能：</h3>
+ * <ul>
+ *   <li>提取分区信息用于索引文件分组
+ *   <li>提取索引字段值用于索引构建
+ *   <li>提取RowId用于建立索引映射
+ * </ul>
+ *
+ * <h3>实现细节：</h3>
+ * <ul>
+ *   <li>使用代码生成的 {@link Projection} 提取分区
+ *   <li>使用 {@link FieldGetter} 提取索引字段
+ *   <li>通过预计算的位置直接访问RowId
+ *   <li>延迟初始化投影和getter以优化性能
+ * </ul>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>全局索引构建流程
+ *   <li>索引数据的批量写入
+ *   <li>索引与数据的关联维护
+ * </ul>
+ */
 public class RowIdIndexFieldsExtractor implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** RowId字段在记录中的位置 */
     private final int rowIdPos;
+
+    /** 读取类型 */
     private final RowType readType;
+
+    /** 分区键列表 */
     private final List<String> partitionKeys;
+
+    /** 索引字段名 */
     private final String indexField;
 
+    /** 延迟初始化的分区投影器 */
     private transient Projection lazyPartitionProjection;
+
+    /** 延迟初始化的索引字段获取器 */
     private transient FieldGetter lazyIndexFieldGetter;
 
     public RowIdIndexFieldsExtractor(

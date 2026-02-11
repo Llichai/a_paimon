@@ -35,7 +35,7 @@ import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
 import static java.time.temporal.ChronoField.YEAR;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Handle time for tag. */
+/** 处理标签的时间。 */
 public interface TagPeriodHandler {
 
     DateTimeFormatter HOUR_FORMATTER =
@@ -111,7 +111,7 @@ public interface TagPeriodHandler {
 
     boolean isAutoTag(String tagName);
 
-    /** Base implementation of {@link TagPeriodHandler}. */
+    /** {@link TagPeriodHandler} 的基础实现。 */
     abstract class BaseTagPeriodHandler implements TagPeriodHandler {
 
         protected abstract Duration onePeriod();
@@ -164,7 +164,7 @@ public interface TagPeriodHandler {
         }
     }
 
-    /** Hourly {@link TagPeriodHandler}. */
+    /** 每小时的 {@link TagPeriodHandler}。 */
     class HourlyTagPeriodHandler extends BaseTagPeriodHandler {
 
         CoreOptions.TagPeriodFormatter formatter;
@@ -195,7 +195,7 @@ public interface TagPeriodHandler {
         }
     }
 
-    /** Daily {@link TagPeriodHandler}. */
+    /** 每天的 {@link TagPeriodHandler}。 */
     class DailyTagPeriodHandler extends BaseTagPeriodHandler {
 
         CoreOptions.TagPeriodFormatter formatter;
@@ -231,7 +231,7 @@ public interface TagPeriodHandler {
         }
     }
 
-    /** Two Hours {@link TagPeriodHandler}. */
+    /** 两小时的 {@link TagPeriodHandler}。 */
     class TwoHoursTagPeriodHandler extends BaseTagPeriodHandler {
 
         static final Duration ONE_PERIOD = Duration.ofHours(2);
@@ -247,7 +247,7 @@ public interface TagPeriodHandler {
         }
     }
 
-    /** Period duration {@link TagPeriodHandler}. */
+    /** 周期时长的 {@link TagPeriodHandler}。 */
     class PeriodDurationTagPeriodHandler extends BaseTagPeriodHandler {
 
         Duration periodDuration;

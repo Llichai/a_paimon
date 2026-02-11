@@ -22,8 +22,30 @@ import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.factories.Factory;
 import org.apache.paimon.options.Options;
 
-/** Factory to create {@link IcebergMigrateMetadata}. */
+/**
+ * Iceberg 迁移元数据工厂接口。
+ *
+ * <p>使用工厂模式创建不同类型的 {@link IcebergMigrateMetadata} 实现。
+ * 支持通过 SPI(Service Provider Interface)机制动态发现和加载具体实现。
+ *
+ * <p>实现类需要:
+ * <ul>
+ *   <li>实现 {@link #identifier()} 方法返回唯一标识符
+ *   <li>实现 {@link #create} 方法创建具体的元数据访问器
+ *   <li>在 META-INF/services 中注册 SPI 服务
+ * </ul>
+ *
+ * @see IcebergMigrateHadoopMetadataFactory Hadoop Catalog 工厂实现
+ * @see org.apache.paimon.factories.FactoryUtil#discoverFactory 工厂发现机制
+ */
 public interface IcebergMigrateMetadataFactory extends Factory {
 
+    /**
+     * 创建 Iceberg 迁移元数据访问器。
+     *
+     * @param icebergIdentifier Iceberg 表标识符
+     * @param icebergOptions Iceberg 配置选项
+     * @return 迁移元数据访问器实例
+     */
     IcebergMigrateMetadata create(Identifier icebergIdentifier, Options icebergOptions);
 }

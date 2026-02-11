@@ -75,7 +75,77 @@ import static org.apache.paimon.CoreOptions.IncrementalBetweenScanMode.DIFF;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
-/** An abstraction layer above {@link FileStoreScan} to provide input split generation. */
+/**
+ * 抽象数据表扫描类，位于 {@link FileStoreScan} 之上，提供输入分片生成功能。
+ *
+ * <p>AbstractDataTableScan 是所有数据表扫描实现的抽象基类，封装了通用的扫描逻辑，
+ * 包括：过滤下推、分区裁剪、快照选择、分片生成等。
+ *
+ * <h3>架构层次</h3>
+ * <pre>
+ * DataTableScan (接口)
+ *     ↓
+ * AbstractDataTableScan (抽象基类，通用逻辑)
+ *     ↓
+ * ├── DataTableBatchScan (批量扫描)
+ * └── DataTableStreamScan (流式扫描)
+ * </pre>
+ *
+ * <h3>核心组件</h3>
+ * <ul>
+ *   <li><b>SnapshotReader</b>: 快照读取器，负责从快照读取数据文件</li>
+ *   <li><b>StartingScanner</b>: 起始扫描器，确定从哪个快照开始扫描</li>
+ *   <li><b>SplitGenerator</b>: 分片生成器，将数据文件转换为 Split</li>
+ *   <li><b>TableQueryAuth</b>: 查询授权，控制数据访问权限</li>
+ * </ul>
+ *
+ * <h3>主要功能</h3>
+ * <ul>
+ *   <li><b>过滤下推</b>: 将谓词下推到扫描层，利用统计信息过滤文件</li>
+ *   <li><b>分区裁剪</b>: 根据分区条件过滤不需要扫描的分区</li>
+ *   <li><b>快照选择</b>: 支持多种快照选择策略（时间旅行、增量读取等）</li>
+ *   <li><b>分片生成</b>: 将数据文件打包成 Split，支持并行读取</li>
+ *   <li><b>查询授权</b>: 支持细粒度的数据访问控制</li>
+ * </ul>
+ *
+ * <h3>起始扫描器（StartingScanner）</h3>
+ * <p>用于确定扫描的起始快照，支持多种策略：
+ * <ul>
+ *   <li><b>FullStartingScanner</b>: 全量扫描（从最新快照开始）</li>
+ *   <li><b>StaticFromSnapshotStartingScanner</b>: 从指定快照开始</li>
+ *   <li><b>StaticFromTimestampStartingScanner</b>: 从指定时间戳开始</li>
+ *   <li><b>IncrementalDeltaStartingScanner</b>: 增量扫描（两个快照之间的变化）</li>
+ *   <li><b>ContinuousLatestStartingScanner</b>: 持续扫描（从最新快照开始）</li>
+ * </ul>
+ *
+ * <h3>使用流程</h3>
+ * <pre>{@code
+ * // 1. 创建扫描器
+ * AbstractDataTableScan scan = new DataTableBatchScan(...);
+ *
+ * // 2. 配置扫描参数
+ * scan.withFilter(predicate)                  // 设置过滤条件
+ *     .withPartitionFilter(partitionFilter)   // 设置分区过滤
+ *     .withReadType(projectedType)            // 设置列裁剪
+ *     .withLimit(1000);                       // 设置行数限制
+ *
+ * // 3. 生成扫描计划
+ * Plan plan = scan.plan();
+ * List<Split> splits = plan.splits();
+ * }</pre>
+ *
+ * <h3>子类实现</h3>
+ * <ul>
+ *   <li>{@link DataTableBatchScan}: 实现批量扫描逻辑（一次性读取）</li>
+ *   <li>{@link DataTableStreamScan}: 实现流式扫描逻辑（持续读取）</li>
+ * </ul>
+ *
+ * @see DataTableScan 数据表扫描接口
+ * @see DataTableBatchScan 批量扫描实现
+ * @see DataTableStreamScan 流式扫描实现
+ * @see SnapshotReader 快照读取器
+ * @see StartingScanner 起始扫描器
+ */
 abstract class AbstractDataTableScan implements DataTableScan {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractDataTableScan.class);
@@ -98,6 +168,14 @@ abstract class AbstractDataTableScan implements DataTableScan {
         this.queryAuth = queryAuth;
     }
 
+    /**
+     * 生成扫描计划（包含查询授权处理）。
+     *
+     * <p>该方法首先进行查询授权检查，然后生成扫描计划。
+     * 如果授权结果需要转换计划（如限制访问范围），会应用转换。
+     *
+     * @return 扫描计划（可能经过授权转换）
+     */
     @Override
     public final TableScan.Plan plan() {
         TableQueryAuthResult queryAuthResult = authQuery();
@@ -108,26 +186,57 @@ abstract class AbstractDataTableScan implements DataTableScan {
         return plan;
     }
 
+    /**
+     * 生成扫描计划（不进行授权检查）。
+     *
+     * <p>由子类实现具体的扫描逻辑（批量扫描或流式扫描）。
+     *
+     * @return 扫描计划
+     */
     protected abstract TableScan.Plan planWithoutAuth();
 
+    /**
+     * 设置过滤谓词（覆盖父接口方法）。
+     *
+     * @param predicate 过滤谓词
+     * @return this
+     */
     @Override
     public InnerTableScan withFilter(Predicate predicate) {
         snapshotReader.withFilter(predicate);
         return this;
     }
 
+    /**
+     * 设置桶过滤（只扫描指定的桶）。
+     *
+     * @param bucket 桶号
+     * @return this
+     */
     @Override
     public AbstractDataTableScan withBucket(int bucket) {
         snapshotReader.withBucket(bucket);
         return this;
     }
 
+    /**
+     * 设置桶过滤器（自定义桶过滤逻辑）。
+     *
+     * @param bucketFilter 桶过滤器
+     * @return this
+     */
     @Override
     public AbstractDataTableScan withBucketFilter(Filter<Integer> bucketFilter) {
         snapshotReader.withBucketFilter(bucketFilter);
         return this;
     }
 
+    /**
+     * 设置要读取的列类型（列裁剪）。
+     *
+     * @param readType 要读取的列类型
+     * @return this
+     */
     @Override
     public InnerTableScan withReadType(@Nullable RowType readType) {
         this.readType = readType;
@@ -135,12 +244,24 @@ abstract class AbstractDataTableScan implements DataTableScan {
         return this;
     }
 
+    /**
+     * 设置分区过滤（使用分区键值对）。
+     *
+     * @param partitionSpec 分区键值对
+     * @return this
+     */
     @Override
     public AbstractDataTableScan withPartitionFilter(Map<String, String> partitionSpec) {
         snapshotReader.withPartitionFilter(partitionSpec);
         return this;
     }
 
+    /**
+     * 设置分区过滤（使用分区列表）。
+     *
+     * @param partitions 分区列表
+     * @return this
+     */
     @Override
     public AbstractDataTableScan withPartitionFilter(List<BinaryRow> partitions) {
         snapshotReader.withPartitionFilter(partitions);

@@ -30,7 +30,44 @@ import org.apache.paimon.utils.ObjectSerializer;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Serializer for {@link IcebergManifestFileMeta}. */
+/**
+ * {@link IcebergManifestFileMeta} 的序列化器。
+ *
+ * <p>负责 Manifest File Meta 对象与 InternalRow 之间的转换。
+ *
+ * <h3>序列化字段（按顺序）</h3>
+ * <ol>
+ *   <li>manifest_path - Manifest 文件路径
+ *   <li>manifest_length - 文件长度
+ *   <li>partition_spec_id - 分区规范 ID
+ *   <li>content - 内容类型（DATA/DELETES）
+ *   <li>sequence_number - 序列号
+ *   <li>min_sequence_number - 最小序列号
+ *   <li>added_snapshot_id - 添加时的快照 ID
+ *   <li>added_files_count - 新增文件数
+ *   <li>existing_files_count - 保留文件数
+ *   <li>deleted_files_count - 删除文件数
+ *   <li>added_rows_count - 新增行数
+ *   <li>existing_rows_count - 保留行数
+ *   <li>deleted_rows_count - 删除行数
+ *   <li>partitions - 分区摘要数组
+ * </ol>
+ *
+ * <h3>依赖序列化器</h3>
+ * <ul>
+ *   <li><b>partitionSummarySerializer</b>：{@link IcebergPartitionSummarySerializer}
+ * </ul>
+ *
+ * <h3>数组转换</h3>
+ * <p>partitions 字段需要特殊处理：
+ * <ul>
+ *   <li>序列化：List -> InternalRow[] -> GenericArray
+ *   <li>反序列化：InternalArray -> List
+ * </ul>
+ *
+ * @see IcebergManifestFileMeta
+ * @see IcebergPartitionSummarySerializer
+ */
 public class IcebergManifestFileMetaSerializer extends ObjectSerializer<IcebergManifestFileMeta> {
 
     private static final long serialVersionUID = 1L;

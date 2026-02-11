@@ -23,8 +23,31 @@ import org.apache.paimon.utils.ChangelogManager;
 import org.apache.paimon.utils.SnapshotManager;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_SNAPSHOT} startup mode of a
- * streaming read.
+ * 连续快照起始扫描器
+ *
+ * <p>对应流式读取的 {@link CoreOptions.StartupMode#FROM_SNAPSHOT} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>从指定快照 ID 之后开始流式读取
+ *   <li>不读取指定快照，从下一个快照开始
+ *   <li>支持 changelog 解耦模式
+ * </ul>
+ *
+ * <p><b>Changelog 解耦：</b>
+ * <ul>
+ *   <li>如果 changelogDecoupled=true，会同时检查 changelog 文件
+ *   <li>起点可能是 changelog 的最早 ID 或 snapshot 的最早 ID
+ * </ul>
+ *
+ * <p><b>返回逻辑：</b>
+ * <pre>
+ * 返回 NextSnapshot(max(startingSnapshotId, earliestId))
+ * - 如果指定的快照已过期，从最早快照开始
+ * - 否则从指定快照的下一个开始
+ * </pre>
+ *
+ * @see CoreOptions.StartupMode#FROM_SNAPSHOT
  */
 public class ContinuousFromSnapshotStartingScanner extends AbstractStartingScanner {
 

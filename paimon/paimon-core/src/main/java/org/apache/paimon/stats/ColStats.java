@@ -37,18 +37,18 @@ import java.util.Optional;
 import java.util.OptionalLong;
 
 /**
- * Col stats, supports the following stats.
+ * 列统计信息类，支持以下统计指标。
  *
  * <ul>
- *   <li>distinctCount: the number of distinct values
- *   <li>min: the minimum value of the column
- *   <li>max: the maximum value of the column
- *   <li>nullCount: the number of nulls
- *   <li>avgLen: average column length
- *   <li>maxLen: max column length
+ *   <li>distinctCount: 不同值的数量
+ *   <li>min: 列的最小值
+ *   <li>max: 列的最大值
+ *   <li>nullCount: 空值数量
+ *   <li>avgLen: 平均列长度
+ *   <li>maxLen: 最大列长度
  * </ul>
  *
- * @param <T> col internal data type
+ * @param <T> 列的内部数据类型
  */
 @Experimental
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -93,7 +93,7 @@ public class ColStats<T> {
     @JsonProperty(FIELD_MAX_LEN)
     private final @Nullable Long maxLen;
 
-    // This should only be used by jackson
+    /** 该构造函数仅供 Jackson 使用。 */
     @JsonCreator
     public ColStats(
             @JsonProperty(FIELD_COL_ID) int colId,
@@ -129,6 +129,7 @@ public class ColStats<T> {
         this.maxLen = maxLen;
     }
 
+    /** 创建列统计信息实例。 */
     public static <T> ColStats<T> newColStats(
             int colId,
             @Nullable Long distinctCount,
@@ -140,34 +141,42 @@ public class ColStats<T> {
         return new ColStats<>(colId, distinctCount, min, max, nullCount, avgLen, maxLen);
     }
 
+    /** 返回列 ID。 */
     public int colId() {
         return colId;
     }
 
+    /** 返回不同值的数量。 */
     public OptionalLong distinctCount() {
         return OptionalUtils.ofNullable(distinctCount);
     }
 
+    /** 返回最小值。 */
     public Optional<Comparable<T>> min() {
         return Optional.ofNullable(min);
     }
 
+    /** 返回最大值。 */
     public Optional<Comparable<T>> max() {
         return Optional.ofNullable(max);
     }
 
+    /** 返回空值数量。 */
     public OptionalLong nullCount() {
         return OptionalUtils.ofNullable(nullCount);
     }
 
+    /** 返回平均长度。 */
     public OptionalLong avgLen() {
         return OptionalUtils.ofNullable(avgLen);
     }
 
+    /** 返回最大长度。 */
     public OptionalLong maxLen() {
         return OptionalUtils.ofNullable(maxLen);
     }
 
+    /** 将最小值和最大值序列化为字符串。 */
     @SuppressWarnings("unchecked")
     public void serializeFieldsToString(DataType dataType) {
         if ((min != null && serializedMin == null) || (max != null && serializedMax == null)) {
@@ -181,6 +190,7 @@ public class ColStats<T> {
         }
     }
 
+    /** 从字符串反序列化最小值和最大值。 */
     @SuppressWarnings("unchecked")
     public void deserializeFieldsFromString(DataType dataType) {
         if ((serializedMin != null && min == null) || (serializedMax != null && max == null)) {

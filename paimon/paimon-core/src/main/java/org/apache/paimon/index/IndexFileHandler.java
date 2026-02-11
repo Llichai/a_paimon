@@ -44,7 +44,23 @@ import java.util.Set;
 import static org.apache.paimon.deletionvectors.DeletionVectorsIndexFile.DELETION_VECTORS_INDEX;
 import static org.apache.paimon.index.HashIndexFile.HASH_INDEX;
 
-/** Handle index files. */
+/**
+ * 索引文件处理器。
+ *
+ * <p>负责索引文件的管理和操作,包括:
+ * <ul>
+ *   <li>哈希索引文件的读写</li>
+ *   <li>删除向量索引文件的读写</li>
+ *   <li>索引文件的扫描和查询</li>
+ *   <li>索引manifest的管理</li>
+ * </ul>
+ *
+ * <p>支持的索引类型:
+ * <ul>
+ *   <li>HASH_INDEX: 哈希索引,用于动态bucket</li>
+ *   <li>DELETION_VECTORS_INDEX: 删除向量索引,用于标记删除的行</li>
+ * </ul>
+ */
 public class IndexFileHandler {
 
     private final FileIO fileIO;

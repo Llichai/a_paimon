@@ -23,7 +23,7 @@ import org.apache.paimon.annotation.Public;
 import java.nio.ByteBuffer;
 
 /**
- * A buffer with size.
+ * 带有大小的缓冲区。
  *
  * @since 0.4.0
  */

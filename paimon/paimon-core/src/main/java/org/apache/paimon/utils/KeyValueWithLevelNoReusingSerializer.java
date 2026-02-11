@@ -26,14 +26,88 @@ import org.apache.paimon.types.RowType;
 
 import static org.apache.paimon.data.JoinedRow.join;
 
-/** Serializer for {@link KeyValue} with Level. */
+/**
+ * 带 Level 的键值序列化器（无对象复用）
+ *
+ * <p>KeyValueWithLevelNoReusingSerializer 是 {@link KeyValue} 的序列化器，包含 Level 信息。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>序列化：{@link #toRow} - 将 KeyValue 转换为 InternalRow
+ *   <li>反序列化：{@link #fromRow} - 将 InternalRow 转换为 KeyValue
+ *   <li>Level 支持：包含 Level 字段（LSM 树的层级）
+ * </ul>
+ *
+ * <p>行结构（InternalRow）：
+ * <pre>
+ * +-----------+------------------+-------+---------+-------+
+ * |    Key    | Sequence | Kind  | Value | Level  |
+ * +-----------+------------------+-------+---------+-------+
+ * | keyArity  |    1     |  1    | valueArity | 1  |
+ * +-----------+------------------+-------+---------+-------+
+ * </pre>
+ *
+ * <p>字段说明：
+ * <ul>
+ *   <li>Key：键字段（keyArity 个字段）
+ *   <li>Sequence：序列号（Long 类型）
+ *   <li>Kind：行类型（Byte 类型，如 INSERT、UPDATE、DELETE）
+ *   <li>Value：值字段（valueArity 个字段）
+ *   <li>Level：LSM 树层级（Int 类型）
+ * </ul>
+ *
+ * <p>无对象复用：
+ * <ul>
+ *   <li>每次反序列化都创建新的 KeyValue 对象
+ *   <li>不复用 InternalRow 对象
+ *   <li>使用 OffsetRow 进行零拷贝优化
+ * </ul>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>Manifest 文件：序列化文件元数据
+ *   <li>Compaction：在压缩过程中传递 KeyValue
+ *   <li>Changelog：记录变更日志
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 创建序列化器
+ * RowType keyType = RowType.of(...);
+ * RowType valueType = RowType.of(...);
+ * KeyValueWithLevelNoReusingSerializer serializer =
+ *     new KeyValueWithLevelNoReusingSerializer(keyType, valueType);
+ *
+ * // 序列化 KeyValue
+ * KeyValue kv = new KeyValue()
+ *     .replace(key, 100L, RowKind.INSERT, value)
+ *     .setLevel(2);
+ * InternalRow row = serializer.toRow(kv);
+ *
+ * // 反序列化 InternalRow
+ * KeyValue deserializedKv = serializer.fromRow(row);
+ * System.out.println("Level: " + deserializedKv.level());
+ * }</pre>
+ *
+ * @see KeyValue
+ * @see ObjectSerializer
+ * @see OffsetRow
+ */
 public class KeyValueWithLevelNoReusingSerializer extends ObjectSerializer<KeyValue> {
 
     private static final long serialVersionUID = 1L;
 
+    /** 键字段数量 */
     private final int keyArity;
+    /** 值字段数量 */
     private final int valueArity;
 
+    /**
+     * 构造序列化器
+     *
+     * @param keyType 键类型
+     * @param valueType 值类型
+     */
     public KeyValueWithLevelNoReusingSerializer(RowType keyType, RowType valueType) {
         super(KeyValue.schemaWithLevel(keyType, valueType));
 

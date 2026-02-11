@@ -21,37 +21,63 @@ package org.apache.paimon.metrics;
 import org.apache.paimon.annotation.Public;
 
 /**
- * A Counter is a {@link Metric} that measures a count.
+ * 计数器指标接口。
+ *
+ * <p>计数器是一个 {@link Metric}，用于测量计数值，支持增加和减少操作。
+ *
+ * <h3>核心功能：</h3>
+ * <ul>
+ *   <li>递增计数（按1或指定值）
+ *   <li>递减计数（按1或指定值）
+ *   <li>获取当前计数值
+ * </ul>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>统计提交次数
+ *   <li>统计写入记录数
+ *   <li>统计文件数量
+ *   <li>统计错误次数
+ * </ul>
+ *
+ * <h3>实现类：</h3>
+ * <ul>
+ *   <li>{@link SimpleCounter}: 简单的低开销实现
+ * </ul>
  *
  * @since 0.5.0
  */
 @Public
 public interface Counter extends Metric {
 
-    /** Increment the current count by 1. */
+    /**
+     * 递增计数1。
+     */
     void inc();
 
     /**
-     * Increment the current count by the given value.
+     * 按指定值递增计数。
      *
-     * @param n value to increment the current count by
+     * @param n 递增值
      */
     void inc(long n);
 
-    /** Decrement the current count by 1. */
+    /**
+     * 递减计数1。
+     */
     void dec();
 
     /**
-     * Decrement the current count by the given value.
+     * 按指定值递减计数。
      *
-     * @param n value to decrement the current count by
+     * @param n 递减值
      */
     void dec(long n);
 
     /**
-     * Returns the current count.
+     * 获取当前计数值。
      *
-     * @return current count
+     * @return 当前计数
      */
     long getCount();
 

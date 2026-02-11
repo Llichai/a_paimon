@@ -21,23 +21,33 @@ package org.apache.paimon.privilege;
 import org.apache.paimon.annotation.Public;
 
 /**
- * Types of privilege.
+ * 权限类型枚举。
+ *
+ * <p>定义了系统支持的所有权限类型,包括表级、库级和Catalog级权限。
  *
  * @since 0.7.0
  */
 @Public
 public enum PrivilegeType {
+    /** 查询表权限 */
     SELECT(PrivilegeTarget.TABLE),
+    /** 插入表权限 */
     INSERT(PrivilegeTarget.TABLE),
+    /** 修改表权限 */
     ALTER_TABLE(PrivilegeTarget.TABLE),
+    /** 删除表权限 */
     DROP_TABLE(PrivilegeTarget.TABLE),
 
+    /** 创建表权限 */
     CREATE_TABLE(PrivilegeTarget.DATABASE),
+    /** 删除数据库权限 */
     DROP_DATABASE(PrivilegeTarget.DATABASE),
+    /** 修改数据库权限 */
     ALTER_DATABASE(PrivilegeTarget.DATABASE),
 
+    /** 创建数据库权限 */
     CREATE_DATABASE(PrivilegeTarget.CATALOG),
-    // you can create and drop users, grant and revoke any privileges to or from others
+    /** 管理员权限 - 可以创建/删除用户,授予/撤销任何权限 */
     ADMIN(PrivilegeTarget.CATALOG);
 
     private final PrivilegeTarget target;

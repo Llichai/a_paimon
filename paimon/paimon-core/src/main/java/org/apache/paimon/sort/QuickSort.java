@@ -18,22 +18,26 @@
 
 package org.apache.paimon.sort;
 
-/** Quick sort {@link IndexedSorter}. */
+/**
+ * 快速排序 {@link IndexedSorter} 实现。
+ */
 public final class QuickSort implements IndexedSorter {
 
+    /** 备用排序算法(堆排序) */
     private static final IndexedSorter alt = new HeapSort();
 
     public QuickSort() {}
 
     /**
-     * Fix the records into sorted order, swapping when the first record is greater than the second
-     * record.
+     * 修正记录为排序顺序。
      *
-     * @param s paged sortable
-     * @param pN page number of first record
-     * @param pO page offset of first record
-     * @param rN page number of second record
-     * @param rO page offset of second record
+     * <p>当第一条记录大于第二条记录时交换它们。
+     *
+     * @param s 分页可排序对象
+     * @param pN 第一条记录的页号
+     * @param pO 第一条记录的页偏移量
+     * @param rN 第二条记录的页号
+     * @param rO 第二条记录的页偏移量
      */
     private static void fix(IndexedSortable s, int pN, int pO, int rN, int rO) {
         if (s.compare(pN, pO, rN, rO) > 0) {
@@ -41,7 +45,14 @@ public final class QuickSort implements IndexedSorter {
         }
     }
 
-    /** Deepest recursion before giving up and doing a heapsort. Returns 2 * ceil(log(n)). */
+    /**
+     * 放弃前的最深递归深度,返回后执行堆排序。
+     *
+     * <p>返回 2 * ceil(log(n))。
+     *
+     * @param x 元素数量
+     * @return 最大深度
+     */
     private static int getMaxDepth(int x) {
         if (x <= 0) {
             throw new IllegalArgumentException("Undefined for " + x);
@@ -50,8 +61,13 @@ public final class QuickSort implements IndexedSorter {
     }
 
     /**
-     * Sort the given range of items using quick sort. {@inheritDoc} If the recursion depth falls
-     * below {@link #getMaxDepth}, then switch to {@link HeapSort}.
+     * 使用快速排序对给定范围的项进行排序。
+     *
+     * <p>如果递归深度低于 {@link #getMaxDepth},则切换到 {@link HeapSort}。
+     *
+     * @param s 可排序对象
+     * @param p 起始位置
+     * @param r 结束位置
      */
     public void sort(final IndexedSortable s, int p, int r) {
         int recordsPerSegment = s.recordsPerSegment();
@@ -78,25 +94,31 @@ public final class QuickSort implements IndexedSorter {
                 getMaxDepth(r - p));
     }
 
+    /**
+     * 对整个可排序对象进行排序。
+     *
+     * @param s 可排序对象
+     */
     public void sort(IndexedSortable s) {
         sort(s, 0, s.size());
     }
 
     /**
-     * Sort the given range of items using quick sort. If the recursion depth falls below {@link
-     * #getMaxDepth}, then switch to {@link HeapSort}.
+     * 使用快速排序对给定范围的项进行排序(内部方法)。
      *
-     * @param s paged sortable
-     * @param recordsPerSegment number of records per memory segment
-     * @param recordSize number of bytes per record
-     * @param maxOffset offset of a last record in a memory segment
-     * @param p index of first record in range
-     * @param pN page number of first record in range
-     * @param pO page offset of first record in range
-     * @param r index of last-plus-one'th record in range
-     * @param rN page number of last-plus-one'th record in range
-     * @param rO page offset of last-plus-one'th record in range
-     * @param depth recursion depth
+     * <p>如果递归深度低于 {@link #getMaxDepth},则切换到 {@link HeapSort}。
+     *
+     * @param s 分页可排序对象
+     * @param recordsPerSegment 每段记录数
+     * @param recordSize 每条记录的字节数
+     * @param maxOffset 内存段中最后一条记录的偏移量
+     * @param p 范围中第一条记录的索引
+     * @param pN 范围中第一条记录的页号
+     * @param pO 范围中第一条记录的页偏移量
+     * @param r 范围中最后一条记录之后的索引
+     * @param rN 范围中最后一条记录之后的页号
+     * @param rO 范围中最后一条记录之后的页偏移量
+     * @param depth 递归深度
      * @see #sort(IndexedSortable, int, int)
      */
     private static void sortInternal(

@@ -61,11 +61,51 @@ import static org.apache.paimon.rest.responses.AuditRESTResponse.FIELD_OWNER;
 import static org.apache.paimon.rest.responses.AuditRESTResponse.FIELD_UPDATED_AT;
 import static org.apache.paimon.rest.responses.AuditRESTResponse.FIELD_UPDATED_BY;
 
-/** This is a system table to display all the database-tables. */
+/**
+ * 所有表系统表。
+ *
+ * <p>这是一个系统表,用于展示 Catalog 中所有数据库和表的信息。提供了表的基本元数据、统计信息和审计信息。
+ *
+ * <h2>表结构 (Schema)</h2>
+ * <table border="1">
+ *   <tr><th>字段名</th><th>类型</th><th>描述</th></tr>
+ *   <tr><td>database_name</td><td>STRING</td><td>数据库名称</td></tr>
+ *   <tr><td>table_name</td><td>STRING</td><td>表名称</td></tr>
+ *   <tr><td>table_type</td><td>STRING</td><td>表类型(如 table-with-pk, append-only 等)</td></tr>
+ *   <tr><td>partitioned</td><td>BOOLEAN</td><td>是否分区表</td></tr>
+ *   <tr><td>primary_key</td><td>BOOLEAN</td><td>是否有主键</td></tr>
+ *   <tr><td>owner</td><td>STRING</td><td>表的所有者</td></tr>
+ *   <tr><td>created_at</td><td>BIGINT</td><td>创建时间戳(毫秒)</td></tr>
+ *   <tr><td>created_by</td><td>STRING</td><td>创建者</td></tr>
+ *   <tr><td>updated_at</td><td>BIGINT</td><td>最后更新时间戳(毫秒)</td></tr>
+ *   <tr><td>updated_by</td><td>STRING</td><td>最后更新者</td></tr>
+ *   <tr><td>record_count</td><td>BIGINT</td><td>记录总数(来自最新快照)</td></tr>
+ *   <tr><td>file_size_in_bytes</td><td>BIGINT</td><td>文件总大小(字节)</td></tr>
+ *   <tr><td>file_count</td><td>BIGINT</td><td>文件总数</td></tr>
+ *   <tr><td>last_file_creation_time</td><td>BIGINT</td><td>最后文件创建时间戳(毫秒)</td></tr>
+ * </table>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- Flink SQL 查询所有表
+ * SELECT database_name, table_name, table_type, record_count
+ * FROM sys.tables
+ * WHERE partitioned = true;
+ *
+ * -- 查询特定数据库的表
+ * SELECT * FROM sys.tables WHERE database_name = 'my_db';
+ * }</pre>
+ *
+ * <p>注意:此系统表是全局级别的,在 Catalog 级别提供,不依赖于特定的数据表。
+ *
+ * @see ReadonlyTable
+ */
 public class AllTablesTable implements ReadonlyTable {
 
+    /** 系统表名称常量。 */
     public static final String ALL_TABLES = "tables";
 
+    /** 表的行类型定义,包含所有字段的类型和名称。 */
     public static final RowType TABLE_TYPE =
             new RowType(
                     Arrays.asList(
@@ -84,12 +124,24 @@ public class AllTablesTable implements ReadonlyTable {
                             new DataField(12, "file_count", DataTypes.BIGINT()),
                             new DataField(13, "last_file_creation_time", DataTypes.BIGINT())));
 
+    /** 表数据行列表。 */
     private final List<GenericRow> rows;
 
+    /**
+     * 构造函数。
+     *
+     * @param rows 表数据行列表
+     */
     public AllTablesTable(List<GenericRow> rows) {
         this.rows = rows;
     }
 
+    /**
+     * 从表和快照列表创建 AllTablesTable 实例。
+     *
+     * @param tables 表和对应快照的列表
+     * @return AllTablesTable 实例
+     */
     public static AllTablesTable fromTables(List<Pair<Table, TableSnapshot>> tables) {
         List<GenericRow> rows = new ArrayList<>();
         for (Pair<Table, TableSnapshot> pair : tables) {

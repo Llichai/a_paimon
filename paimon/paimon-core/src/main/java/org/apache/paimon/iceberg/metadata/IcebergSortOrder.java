@@ -28,13 +28,17 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Sort order in Iceberg's metadata.
+ * Iceberg 元数据中的排序顺序类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#sort-orders">Iceberg spec</a>.
+ * <p>定义表数据的排序规范。当前 Paimon 不支持排序规范,
+ * 因此 fields 列表始终为空,order-id 固定为 0。
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#sort-orders">Iceberg 规范</a>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergSortOrder {
 
+    /** 排序规范 ID,当前未支持,固定为 0 */
     // currently unsupported
     public static final int ORDER_ID = 0;
 

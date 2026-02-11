@@ -18,18 +18,28 @@
 
 package org.apache.paimon.sort;
 
-/** Indexed sorter to provide sort. */
+/**
+ * 提供排序功能的索引排序器接口。
+ */
 public interface IndexedSorter {
 
     /**
-     * Sort the items accessed through the given IndexedSortable over the given range of logical
-     * indices. From the perspective of the sort algorithm, each index between l (inclusive) and r
-     * (exclusive) is an addressable entry.
+     * 对通过给定 IndexedSortable 访问的项在给定逻辑索引范围内进行排序。
      *
+     * <p>从排序算法的角度来看,l(包含)和r(不包含)之间的每个索引都是可寻址的条目。
+     *
+     * @param s 可排序对象
+     * @param l 起始索引(包含)
+     * @param r 结束索引(不包含)
      * @see IndexedSortable#compare
      * @see IndexedSortable#swap
      */
     void sort(IndexedSortable s, int l, int r);
 
+    /**
+     * 对整个可排序对象进行排序。
+     *
+     * @param s 可排序对象
+     */
     void sort(IndexedSortable s);
 }

@@ -28,7 +28,12 @@ import java.util.List;
 import static org.apache.paimon.utils.IntFileUtils.readInts;
 import static org.apache.paimon.utils.IntFileUtils.writeInts;
 
-/** Hash index file contains ints. */
+/**
+ * 哈希索引文件。
+ *
+ * <p>存储整数类型的哈希索引数据。
+ * 用于动态bucket表中维护键的哈希值,以便快速查找和分配bucket。
+ */
 public class HashIndexFile extends IndexFile {
 
     public static final String HASH_INDEX = "HASH";

@@ -27,9 +27,25 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Snapshot summary in Iceberg's snapshot.
+ * Iceberg 快照摘要类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#snapshots">Iceberg spec</a>.
+ * <p>存储快照的摘要信息,以键值对形式存储元数据。
+ *
+ * <p>常用字段:
+ * <ul>
+ *   <li>operation: 操作类型(append、overwrite 等)
+ *   <li>其他自定义元数据
+ * </ul>
+ *
+ * <p>预定义的摘要常量:
+ * <ul>
+ *   <li>APPEND: 追加操作摘要
+ *   <li>OVERWRITE: 覆盖操作摘要
+ * </ul>
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#snapshots">Iceberg 规范</a>
+ *
+ * @see IcebergSnapshot 快照类
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergSnapshotSummary {
