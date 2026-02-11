@@ -23,52 +23,99 @@ import org.apache.paimon.annotation.Public;
 import java.util.Map;
 
 /**
- * A MetricGroup is a named container for {@link Metric Metrics} and further metric subgroups.
+ * 指标组接口。
  *
- * <p>Instances of this class can be used to register new metrics with Paimon.
+ * <p>指标组是 {@link Metric} 和子指标组的命名容器。
+ *
+ * <h3>核心功能：</h3>
+ * <ul>
+ *   <li>创建和注册计数器
+ *   <li>注册仪表盘
+ *   <li>注册直方图
+ *   <li>管理指标变量
+ *   <li>提供指标层级组织
+ * </ul>
+ *
+ * <h3>指标变量：</h3>
+ * <p>指标变量用于在指标名称中嵌入上下文信息，例如：
+ * <ul>
+ *   <li>table: 表名
+ *   <li>partition: 分区名
+ *   <li>task: 任务ID
+ * </ul>
+ *
+ * <h3>使用示例：</h3>
+ * <pre>
+ * MetricGroup tableGroup = metricRegistry.createTableMetricGroup("commit", "my_table");
+ * Counter commitCounter = tableGroup.counter("commitCount");
+ * Gauge<Long> memoryGauge = tableGroup.gauge("memory", () -> Runtime.getRuntime().totalMemory());
+ * Histogram latencyHist = tableGroup.histogram("latency", 1000);
+ * </pre>
+ *
+ * <h3>层级结构：</h3>
+ * <pre>
+ * MetricGroup (commit)
+ *   ├─ variable: table=my_table
+ *   ├─ Counter: commitCount
+ *   ├─ Gauge: memory
+ *   └─ Histogram: latency
+ * </pre>
  */
 @Public
 public interface MetricGroup {
 
     /**
-     * Creates and registers a new {@link org.apache.paimon.metrics.Counter} with Paimon.
+     * 创建并注册新的计数器。
      *
-     * @param name name of the counter
-     * @return the created counter
+     * @param name 计数器名称
+     * @return 创建的计数器
      */
     Counter counter(String name);
 
     /**
-     * Registers a new {@link org.apache.paimon.metrics.Gauge} with Paimon.
+     * 注册新的仪表盘。
      *
-     * @param name name of the gauge
-     * @param gauge gauge to register
-     * @param <T> return type of the gauge
-     * @return the given gauge
+     * @param name 仪表盘名称
+     * @param gauge 仪表盘实例
+     * @param <T> 仪表盘返回值类型
+     * @return 传入的仪表盘实例
      */
     <T> Gauge<T> gauge(String name, Gauge<T> gauge);
 
     /**
-     * Registers a new {@link Histogram} with Paimon.
+     * 注册新的直方图。
      *
-     * @param name name of the histogram
-     * @param windowSize number of records this histogram keeps
-     * @return the registered histogram
+     * @param name 直方图名称
+     * @param windowSize 直方图保留的记录数（滑动窗口大小）
+     * @return 注册的直方图
      */
     Histogram histogram(String name, int windowSize);
 
-    /** Returns a map of all variables and their associated value. */
+    /**
+     * 返回所有变量及其关联值的映射。
+     *
+     * @return 变量映射
+     */
     Map<String, String> getAllVariables();
 
     /**
-     * Returns the name for this group, meaning what kind of entity it represents, for example
-     * "commit".
+     * 返回该组的名称。
+     *
+     * <p>表示该组代表的实体类型，例如 "commit"、"scan"、"write" 等。
+     *
+     * @return 组名
      */
     String getGroupName();
 
-    /** Returns all the metrics the group carries. */
+    /**
+     * 返回该组携带的所有指标。
+     *
+     * @return 指标名称到指标实例的映射
+     */
     Map<String, Metric> getMetrics();
 
-    /** Close the metric group and release related resources. */
+    /**
+     * 关闭指标组并释放相关资源。
+     */
     void close();
 }

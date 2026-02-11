@@ -75,7 +75,53 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing committing snapshots of table. */
+/**
+ * 快照系统表。
+ *
+ * <p>用于展示表的所有快照(Snapshot)信息。快照是表在某个时间点的完整状态,包含了该时刻的所有数据文件和元数据。
+ *
+ * <h2>表结构 (Schema)</h2>
+ * <table border="1">
+ *   <tr><th>字段名</th><th>类型</th><th>描述</th></tr>
+ *   <tr><td>snapshot_id</td><td>BIGINT NOT NULL</td><td>快照 ID(主键)</td></tr>
+ *   <tr><td>schema_id</td><td>BIGINT NOT NULL</td><td>Schema 版本 ID</td></tr>
+ *   <tr><td>commit_user</td><td>STRING NOT NULL</td><td>提交用户</td></tr>
+ *   <tr><td>commit_identifier</td><td>BIGINT NOT NULL</td><td>提交标识符</td></tr>
+ *   <tr><td>commit_kind</td><td>STRING NOT NULL</td><td>提交类型(APPEND/COMPACT/OVERWRITE等)</td></tr>
+ *   <tr><td>commit_time</td><td>TIMESTAMP(3) NOT NULL</td><td>提交时间</td></tr>
+ *   <tr><td>base_manifest_list</td><td>STRING NOT NULL</td><td>Base Manifest List 文件名</td></tr>
+ *   <tr><td>delta_manifest_list</td><td>STRING NOT NULL</td><td>Delta Manifest List 文件名</td></tr>
+ *   <tr><td>changelog_manifest_list</td><td>STRING</td><td>Changelog Manifest List 文件名</td></tr>
+ *   <tr><td>total_record_count</td><td>BIGINT</td><td>总记录数</td></tr>
+ *   <tr><td>delta_record_count</td><td>BIGINT</td><td>增量记录数</td></tr>
+ *   <tr><td>changelog_record_count</td><td>BIGINT</td><td>Changelog 记录数</td></tr>
+ *   <tr><td>watermark</td><td>BIGINT</td><td>水位线(流处理)</td></tr>
+ *   <tr><td>next_row_id</td><td>BIGINT</td><td>下一个行 ID(用于行跟踪)</td></tr>
+ * </table>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- 查询表的所有快照
+ * SELECT * FROM my_table$snapshots ORDER BY snapshot_id;
+ *
+ * -- 查询特定快照
+ * SELECT * FROM my_table$snapshots WHERE snapshot_id = 5;
+ *
+ * -- 查询快照的提交类型分布
+ * SELECT commit_kind, COUNT(*) FROM my_table$snapshots GROUP BY commit_kind;
+ * }</pre>
+ *
+ * <h2>过滤优化</h2>
+ * <p>支持对 {@code snapshot_id} 字段的谓词下推,可以高效过滤快照:
+ * <ul>
+ *   <li>等值过滤: {@code WHERE snapshot_id = 10}</li>
+ *   <li>范围过滤: {@code WHERE snapshot_id > 5 AND snapshot_id <= 20}</li>
+ *   <li>IN 过滤: {@code WHERE snapshot_id IN (1, 3, 5)}</li>
+ * </ul>
+ *
+ * @see Table
+ * @see ReadonlyTable
+ */
 public class SnapshotsTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

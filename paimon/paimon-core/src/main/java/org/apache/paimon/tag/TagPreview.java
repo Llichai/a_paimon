@@ -37,7 +37,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.paimon.CoreOptions.SCAN_SNAPSHOT_ID;
 import static org.apache.paimon.CoreOptions.SCAN_TAG_NAME;
 
-/** A class of tag preview to find suitable snapshots. */
+/** 标签预览类,用于查找合适的快照。 */
 public class TagPreview {
 
     private final TagTimeExtractor timeExtractor;

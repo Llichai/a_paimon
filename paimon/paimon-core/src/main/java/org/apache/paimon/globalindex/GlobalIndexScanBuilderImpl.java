@@ -40,19 +40,68 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/** Implementation of {@link GlobalIndexScanBuilder}. */
+/**
+ * 全局索引扫描构建器的默认实现。
+ *
+ * <p>实现 {@link GlobalIndexScanBuilder} 接口，提供完整的索引扫描构建功能。
+ *
+ * <h3>核心职责：</h3>
+ * <ul>
+ *   <li>管理扫描配置参数（快照、分区、行范围）
+ *   <li>扫描索引清单获取索引文件
+ *   <li>构建行范围索引扫描器
+ *   <li>生成索引分片列表
+ *   <li>验证不同类型索引的分片一致性
+ * </ul>
+ *
+ * <h3>分片一致性检查：</h3>
+ * <p>系统支持多种索引类型（如B树、向量索引等），{@link #shardList()} 方法会验证：
+ * <ul>
+ *   <li>所有索引类型的分片范围必须完全一致
+ *   <li>不允许部分索引覆盖不同的行范围
+ *   <li>确保索引查询的正确性和完整性
+ * </ul>
+ *
+ * <h3>使用示例：</h3>
+ * <pre>
+ * GlobalIndexScanBuilder builder = new GlobalIndexScanBuilderImpl(...);
+ * RowRangeGlobalIndexScanner scanner = builder
+ *     .withSnapshot(snapshotId)
+ *     .withPartitionPredicate(predicate)
+ *     .withRowRange(range)
+ *     .build();
+ * </pre>
+ */
 public class GlobalIndexScanBuilderImpl implements GlobalIndexScanBuilder {
 
+    /** 配置选项 */
     private final Options options;
+
+    /** 行类型 */
     private final RowType rowType;
+
+    /** 文件IO接口 */
     private final FileIO fileIO;
+
+    /** 索引路径工厂 */
     private final IndexPathFactory indexPathFactory;
+
+    /** 快照管理器 */
     private final SnapshotManager snapshotManager;
+
+    /** 索引文件处理器 */
     private final IndexFileHandler indexFileHandler;
 
+    /** 扫描的快照 */
     private Snapshot snapshot;
+
+    /** 分区谓词 */
     private PartitionPredicate partitionPredicate;
+
+    /** 行范围 */
     private Range rowRange;
+
+    /** 向量搜索条件 */
     private VectorSearch vectorSearch;
 
     public GlobalIndexScanBuilderImpl(
@@ -102,6 +151,24 @@ public class GlobalIndexScanBuilderImpl implements GlobalIndexScanBuilder {
                 options, rowType, fileIO, indexPathFactory, rowRange, entries);
     }
 
+    /**
+     * 获取索引分片列表并验证一致性。
+     *
+     * <p>该方法会：
+     * <ol>
+     *   <li>扫描所有索引文件
+     *   <li>按索引类型分组统计行范围
+     *   <li>验证所有索引类型的分片范围一致性
+     *   <li>返回排序并合并后的行范围列表
+     * </ol>
+     *
+     * <h3>一致性检查：</h3>
+     * <p>如果索引A的范围是[1,10],[20,30]，索引B的范围是[1,10],[20,25]，
+     * 则会抛出异常，因为[26,30]范围难以处理。
+     *
+     * @return 已排序且合并的行范围列表
+     * @throws IllegalStateException 如果不同索引类型的分片范围不一致
+     */
     @Override
     public List<Range> shardList() {
         Map<String, List<Range>> indexRanges = new HashMap<>();

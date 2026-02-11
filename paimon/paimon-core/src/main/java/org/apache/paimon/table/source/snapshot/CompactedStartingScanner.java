@@ -28,7 +28,26 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
-/** {@link StartingScanner} for the {@link CoreOptions.StartupMode#COMPACTED_FULL} startup mode. */
+/**
+ * 压缩快照起始扫描器
+ *
+ * <p>对应 {@link CoreOptions.StartupMode#COMPACTED_FULL} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>查找最新的压缩快照（commitKind == COMPACT）
+ *   <li>如果没有压缩快照，使用最新快照
+ *   <li>扫描模式：ScanMode.ALL
+ * </ul>
+ *
+ * <p><b>优势：</b>
+ * <ul>
+ *   <li>压缩快照文件更少、更大、更高效
+ *   <li>适合批量读取场景
+ * </ul>
+ *
+ * @see CoreOptions.StartupMode#COMPACTED_FULL
+ */
 public class CompactedStartingScanner extends ReadPlanStartingScanner {
 
     private static final Logger LOG = LoggerFactory.getLogger(CompactedStartingScanner.class);

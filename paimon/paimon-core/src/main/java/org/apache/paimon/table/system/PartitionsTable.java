@@ -77,7 +77,26 @@ import java.util.stream.Collectors;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing partitions info. */
+/**
+ * 分区系统表。
+ *
+ * <p>用于展示表的分区元数据信息,包括记录数、文件大小等统计信息。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>partition (STRING): 分区值(格式: key1=val1/key2=val2,主键)</li>
+ *   <li>record_count (BIGINT NOT NULL): 记录数</li>
+ *   <li>file_size_in_bytes (BIGINT NOT NULL): 文件总大小(字节)</li>
+ *   <li>file_count (BIGINT NOT NULL): 文件数量</li>
+ *   <li>last_update_time (TIMESTAMP_MILLIS): 最后更新时间</li>
+ *   <li>created_at (TIMESTAMP_MILLIS): 创建时间</li>
+ *   <li>created_by (STRING): 创建者</li>
+ *   <li>updated_by (STRING): 最后更新者</li>
+ *   <li>options (STRING): 分区级别的配置选项(JSON)</li>
+ * </ul>
+ *
+ * @see ReadonlyTable
+ */
 public class PartitionsTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

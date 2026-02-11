@@ -25,7 +25,7 @@ import org.apache.paimon.utils.PathFactory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-/** Stats file contains stats. */
+/** 包含统计信息的统计文件。 */
 public class StatsFile {
 
     private final FileIO fileIO;
@@ -37,18 +37,18 @@ public class StatsFile {
     }
 
     /**
-     * Read stats from stat file name.
+     * 从统计文件名读取统计信息。
      *
-     * @return stats
+     * @return 统计信息
      */
     public Statistics read(String fileName) {
         return Statistics.fromPath(fileIO, pathFactory.toPath(fileName));
     }
 
     /**
-     * Write stats to a stats file.
+     * 将统计信息写入统计文件。
      *
-     * @return the written file name
+     * @return 写入的文件名
      */
     public String write(Statistics stats) {
         Path path = pathFactory.newPath();

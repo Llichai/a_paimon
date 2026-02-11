@@ -30,7 +30,12 @@ import java.util.LinkedHashMap;
 
 import static org.apache.paimon.data.BinaryString.fromString;
 
-/** A {@link VersionedObjectSerializer} for {@link IndexFileMeta}. */
+/**
+ * {@link IndexFileMeta} 的序列化器。
+ *
+ * <p>负责将索引文件元数据序列化为行格式,以及从行格式反序列化。
+ * 支持删除向量元数据和全局索引元数据的序列化。
+ */
 public class IndexFileMetaSerializer extends ObjectSerializer<IndexFileMeta> {
 
     public IndexFileMetaSerializer() {

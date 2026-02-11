@@ -96,8 +96,77 @@ import java.util.stream.Stream;
 import static org.apache.paimon.deletionvectors.DeletionVectorsIndexFile.DELETION_VECTORS_INDEX;
 
 /**
- * A {@link CommitCallback} to create Iceberg compatible metadata, so Iceberg readers can read
- * Paimon's {@link RawFile}.
+ * Iceberg 提交回调类。
+ *
+ * <p>这是一个 {@link CommitCallback} 实现，用于创建 Iceberg 兼容的元数据，使得 Iceberg 读取器能够读取
+ * Paimon 的 {@link RawFile}。
+ *
+ * <h3>功能职责</h3>
+ * <ul>
+ *   <li>在 Paimon 提交后生成 Iceberg 格式的元数据文件
+ *   <li>维护 Iceberg Manifest File 和 Manifest List
+ *   <li>支持增量更新和完整重建两种模式
+ *   <li>处理 Deletion Vector 到 Iceberg 删除文件的转换
+ *   <li>管理 Iceberg 元数据的过期和清理
+ *   <li>支持 Iceberg 标签（Tag）的创建和删除
+ * </ul>
+ *
+ * <h3>工作流程</h3>
+ * <ul>
+ *   <li><b>提交回调</b>：在 Paimon 提交完成后被调用
+ *   <li><b>元数据生成</b>：根据基础元数据增量生成或完整重建
+ *   <li><b>Manifest 写入</b>：将数据文件信息写入 Manifest File
+ *   <li><b>List 生成</b>：生成 Manifest List 汇总所有 Manifest File
+ *   <li><b>版本更新</b>：更新 version-hint.text 文件
+ *   <li><b>元数据提交</b>：可选地提交到外部 Catalog（Hive/REST）
+ * </ul>
+ *
+ * <h3>增量更新策略</h3>
+ * <ul>
+ *   <li>如果存在基础元数据：基于旧元数据增量更新
+ *   <li>如果不存在基础元数据：完整扫描表生成元数据
+ *   <li>快速路径：仅新增文件时，直接追加新 Manifest
+ *   <li>慢速路径：有删除时，需要重写受影响的 Manifest
+ * </ul>
+ *
+ * <h3>Deletion Vector 处理</h3>
+ * <p>当启用删除向量且格式为 V3 时：
+ * <ul>
+ *   <li>将 Paimon DV 转换为 Iceberg Position Deletes
+ *   <li>使用 Puffin 格式存储删除文件引用
+ *   <li>生成独立的删除文件 Manifest
+ *   <li>在 Manifest List 中同时包含数据和删除文件
+ * </ul>
+ *
+ * <h3>元数据过期</h3>
+ * <ul>
+ *   <li>根据配置保留最近的 N 个快照
+ *   <li>删除过期的 Manifest File 和 Manifest List
+ *   <li>清理旧版本的 metadata.json 文件
+ *   <li>避免删除仍在使用的共享文件
+ * </ul>
+ *
+ * <h3>标签支持</h3>
+ * <ul>
+ *   <li>标签仅在指向存在的 Iceberg 快照时才添加
+ *   <li>通过重写最新元数据文件来添加/删除标签
+ *   <li>保持 Paimon 快照 ID 和 Iceberg 版本号一致
+ * </ul>
+ *
+ * <h3>与其他组件的关系</h3>
+ * <ul>
+ *   <li>依赖 {@link IcebergManifestFile} 处理 Manifest 文件
+ *   <li>依赖 {@link IcebergManifestList} 处理 Manifest List
+ *   <li>依赖 {@link IcebergMetadata} 表示元数据结构
+ *   <li>可选依赖 {@link IcebergMetadataCommitter} 提交到外部系统
+ * </ul>
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li>Paimon 表需要被 Iceberg 引擎（Spark/Trino）读取
+ *   <li>多引擎查询同一份数据
+ *   <li>利用 Iceberg 生态工具
+ * </ul>
  */
 public class IcebergCommitCallback implements CommitCallback, TagCallback {
 
@@ -126,6 +195,12 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Public interface
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 构造 Iceberg 提交回调。
+     *
+     * @param table Paimon 表
+     * @param commitUser 提交用户标识
+     */
     public IcebergCommitCallback(FileStoreTable table, String commitUser) {
         this.table = table;
         this.commitUser = commitUser;
@@ -163,11 +238,29 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         this.needAddDvToIceberg = needAddDvToIceberg();
     }
 
+    /**
+     * 获取 Iceberg 元数据目录路径。
+     *
+     * @param table Paimon 表
+     * @return Iceberg metadata 目录路径
+     */
     public static Path catalogTableMetadataPath(FileStoreTable table) {
         Path icebergDBPath = catalogDatabasePath(table);
         return new Path(icebergDBPath, String.format("%s/metadata", table.location().getName()));
     }
 
+    /**
+     * 获取 Iceberg 数据库目录路径。
+     *
+     * <p>根据存储类型和位置配置确定路径：
+     * <ul>
+     *   <li>TABLE_LOCATION：直接使用表所在数据库路径
+     *   <li>CATALOG_STORAGE：使用 catalog 的 iceberg 子目录
+     * </ul>
+     *
+     * @param table Paimon 表
+     * @return Iceberg 数据库路径
+     */
     public static Path catalogDatabasePath(FileStoreTable table) {
         Path dbPath = table.location().getParent();
         final String dbSuffix = ".db";
@@ -202,6 +295,12 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         }
     }
 
+    /**
+     * 根据存储类型推断默认的元数据存储位置。
+     *
+     * @param storageType 存储类型
+     * @return 元数据存储位置
+     */
     private static IcebergOptions.StorageLocation inferDefaultMetadataLocation(
             IcebergOptions.StorageType storageType) {
         switch (storageType) {
@@ -220,6 +319,14 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     @Override
     public void close() throws Exception {}
 
+    /**
+     * 提交回调入口，在 Paimon 提交完成后调用。
+     *
+     * @param baseFiles 基础文件列表（未使用）
+     * @param deltaFiles 增量变更文件
+     * @param indexFiles 索引文件
+     * @param snapshot 当前快照
+     */
     @Override
     public void call(
             List<SimpleFileEntry> baseFiles,
@@ -233,6 +340,13 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                 indexFiles);
     }
 
+    /**
+     * 重试提交回调，用于失败后恢复。
+     *
+     * <p>通过快照扫描重新收集文件变更并生成元数据。
+     *
+     * @param committable 提交内容
+     */
     @Override
     public void retry(ManifestCommittable committable) {
         SnapshotManager snapshotManager = table.snapshotManager();
@@ -258,6 +372,21 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                 indexFileHandler.scan(snapshot, DELETION_VECTORS_INDEX));
     }
 
+    /**
+     * 创建或更新 Iceberg 元数据。
+     *
+     * <p>核心逻辑：
+     * <ul>
+     *   <li>第一个快照：删除旧元数据并完整重建
+     *   <li>已存在元数据：跳过避免重复
+     *   <li>有基础元数据：增量更新
+     *   <li>无基础元数据：完整重建
+     * </ul>
+     *
+     * @param snapshot 当前快照
+     * @param fileChangesCollector 文件变更收集器
+     * @param indexFiles 索引文件列表
+     */
     private void createMetadata(
             Snapshot snapshot,
             FileChangesCollector fileChangesCollector,
@@ -301,6 +430,24 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Create metadata afresh
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 从零开始创建 Iceberg 元数据（无基础元数据）。
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>完整扫描表读取所有数据文件
+     *   <li>将数据文件转换为 IcebergManifestEntry
+     *   <li>生成 Deletion Vector 的 ManifestEntry
+     *   <li>写入 Manifest File
+     *   <li>写入 Manifest List
+     *   <li>生成初始 IcebergMetadata
+     *   <li>写入 metadata.json 和 version-hint.text
+     *   <li>可选提交到外部 Catalog
+     * </ol>
+     *
+     * @param snapshotId 快照 ID
+     * @throws IOException 如果 I/O 操作失败
+     */
     private void createMetadataWithoutBase(long snapshotId) throws IOException {
         SnapshotReader snapshotReader = table.newSnapshotReader().withSnapshot(snapshotId);
         SchemaCache schemaCache = new SchemaCache();
@@ -405,6 +552,21 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         }
     }
 
+    /**
+     * 将 DataSplit 转换为 Iceberg Manifest Entry。
+     *
+     * <p>包括：
+     * <ul>
+     *   <li>数据文件的 ManifestEntry（状态为 ADDED）
+     *   <li>删除向量的 ManifestEntry（如果启用 DV）
+     * </ul>
+     *
+     * @param dataSplit 数据分片
+     * @param snapshotId 快照 ID
+     * @param schemaCache Schema 缓存
+     * @param dataFileEntries 数据文件条目集合（输出参数）
+     * @param dvFileEntries 删除文件条目集合（输出参数）
+     */
     private void dataSplitToManifestEntries(
             DataSplit dataSplit,
             long snapshotId,
@@ -475,6 +637,13 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         }
     }
 
+    /**
+     * 获取分区字段定义。
+     *
+     * @param partitionKeys 分区键名称列表
+     * @param icebergSchema Iceberg Schema
+     * @return 分区字段列表
+     */
     private List<IcebergPartitionField> getPartitionFields(
             List<String> partitionKeys, IcebergSchema icebergSchema) {
         Map<String, IcebergDataField> fields = new HashMap<>();
@@ -495,6 +664,26 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Create metadata based on old ones
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 基于旧元数据增量创建新元数据。
+     *
+     * <p>优化策略：
+     * <ul>
+     *   <li>格式版本变更：重建元数据
+     *   <li>仅新增文件：快速追加新 Manifest
+     *   <li>有删除文件：重写受影响的 Manifest
+     *   <li>重用未变更的 Manifest
+     *   <li>合并小 Manifest 文件
+     *   <li>更新 Schema（如果需要）
+     *   <li>清理过期的 Snapshot 和 Manifest
+     * </ul>
+     *
+     * @param fileChangesCollector 文件变更收集器
+     * @param indexFiles 索引文件列表
+     * @param snapshot 当前快照
+     * @param baseMetadataPath 基础元数据文件路径
+     * @throws IOException 如果 I/O 操作失败
+     */
     private void createMetadataWithBase(
             FileChangesCollector fileChangesCollector,
             List<IndexManifestEntry> indexFiles,
@@ -678,13 +867,34 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         }
     }
 
+    /**
+     * 文件变更收集器接口。
+     *
+     * <p>用于收集新增和删除的文件。
+     */
     private interface FileChangesCollector {
+        /**
+         * 收集文件变更。
+         *
+         * @param removedFiles 删除的文件 Map（路径 -> 分区）
+         * @param addedFiles 新增的文件 Map（路径 -> (分区, 文件元数据)）
+         * @return 是否仅有新增（无删除）
+         * @throws IOException 如果 I/O 操作失败
+         */
         boolean collect(
                 Map<String, BinaryRow> removedFiles,
                 Map<String, Pair<BinaryRow, DataFileMeta>> addedFiles)
                 throws IOException;
     }
 
+    /**
+     * 从 ManifestEntry 列表收集文件变更。
+     *
+     * @param manifestEntries Manifest 条目列表
+     * @param removedFiles 删除的文件集合（输出）
+     * @param addedFiles 新增的文件集合（输出）
+     * @return 是否仅有新增文件
+     */
     private boolean collectFileChanges(
             List<ManifestEntry> manifestEntries,
             Map<String, BinaryRow> removedFiles,
@@ -715,6 +925,14 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         return isAddOnly;
     }
 
+    /**
+     * 通过快照扫描收集文件变更。
+     *
+     * @param snapshotId 快照 ID
+     * @param removedFiles 删除的文件集合（输出）
+     * @param addedFiles 新增的文件集合（输出）
+     * @return 是否仅有新增文件
+     */
     private boolean collectFileChanges(
             long snapshotId,
             Map<String, BinaryRow> removedFiles,
@@ -730,6 +948,19 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                 addedFiles);
     }
 
+    /**
+     * 判断文件是否应该添加到 Iceberg。
+     *
+     * <p>规则：
+     * <ul>
+     *   <li>Append-only 表：所有文件都添加
+     *   <li>主键表且启用 DV：Level > 0 的文件添加
+     *   <li>主键表且未启用 DV：只添加最高层级的文件
+     * </ul>
+     *
+     * @param meta 文件元数据
+     * @return 是否应添加
+     */
     private boolean shouldAddFileToIceberg(DataFileMeta meta) {
         if (table.primaryKeys().isEmpty()) {
             return true;
@@ -742,6 +973,16 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         }
     }
 
+    /**
+     * 为新增文件创建 Manifest File Meta。
+     *
+     * <p>将新增文件写入新的 Manifest File。
+     *
+     * @param addedFiles 新增的文件 Map
+     * @param currentSnapshotId 当前快照 ID
+     * @return Manifest File Meta 列表
+     * @throws IOException 如果 I/O 操作失败
+     */
     private List<IcebergManifestFileMeta> createNewlyAddedManifestFileMetas(
             Map<String, Pair<BinaryRow, DataFileMeta>> addedFiles, long currentSnapshotId)
             throws IOException {
@@ -777,6 +1018,25 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                 currentSnapshotId);
     }
 
+    /**
+     * 处理删除的文件并创建新的 Manifest File Meta。
+     *
+     * <p>策略：
+     * <ul>
+     *   <li>检查基础 Manifest 是否包含被修改的分区
+     *   <li>可重用：直接保留原 Manifest
+     *   <li>需重写：标记删除的文件，重新生成 Manifest
+     *   <li>去重：移除已存在的新增文件
+     * </ul>
+     *
+     * @param removedFiles 删除的文件
+     * @param addedFiles 新增的文件
+     * @param modifiedPartitions 修改的分区列表
+     * @param baseManifestFileMetas 基础 Manifest File Meta 列表
+     * @param currentSnapshotId 当前快照 ID
+     * @return (新的 Manifest Meta 列表, 快照摘要)
+     * @throws IOException 如果 I/O 操作失败
+     */
     private Pair<List<IcebergManifestFileMeta>, IcebergSnapshotSummary>
             createWithDeleteManifestFileMetas(
                     Map<String, BinaryRow> removedFiles,
@@ -872,8 +1132,25 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Compact
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 如果需要则合并 Manifest File。
+     *
+     * <p>合并策略：
+     * <ul>
+     *   <li>找出小于目标大小 2/3 的 Manifest
+     *   <li>如果数量 >= 最小文件数 或 总大小 >= 目标大小
+     *   <li>合并这些小文件为更大的文件
+     *   <li>过滤已删除的条目
+     *   <li>更新条目状态（ADDED -> EXISTING）
+     * </ul>
+     *
+     * @param toCompact 待合并的 Manifest Meta 列表
+     * @param currentSnapshotId 当前快照 ID
+     * @return 合并后的 Manifest Meta 列表
+     * @throws IOException 如果 I/O 操作失败
+     */
     private List<IcebergManifestFileMeta> compactMetadataIfNeeded(
-            List<IcebergManifestFileMeta> toCompact, long currentSnapshotId) throws IOException {
+            List<IcebergManifestFileMeta> toCompact, long snapshotId) throws IOException {
         List<IcebergManifestFileMeta> result = new ArrayList<>();
         long targetSizeInBytes = table.coreOptions().manifestTargetSize().getBytes();
 
@@ -943,6 +1220,19 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Expire
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 判断快照是否应该过期。
+     *
+     * <p>过期条件：
+     * <ul>
+     *   <li>快照数量超过最大保留数
+     *   <li>快照时间超过保留时间且快照数量超过最小保留数
+     * </ul>
+     *
+     * @param snapshot 快照信息
+     * @param currentSnapshotId 当前快照 ID
+     * @return 是否应过期
+     */
     private boolean shouldExpire(IcebergSnapshot snapshot, long currentSnapshotId) {
         Options options = new Options(table.options());
         if (snapshot.snapshotId()
@@ -958,6 +1248,14 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                         - options.get(CoreOptions.SNAPSHOT_TIME_RETAINED).toMillis();
     }
 
+    /**
+     * 过期 Manifest List。
+     *
+     * <p>删除不再使用的 Manifest File。
+     *
+     * @param toExpire 要过期的 Manifest List 文件名
+     * @param next 下一个 Manifest List 文件名（用于判断哪些 Manifest 仍在使用）
+     */
     private void expireManifestList(String toExpire, String next) {
         Set<IcebergManifestFileMeta> metaInUse = new HashSet<>(manifestList.read(next));
         for (IcebergManifestFileMeta meta : manifestList.read(toExpire)) {
@@ -969,6 +1267,12 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         table.fileIO().deleteQuietly(pathFactory.toManifestListPath(toExpire));
     }
 
+    /**
+     * 过期指定快照之前的所有元数据。
+     *
+     * @param snapshotId 快照 ID
+     * @throws IOException 如果 I/O 操作失败
+     */
     private void expireAllBefore(long snapshotId) throws IOException {
         Set<String> expiredManifestLists = new HashSet<>();
         Set<String> expiredManifestFileMetas = new HashSet<>();
@@ -1001,6 +1305,14 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         deleteApplicableMetadataFiles(snapshotId);
     }
 
+    /**
+     * 删除可应用的元数据文件。
+     *
+     * <p>根据配置删除超过最大版本数的旧元数据文件。
+     *
+     * @param snapshotId 当前快照 ID
+     * @throws IOException 如果 I/O 操作失败
+     */
     private void deleteApplicableMetadataFiles(long snapshotId) throws IOException {
         Options options = new Options(table.options());
         if (options.get(IcebergOptions.METADATA_DELETE_AFTER_COMMIT)) {
@@ -1025,6 +1337,15 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                 "IcebergCommitCallback notifyCreation requires a snapshot ID");
     }
 
+    /**
+     * 标签创建通知（带快照 ID）。
+     *
+     * <p>将标签信息添加到最新的 Iceberg 元数据中。
+     * 仅当标签指向的快照在 Iceberg 中存在时才添加。
+     *
+     * @param tagName 标签名称
+     * @param snapshotId 快照 ID
+     */
     @Override
     public void notifyCreation(String tagName, long snapshotId) {
         try {
@@ -1103,6 +1424,13 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         }
     }
 
+    /**
+     * 标签删除通知。
+     *
+     * <p>从最新的 Iceberg 元数据中移除标签信息。
+     *
+     * @param tagName 标签名称
+     */
     @Override
     public void notifyDeletion(String tagName) {
         try {
@@ -1164,6 +1492,18 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Deletion vectors
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 检查是否需要将删除向量添加到 Iceberg。
+     *
+     * <p>需要满足：
+     * <ul>
+     *   <li>启用删除向量
+     *   <li>使用 bitmap64 格式
+     *   <li>Iceberg 格式版本为 V3
+     * </ul>
+     *
+     * @return 是否需要添加 DV
+     */
     private boolean needAddDvToIceberg() {
         CoreOptions options = table.coreOptions();
         // there may be dv indexes using bitmap32 in index files even if 'deletion-vectors.bitmap64'
@@ -1174,6 +1514,14 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
                 && formatVersion == IcebergMetadata.FORMAT_VERSION_V3;
     }
 
+    /**
+     * 为删除向量创建 Manifest File Meta。
+     *
+     * <p>将所有 DV 索引转换为 Iceberg Position Deletes。
+     *
+     * @param snapshot 快照
+     * @return DV Manifest File Meta 列表
+     */
     private List<IcebergManifestFileMeta> createDvManifestFileMetas(Snapshot snapshot) {
         List<IcebergManifestEntry> icebergDvEntries = new ArrayList<>();
 
@@ -1234,6 +1582,12 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
     // Utils
     // -------------------------------------------------------------------------------------
 
+    /**
+     * 检查格式版本是否相同。
+     *
+     * @param baseFormatVersion 基础格式版本
+     * @return 是否相同
+     */
     private boolean isSameFormatVersion(int baseFormatVersion) {
         if (baseFormatVersion != formatVersion) {
             Preconditions.checkArgument(
@@ -1252,16 +1606,32 @@ public class IcebergCommitCallback implements CommitCallback, TagCallback {
         return true;
     }
 
+    /**
+     * Schema 缓存类。
+     *
+     * <p>缓存 Iceberg Schema 以避免重复转换。
+     */
     private class SchemaCache {
 
         SchemaManager schemaManager = new SchemaManager(table.fileIO(), table.location());
         Map<Long, IcebergSchema> schemas = new HashMap<>();
 
+        /**
+         * 获取指定 ID 的 Iceberg Schema。
+         *
+         * @param schemaId Schema ID
+         * @return Iceberg Schema
+         */
         private IcebergSchema get(long schemaId) {
             return schemas.computeIfAbsent(
                     schemaId, id -> IcebergSchema.create(schemaManager.schema(id)));
         }
 
+        /**
+         * 获取最新的 Schema ID。
+         *
+         * @return 最新 Schema ID
+         */
         private long getLatestSchemaId() {
             return schemaManager.latest().get().id();
         }

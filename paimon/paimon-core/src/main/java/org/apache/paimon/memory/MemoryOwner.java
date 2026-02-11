@@ -18,15 +18,15 @@
 
 package org.apache.paimon.memory;
 
-/** A class provides memory related methods. */
+/** 提供内存相关方法的类。 */
 public interface MemoryOwner {
 
-    /** Set {@link MemorySegmentPool} for the owner. */
+    /** 为所有者设置 {@link MemorySegmentPool}。 */
     void setMemoryPool(MemorySegmentPool memoryPool);
 
-    /** Memory occupancy size of this owner. */
+    /** 此所有者的内存占用大小。 */
     long memoryOccupancy();
 
-    /** Flush memory of owner, release memory. */
+    /** 刷新所有者的内存,释放内存。 */
     void flushMemory() throws Exception;
 }

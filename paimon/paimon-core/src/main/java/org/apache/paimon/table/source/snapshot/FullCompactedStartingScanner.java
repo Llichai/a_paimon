@@ -30,8 +30,26 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 /**
- * {@link StartingScanner} for the {@link StartupMode#COMPACTED_FULL} startup mode with
- * 'full-compaction.delta-commits'.
+ * 全量压缩起始扫描器（带 Delta 提交计数）
+ *
+ * <p>对应 {@link StartupMode#COMPACTED_FULL} 启动模式，配合 'full-compaction.delta-commits' 参数。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>查找最新的全量压缩快照（commitIdentifier % deltaCommits == 0）
+ *   <li>全量压缩是经过多次 delta 提交后的大规模压缩
+ *   <li>如果没有全量压缩快照，使用最新快照
+ * </ul>
+ *
+ * <p><b>全量压缩识别：</b>
+ * <ul>
+ *   <li>commitKind == COMPACT
+ *   <li>commitIdentifier % deltaCommits == 0（周期性全量压缩）
+ *   <li>或 commitIdentifier == Long.MAX_VALUE（手动触发的全量压缩）
+ * </ul>
+ *
+ * @see StartupMode#COMPACTED_FULL
+ * @see CoreOptions#FULL_COMPACTION_DELTA_COMMITS
  */
 public class FullCompactedStartingScanner extends ReadPlanStartingScanner {
 

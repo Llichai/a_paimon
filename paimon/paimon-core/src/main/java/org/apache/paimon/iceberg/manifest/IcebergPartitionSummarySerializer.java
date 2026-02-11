@@ -22,13 +22,47 @@ import org.apache.paimon.data.GenericRow;
 import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.utils.ObjectSerializer;
 
-/** Serializer for {@link IcebergPartitionSummary}. */
+/**
+ * {@link IcebergPartitionSummary} 的序列化器类。
+ *
+ * <p>负责将 {@link IcebergPartitionSummary} 对象与 Paimon 内部行格式 {@link InternalRow} 之间进行转换。
+ *
+ * <p>序列化字段顺序:
+ * <ol>
+ *   <li>containsNull (boolean, 非空)
+ *   <li>containsNan (boolean, 可空)
+ *   <li>lowerBound (bytes, 可空)
+ *   <li>upperBound (bytes, 可空)
+ * </ol>
+ *
+ * <p>字段 ID 定义参考 Iceberg 规范:
+ * <ul>
+ *   <li>509: contains_null
+ *   <li>518: contains_nan
+ *   <li>510: lower_bound
+ *   <li>511: upper_bound
+ * </ul>
+ *
+ * @see IcebergPartitionSummary 分区汇总信息类
+ * @see org.apache.paimon.utils.ObjectSerializer 序列化器基类
+ */
 public class IcebergPartitionSummarySerializer extends ObjectSerializer<IcebergPartitionSummary> {
 
+    /**
+     * 构造序列化器。
+     *
+     * <p>使用 {@link IcebergPartitionSummary#schema()} 定义的 Schema。
+     */
     public IcebergPartitionSummarySerializer() {
         super(IcebergPartitionSummary.schema());
     }
 
+    /**
+     * 将分区汇总对象转换为内部行格式。
+     *
+     * @param record 分区汇总对象
+     * @return 内部行表示
+     */
     @Override
     public InternalRow toRow(IcebergPartitionSummary record) {
         return GenericRow.of(
@@ -38,6 +72,12 @@ public class IcebergPartitionSummarySerializer extends ObjectSerializer<IcebergP
                 record.upperBound());
     }
 
+    /**
+     * 从内部行格式反序列化为分区汇总对象。
+     *
+     * @param row 内部行
+     * @return 分区汇总对象
+     */
     @Override
     public IcebergPartitionSummary fromRow(InternalRow row) {
         return new IcebergPartitionSummary(

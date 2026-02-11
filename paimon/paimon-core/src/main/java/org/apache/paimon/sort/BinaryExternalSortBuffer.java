@@ -44,24 +44,52 @@ import java.util.List;
 import static org.apache.paimon.codegen.CodeGenUtils.newNormalizedKeyComputer;
 import static org.apache.paimon.codegen.CodeGenUtils.newRecordComparator;
 
-/** A spillable {@link SortBuffer}. */
+/**
+ * 可溢出的 {@link SortBuffer}。
+ *
+ * <p>当内存不足时,可以将数据溢出到磁盘,支持外部排序。
+ */
 public class BinaryExternalSortBuffer implements SortBuffer {
 
+    /** 二进制行序列化器 */
     private final BinaryRowSerializer serializer;
+    /** 内存排序缓冲区 */
     private final BinaryInMemorySortBuffer inMemorySortBuffer;
+    /** IO管理器 */
     private final IOManager ioManager;
+    /** 溢出通道管理器 */
     private final SpillChannelManager channelManager;
+    /** 最大文件句柄数 */
     private final int maxNumFileHandles;
+    /** 压缩编解码工厂 */
     private final BlockCompressionFactory compressionCodecFactory;
+    /** 压缩块大小 */
     private final int compressionBlockSize;
+    /** 二进制外部合并器 */
     private final BinaryExternalMerger merger;
 
+    /** 文件通道枚举器 */
     private final FileIOChannel.Enumerator enumerator;
+    /** 溢出通道ID列表 */
     private final List<ChannelWithMeta> spillChannelIDs;
+    /** 最大磁盘大小 */
     private final MemorySize maxDiskSize;
 
+    /** 记录数 */
     private int numRecords = 0;
 
+    /**
+     * 构造二进制外部排序缓冲区。
+     *
+     * @param serializer 二进制行序列化器
+     * @param comparator 记录比较器
+     * @param pageSize 页大小
+     * @param inMemorySortBuffer 内存排序缓冲区
+     * @param ioManager IO管理器
+     * @param maxNumFileHandles 最大文件句柄数
+     * @param compression 压缩选项
+     * @param maxDiskSize 最大磁盘大小
+     */
     public BinaryExternalSortBuffer(
             BinaryRowSerializer serializer,
             RecordComparator comparator,
@@ -93,6 +121,20 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         this.spillChannelIDs = new ArrayList<>();
     }
 
+    /**
+     * 创建二进制外部排序缓冲区。
+     *
+     * @param ioManager IO管理器
+     * @param rowType 行类型
+     * @param keyFields 键字段索引数组
+     * @param bufferSize 缓冲区大小
+     * @param pageSize 页大小
+     * @param maxNumFileHandles 最大文件句柄数
+     * @param compression 压缩选项
+     * @param maxDiskSize 最大磁盘大小
+     * @param sequenceOrder 是否顺序排序
+     * @return 二进制外部排序缓冲区
+     */
     public static BinaryExternalSortBuffer create(
             IOManager ioManager,
             RowType rowType,
@@ -114,6 +156,19 @@ public class BinaryExternalSortBuffer implements SortBuffer {
                 sequenceOrder);
     }
 
+    /**
+     * 创建二进制外部排序缓冲区。
+     *
+     * @param ioManager IO管理器
+     * @param rowType 行类型
+     * @param keyFields 键字段索引数组
+     * @param pool 内存段池
+     * @param maxNumFileHandles 最大文件句柄数
+     * @param compression 压缩选项
+     * @param maxDiskSize 最大磁盘大小
+     * @param sequenceOrder 是否顺序排序
+     * @return 二进制外部排序缓冲区
+     */
     public static BinaryExternalSortBuffer create(
             IOManager ioManager,
             RowType rowType,
@@ -162,6 +217,12 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         return inMemorySortBuffer.getOccupancy();
     }
 
+    /**
+     * 刷新内存数据到磁盘。
+     *
+     * @return 刷新成功返回true,磁盘已满返回false
+     * @throws IOException 如果遇到IO问题
+     */
     @Override
     public boolean flushMemory() throws IOException {
         boolean isFull = getDiskUsage() >= maxDiskSize.getBytes();
@@ -173,6 +234,11 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         }
     }
 
+    /**
+     * 获取磁盘使用量。
+     *
+     * @return 磁盘使用字节数
+     */
     private long getDiskUsage() {
         long bytes = 0;
 
@@ -182,6 +248,12 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         return bytes;
     }
 
+    /**
+     * 写入迭代器中的记录(用于测试)。
+     *
+     * @param iterator 二进制行迭代器
+     * @throws IOException 如果遇到IO问题
+     */
     @VisibleForTesting
     public void write(MutableObjectIterator<BinaryRow> iterator) throws IOException {
         BinaryRow row = serializer.createInstance();
@@ -213,6 +285,12 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         }
     }
 
+    /**
+     * 获取已排序的迭代器。
+     *
+     * @return 已排序的二进制行迭代器
+     * @throws IOException 如果遇到IO问题
+     */
     @Override
     public final MutableObjectIterator<BinaryRow> sortedIterator() throws IOException {
         if (spillChannelIDs.isEmpty()) {
@@ -221,6 +299,12 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         return spilledIterator();
     }
 
+    /**
+     * 获取溢出数据的迭代器。
+     *
+     * @return 溢出数据迭代器
+     * @throws IOException 如果遇到IO问题
+     */
     private MutableObjectIterator<BinaryRow> spilledIterator() throws IOException {
         spill();
 
@@ -245,6 +329,11 @@ public class BinaryExternalSortBuffer implements SortBuffer {
         };
     }
 
+    /**
+     * 将内存数据溢出到磁盘。
+     *
+     * @throws IOException 如果遇到IO问题
+     */
     private void spill() throws IOException {
         if (inMemorySortBuffer.isEmpty()) {
             return;

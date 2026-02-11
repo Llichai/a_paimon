@@ -28,7 +28,27 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
-/** {@link StartingScanner} for the {@link CoreOptions#SCAN_WATERMARK} of a batch read. */
+/**
+ * 静态水位线起始扫描器
+ *
+ * <p>对应批量读取的水位线查询（{@link CoreOptions#SCAN_WATERMARK}）。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>查找水位线大于等于指定值的最早快照
+ *   <li>扫描模式：ScanMode.ALL
+ *   <li>如果所有快照的水位线都小于指定值，抛出异常
+ * </ul>
+ *
+ * <p><b>水位线匹配逻辑：</b>
+ * <ul>
+ *   <li>找到 snapshot.watermark() >= watermark 的最小快照 ID
+ *   <li>水位线通常表示事件时间的进度
+ * </ul>
+ *
+ * @see CoreOptions#SCAN_WATERMARK
+ * @see Snapshot#watermark()
+ */
 public class StaticFromWatermarkStartingScanner extends ReadPlanStartingScanner {
 
     private static final Logger LOG =

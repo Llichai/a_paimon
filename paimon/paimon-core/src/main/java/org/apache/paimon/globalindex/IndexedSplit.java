@@ -37,15 +37,55 @@ import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
 
-/** Indexed split for global index. */
+/**
+ * 带索引信息的数据分片。
+ *
+ * <p>扩展普通的 {@link DataSplit}，增加了行范围和分数信息，用于支持：
+ * <ul>
+ *   <li>精确的行范围过滤，避免读取不需要的数据
+ *   <li>向量搜索的相似度分数
+ *   <li>TopN查询的排序优化
+ * </ul>
+ *
+ * <h3>核心字段：</h3>
+ * <ul>
+ *   <li>split: 原始数据分片
+ *   <li>rowRanges: 需要读取的行范围列表（基于全局索引过滤）
+ *   <li>scores: 每行对应的分数（用于向量搜索等场景）
+ * </ul>
+ *
+ * <h3>序列化格式：</h3>
+ * <pre>
+ * Magic(long) + Version(int) + DataSplit + RowRanges + Scores
+ * </pre>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>全局索引过滤后的精确读取
+ *   <li>向量相似度搜索结果返回
+ *   <li>TopN查询的分数排序
+ * </ul>
+ *
+ * @see DataSplit
+ * @see IndexedSplitRecordReader
+ */
 public class IndexedSplit implements Split {
 
     private static final long serialVersionUID = 1L;
+
+    /** 序列化魔数，用于验证数据正确性 */
     private static final long MAGIC = -938472394838495695L;
+
+    /** 序列化版本号 */
     private static final int VERSION = 1;
 
+    /** 原始数据分片 */
     private DataSplit split;
+
+    /** 需要读取的行范围列表 */
     private List<Range> rowRanges;
+
+    /** 每行对应的分数（可选） */
     @Nullable private float[] scores;
 
     public IndexedSplit(DataSplit split, List<Range> rowRanges, @Nullable float[] scores) {

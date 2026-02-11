@@ -20,9 +20,18 @@ package org.apache.paimon.privilege;
 
 import java.io.Serializable;
 
-/** Loader for creating a {@link PrivilegeManager}. */
+/**
+ * {@link PrivilegeManager} 的加载器。
+ *
+ * <p>用于创建权限管理器实例。
+ */
 @FunctionalInterface
 public interface PrivilegeManagerLoader extends Serializable {
 
+    /**
+     * 加载权限管理器。
+     *
+     * @return 权限管理器实例
+     */
     PrivilegeManager load();
 }

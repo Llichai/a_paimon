@@ -20,7 +20,32 @@ package org.apache.paimon.table.source.snapshot;
 
 import org.apache.paimon.utils.SnapshotManager;
 
-/** This scanner always return an empty result. */
+/**
+ * 空结果起始扫描器
+ *
+ * <p>该扫描器总是返回 {@link NoSnapshot}，表示没有数据可读。
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>增量查询时起始和结束快照相同
+ *   <li>时间范围查询时没有找到符合条件的数据
+ *   <li>标签查询时标签不存在
+ *   <li>任何确定没有数据需要读取的场景
+ * </ul>
+ *
+ * <p><b>示例：</b>
+ * <pre>
+ * // 起始和结束标签相同
+ * if (start.id() == end.id()) {
+ *     return new EmptyResultStartingScanner(snapshotManager);
+ * }
+ *
+ * // 没有找到符合条件的标签
+ * if (previousTags.isEmpty()) {
+ *     return new EmptyResultStartingScanner(snapshotManager);
+ * }
+ * </pre>
+ */
 public class EmptyResultStartingScanner extends AbstractStartingScanner {
 
     public EmptyResultStartingScanner(SnapshotManager snapshotManager) {

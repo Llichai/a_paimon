@@ -64,7 +64,26 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing committing snapshots of table. */
+/**
+ * Manifest 文件系统表。
+ *
+ * <p>用于展示表当前快照的所有 Manifest 文件信息。Manifest 文件记录了数据文件的元数据。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>file_name (STRING NOT NULL): Manifest 文件名(主键)</li>
+ *   <li>file_size (BIGINT NOT NULL): 文件大小(字节)</li>
+ *   <li>num_added_files (BIGINT NOT NULL): 新增的数据文件数</li>
+ *   <li>num_deleted_files (BIGINT NOT NULL): 删除的数据文件数</li>
+ *   <li>schema_id (BIGINT NOT NULL): Schema 版本 ID</li>
+ *   <li>min_partition_stats (STRING): 最小分区统计(JSON)</li>
+ *   <li>max_partition_stats (STRING): 最大分区统计(JSON)</li>
+ *   <li>min_row_id (BIGINT): 最小行 ID</li>
+ *   <li>max_row_id (BIGINT): 最大行 ID</li>
+ * </ul>
+ *
+ * @see ReadonlyTable
+ */
 public class ManifestsTable implements ReadonlyTable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ManifestsTable.class);

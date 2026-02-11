@@ -21,15 +21,20 @@ package org.apache.paimon.privilege;
 import org.apache.paimon.annotation.Public;
 
 /**
- * Entity type in privilege system.
+ * 权限系统中的实体类型。
  *
- * <p>Supports identity-based access control (grant privilege directly to user) and role-based
- * access control (grant privilege to role, then assign role to user).
+ * <p>支持两种访问控制模式:
+ * <ul>
+ *   <li>基于身份的访问控制(直接授予用户权限)</li>
+ *   <li>基于角色的访问控制(授予角色权限,然后将角色分配给用户)</li>
+ * </ul>
  *
  * @since 0.8.0
  */
 @Public
 public enum EntityType {
+    /** 用户实体 */
     USER,
+    /** 角色实体 */
     ROLE
 }

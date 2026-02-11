@@ -57,8 +57,85 @@ import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /**
- * Chain table which mainly read from the snapshot branch. However, if the snapshot branch does not
- * have a partition, it will fall back to chain read.
+ * 链式分组读取表 - 主分支快照 + Delta 分支增量数据的链式读取
+ *
+ * <p>ChainGroupReadTable 是 {@link FallbackReadFileStoreTable} 的增强版，专门用于<b>主分支快照 + Delta 增量数据</b>的场景。
+ * 它不仅支持分区级别的回退，还支持<b>同一分区内的文件链式合并</b>。
+ *
+ * <p><b>核心概念：</b>
+ * <ul>
+ *   <li><b>Snapshot Branch</b>：主分支，存储周期性的全量快照数据
+ *   <li><b>Delta Branch</b>：增量分支，存储快照之间的增量变更数据
+ *   <li><b>Chain Read</b>：将快照数据 + 增量数据链式合并，得到最新完整数据
+ * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li><b>数据湖增量架构</b>：全量快照 + 增量更新的存储模式
+ *   <li><b>流批一体</b>：批处理产生快照，流处理产生增量，查询时合并
+ *   <li><b>成本优化</b>：避免频繁重写全量数据，只存储增量变化
+ * </ul>
+ *
+ * <p><b>读取策略：</b>
+ * <pre>
+ * 分区 A:
+ *   - Snapshot Branch: [2024-01-01 00:00 快照]
+ *   - Delta Branch: [00:05 增量, 00:10 增量, 00:15 增量]
+ *   → 读取时：快照 + 所有增量 (Chain Read)
+ *
+ * 分区 B:
+ *   - Snapshot Branch: 无数据
+ *   - Delta Branch: [00:00~00:20 所有增量]
+ *   → 读取时：只读 Delta (Fallback Read)
+ * </pre>
+ *
+ * <p><b>分区匹配算法：</b>
+ * <ol>
+ *   <li>找到 Delta 分支的最大分区 (maxDeltaPartition)
+ *   <li>在 Snapshot 分支中找到 ≤ maxDeltaPartition 的分区
+ *   <li>对每个 Delta 分区，找到最接近的 Snapshot 分区
+ *   <li>合并 Snapshot 分区的文件 + Delta 分区的文件
+ * </ol>
+ *
+ * <p><b>与 FallbackReadFileStoreTable 的区别：</b>
+ * <table border="1">
+ *   <tr>
+ *     <th>特性</th>
+ *     <th>FallbackReadFileStoreTable</th>
+ *     <th>ChainGroupReadTable</th>
+ *   </tr>
+ *   <tr>
+ *     <td>分区粒度</td>
+ *     <td>完整分区切换</td>
+ *     <td>分区内文件合并</td>
+ *   </tr>
+ *   <tr>
+ *     <td>数据模式</td>
+ *     <td>主备切换</td>
+ *     <td>快照+增量</td>
+ *   </tr>
+ *   <tr>
+ *     <td>读取方式</td>
+ *     <td>选择一个分支</td>
+ *     <td>链式合并两个分支</td>
+ *   </tr>
+ *   <tr>
+ *     <td>适用表类型</td>
+ *     <td>任意表</td>
+ *     <td>仅主键表</td>
+ *   </tr>
+ * </table>
+ *
+ * <p><b>技术要点：</b>
+ * <ul>
+ *   <li><b>ChainSplit</b>：特殊的分片类型，包含多个文件和文件来源映射
+ *   <li><b>Partition Comparator</b>：按分区键排序，用于三角形匹配算法
+ *   <li><b>File Branch Mapping</b>：记录每个文件来自哪个分支
+ *   <li><b>Bucket Path Mapping</b>：记录每个文件的 Bucket 路径
+ * </ul>
+ *
+ * @see FallbackReadFileStoreTable
+ * @see org.apache.paimon.table.source.ChainSplit
  */
 public class ChainGroupReadTable extends FallbackReadFileStoreTable {
 
@@ -121,7 +198,35 @@ public class ChainGroupReadTable extends FallbackReadFileStoreTable {
         return new ChainGroupReadTable(switchWrappedToBranch(branchName), fallback());
     }
 
-    /** Scan implementation for {@link ChainGroupReadTable}. */
+    /**
+     * 链式读取的批量扫描实现
+     *
+     * <p>该扫描器实现了复杂的分区匹配和文件合并逻辑。
+     *
+     * <p><b>核心算法：</b>
+     * <ol>
+     *   <li>扫描 Snapshot 分支，获取完整分区（completePartitions）
+     *   <li>扫描 Delta 分支，过滤出缺失分区（remainingPartitions）
+     *   <li>对每个缺失分区：
+     *       <ul>
+     *         <li>找到 Snapshot 中最接近的分区（三角形匹配）
+     *         <li>扫描 Delta 分区的所有文件
+     *         <li>扫描 Snapshot 分区的所有文件
+     *         <li>按 bucket 分组，合并文件列表
+     *         <li>创建 ChainSplit（包含文件来源映射）
+     *       </ul>
+     * </ol>
+     *
+     * <p><b>三角形匹配算法：</b>
+     * <pre>
+     * 假设分区键为 [dt, hour]：
+     * Delta 分区：(2024-01-01, 10)
+     * Snapshot 候选分区：
+     *   - (2024-01-01, 08) ← 选择这个（最接近且 ≤）
+     *   - (2024-01-01, 05)
+     *   - (2023-12-31, 23)
+     * </pre>
+     */
     public static class ChainTableBatchScan extends FallbackReadScan {
 
         private final RowDataToObjectArrayConverter partitionConverter;

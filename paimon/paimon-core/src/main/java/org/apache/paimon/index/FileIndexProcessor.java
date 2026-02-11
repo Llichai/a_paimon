@@ -57,7 +57,17 @@ import java.util.stream.Collectors;
 import static org.apache.paimon.io.DataFilePathFactory.createNewFileIndexFilePath;
 import static org.apache.paimon.io.DataFilePathFactory.dataFileToFileIndexPath;
 
-/** Does the file index rewrite. */
+/**
+ * 文件索引处理器。
+ *
+ * <p>负责处理文件索引的重写操作,包括:
+ * <ul>
+ *   <li>读取现有的文件索引</li>
+ *   <li>移除不必要的索引列</li>
+ *   <li>重新生成索引数据</li>
+ *   <li>根据大小决定是写入独立文件还是嵌入manifest</li>
+ * </ul>
+ */
 public class FileIndexProcessor {
 
     private final FileStoreTable table;
@@ -79,6 +89,17 @@ public class FileIndexProcessor {
         this.sizeInMeta = table.coreOptions().fileIndexInManifestThreshold();
     }
 
+    /**
+     * 处理数据文件的索引。
+     *
+     * <p>重写指定数据文件的索引,包括移除过期索引、重新生成必要的索引等。
+     *
+     * @param partition 分区
+     * @param bucket bucket ID
+     * @param manifestEntry manifest条目
+     * @return 更新后的数据文件元数据
+     * @throws IOException IO异常
+     */
     public DataFileMeta process(BinaryRow partition, int bucket, ManifestEntry manifestEntry)
             throws IOException {
         DataFileMeta dataFileMeta = manifestEntry.file();
@@ -184,7 +205,11 @@ public class FileIndexProcessor {
         }
     }
 
-    /** Schema id to specified information related to schema. */
+    /**
+     * Schema缓存,用于缓存Schema ID到Schema信息的映射。
+     *
+     * <p>避免重复读取和解析Schema,提高性能。
+     */
     private static class SchemaCache {
 
         private final FileIndexOptions fileIndexOptions;

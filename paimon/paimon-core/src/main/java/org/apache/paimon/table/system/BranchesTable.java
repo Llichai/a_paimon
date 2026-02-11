@@ -69,7 +69,22 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing branches of table. */
+/**
+ * 分支系统表。
+ *
+ * <p>用于展示表的所有分支(Branch)信息。分支允许在同一个表上维护多个独立的数据版本。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>branch_name (STRING NOT NULL): 分支名称(主键)</li>
+ *   <li>create_time (TIMESTAMP(3) NOT NULL): 分支创建时间</li>
+ * </ul>
+ *
+ * <h2>过滤优化</h2>
+ * <p>支持对 branch_name 的等值和 IN 过滤。
+ *
+ * @see ReadonlyTable
+ */
 public class BranchesTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

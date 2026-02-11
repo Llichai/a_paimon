@@ -51,11 +51,60 @@ import java.util.stream.Collectors;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
-/** Scanner for shard-based global indexes. */
+/**
+ * 基于行范围的全局索引扫描器。
+ *
+ * <p>负责扫描指定行范围的全局索引数据，并使用谓词和向量搜索条件进行过滤。
+ *
+ * <h3>核心功能：</h3>
+ * <ul>
+ *   <li>加载指定行范围的索引文件
+ *   <li>创建各类型索引的读取器
+ *   <li>使用 {@link GlobalIndexEvaluator} 评估谓词和向量搜索
+ *   <li>返回匹配的行范围结果
+ * </ul>
+ *
+ * <h3>索引组织结构：</h3>
+ * <pre>
+ * Map<FieldId, Map<IndexType, Map<Range, List<IndexFileMeta>>>>
+ * └─ 字段ID
+ *    └─ 索引类型（B树、向量等）
+ *       └─ 行范围
+ *          └─ 索引文件列表
+ * </pre>
+ *
+ * <h3>工作流程：</h3>
+ * <ol>
+ *   <li>验证索引文件与行范围的交集
+ *   <li>按字段ID和索引类型分组索引文件
+ *   <li>为每个分组创建索引读取器
+ *   <li>使用评估器扫描索引并应用过滤条件
+ *   <li>返回匹配的全局索引结果
+ * </ol>
+ *
+ * <h3>索引读取器层次：</h3>
+ * <ul>
+ *   <li>UnionGlobalIndexReader: 合并同类型多个分片的索引
+ *   <li>OffsetGlobalIndexReader: 处理行范围偏移
+ *   <li>具体索引读取器: 读取实际索引数据
+ * </ul>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>点查询的全局索引加速
+ *   <li>向量相似度搜索
+ *   <li>范围查询的索引过滤
+ * </ul>
+ */
 public class RowRangeGlobalIndexScanner implements Closeable {
 
+    /** 配置选项 */
     private final Options options;
+
+    /** 全局索引评估器 */
     private final GlobalIndexEvaluator globalIndexEvaluator;
+
+    /** 索引路径工厂 */
     private final IndexPathFactory indexPathFactory;
 
     public RowRangeGlobalIndexScanner(

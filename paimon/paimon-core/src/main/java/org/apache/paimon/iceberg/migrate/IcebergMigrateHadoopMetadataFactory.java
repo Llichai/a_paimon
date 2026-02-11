@@ -22,9 +22,32 @@ import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.iceberg.IcebergOptions;
 import org.apache.paimon.options.Options;
 
-/** Factory to create {@link IcebergMigrateHadoopMetadata}. */
+/**
+ * Hadoop Catalog 的 Iceberg 迁移元数据工厂类。
+ *
+ * <p>用于创建 {@link IcebergMigrateHadoopMetadata} 实例。
+ * 通过 SPI 机制注册,标识符为 "hadoop-catalog_migrate"。
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * IcebergMigrateMetadataFactory factory = FactoryUtil.discoverFactory(
+ *     classLoader,
+ *     IcebergMigrateMetadataFactory.class,
+ *     "hadoop-catalog_migrate"
+ * );
+ * IcebergMigrateMetadata metadata = factory.create(identifier, options);
+ * }</pre>
+ *
+ * @see IcebergMigrateHadoopMetadata 创建的元数据访问器类型
+ * @see IcebergMigrateMetadataFactory 工厂接口
+ */
 public class IcebergMigrateHadoopMetadataFactory implements IcebergMigrateMetadataFactory {
 
+    /**
+     * 返回工厂标识符。
+     *
+     * @return "hadoop-catalog_migrate"
+     */
     @Override
     public String identifier() {
         return IcebergOptions.StorageType.HADOOP_CATALOG + "_migrate";

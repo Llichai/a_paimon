@@ -50,7 +50,105 @@ import static org.apache.paimon.utils.DateTimeUtils.parseTimestampData;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.SnapshotManager.EARLIEST_SNAPSHOT_DEFAULT_RETRY_NUM;
 
-/** The util class of resolve snapshot from scan params for time travel. */
+/**
+ * 时间旅行工具类
+ *
+ * <p>该类提供从扫描参数解析快照的工具方法，支持多种时间旅行方式。
+ *
+ * <p><b>核心功能：</b>
+ * <ol>
+ *   <li>解析时间旅行参数（scan.snapshot-id、scan.timestamp 等）
+ *   <li>查找指定时间点/水位线/标签对应的快照
+ *   <li>处理增量查询的桶数一致性检查
+ *   <li>处理 changelog 相关的快照查找
+ * </ol>
+ *
+ * <p><b>支持的时间旅行方式：</b>
+ * <table border="1">
+ *   <tr>
+ *     <th>参数</th>
+ *     <th>说明</th>
+ *     <th>查找方法</th>
+ *   </tr>
+ *   <tr>
+ *     <td>scan.snapshot-id</td>
+ *     <td>指定快照 ID</td>
+ *     <td>直接使用该快照</td>
+ *   </tr>
+ *   <tr>
+ *     <td>scan.timestamp / scan.timestamp-millis</td>
+ *     <td>指定时间戳</td>
+ *     <td>查找小于等于该时间的最新快照</td>
+ *   </tr>
+ *   <tr>
+ *     <td>scan.watermark</td>
+ *     <td>指定水位线</td>
+ *     <td>查找水位线大于等于该值的最早快照</td>
+ *   </tr>
+ *   <tr>
+ *     <td>scan.tag-name</td>
+ *     <td>指定标签名称</td>
+ *     <td>使用标签对应的快照</td>
+ *   </tr>
+ *   <tr>
+ *     <td>scan.version</td>
+ *     <td>通用版本号</td>
+ *     <td>自动识别为标签/快照ID/水位线</td>
+ *   </tr>
+ * </table>
+ *
+ * <p><b>主要方法：</b>
+ * <ul>
+ *   <li>{@link #tryTravelToSnapshot}：尝试进行时间旅行，返回对应快照
+ *   <li>{@link #tryTravelOrLatest}：尝试时间旅行，失败则返回最新快照
+ *   <li>{@link #earlierThanTimeMills}：查找早于指定时间的快照
+ *   <li>{@link #hasTimeTravelOptions}：检查是否有时间旅行参数
+ *   <li>{@link #checkRescaleBucketForIncrementalDiffQuery}：检查增量查询的桶数一致性
+ * </ul>
+ *
+ * <p><b>使用示例：</b>
+ * <pre>
+ * // 1. 尝试时间旅行
+ * Optional<Snapshot> snapshot = TimeTravelUtil.tryTravelToSnapshot(table);
+ * if (snapshot.isPresent()) {
+ *     // 使用指定快照读取
+ * }
+ *
+ * // 2. 时间旅行或使用最新快照
+ * Snapshot snapshot = TimeTravelUtil.tryTravelOrLatest(table);
+ *
+ * // 3. 查找早于指定时间的快照
+ * Long snapshotId = TimeTravelUtil.earlierThanTimeMills(
+ *     snapshotManager, changelogManager, timestampMillis, true, false);
+ *
+ * // 4. 检查是否有时间旅行参数
+ * if (TimeTravelUtil.hasTimeTravelOptions(options)) {
+ *     // 使用时间旅行
+ * }
+ * </pre>
+ *
+ * <p><b>scan.version 参数的自动识别：</b>
+ * <pre>
+ * scan.version 会自动识别为：
+ * 1. 如果是标签名（tagManager.tagExists(version)）→ scan.tag-name
+ * 2. 如果是 "watermark-123" 格式 → scan.watermark=123
+ * 3. 如果是纯数字 → scan.snapshot-id
+ * 4. 否则按标签处理（不存在会抛异常）
+ * </pre>
+ *
+ * <p><b>增量查询的桶数一致性：</b>
+ * <ul>
+ *   <li>增量 Diff 查询要求起始和结束快照的桶数必须一致
+ *   <li>如果两个快照使用了不同的 schema，会检查桶数配置
+ *   <li>如果桶数不同，抛出 {@link InconsistentTagBucketException}
+ * </ul>
+ *
+ * @see org.apache.paimon.table.FileStoreTable
+ * @see StaticFromSnapshotStartingScanner
+ * @see StaticFromTimestampStartingScanner
+ * @see StaticFromWatermarkStartingScanner
+ * @see StaticFromTagStartingScanner
+ */
 public class TimeTravelUtil {
 
     private static final Logger LOG = LoggerFactory.getLogger(TimeTravelUtil.class);

@@ -35,7 +35,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/** A manager to expire tags by time. */
+/** 按时间使标签过期的管理器。 */
 public class TagTimeExpire {
 
     private static final Logger LOG = LoggerFactory.getLogger(TagTimeExpire.class);

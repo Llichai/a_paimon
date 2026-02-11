@@ -34,7 +34,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.paimon.codegen.CodeGenLoader.getCodeGenerator;
 
-/** Utils for code generations. */
+/** 代码生成的工具类。 */
 public class CodeGenUtils {
 
     private static final Cache<ClassKey, Pair<Class<?>, Object[]>> COMPILED_CLASS_CACHE =

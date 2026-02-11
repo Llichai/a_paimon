@@ -38,8 +38,31 @@ import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
- * A split describes chain table read scope. It follows DataSplit's custom serialization pattern and
- * extends it with branch + partition per data file.
+ * 链式分片，用于描述链式表（Chain Table）的读取范围。
+ *
+ * <p>ChainSplit 扩展了 DataSplit 的自定义序列化模式，为每个数据文件添加了
+ * 分支（branch）和分区（partition）信息。
+ *
+ * <h3>链式表</h3>
+ * <p>链式表是一种特殊的表类型，可以跨多个分支读取数据。每个数据文件
+ * 可能来自不同的分支，需要记录文件到分支的映射关系。
+ *
+ * <h3>核心字段</h3>
+ * <ul>
+ *   <li><b>logicalPartition</b>: 逻辑分区（用于分片调度）</li>
+ *   <li><b>dataFiles</b>: 数据文件列表（可能来自多个分支）</li>
+ *   <li><b>fileBranchMapping</b>: 文件名 -> 分支名的映射</li>
+ *   <li><b>fileBucketPathMapping</b>: 文件名 -> 桶路径的映射</li>
+ * </ul>
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li>跨分支查询（查询多个分支的数据）</li>
+ *   <li>分支合并读取</li>
+ * </ul>
+ *
+ * @see Split 分片接口
+ * @see DataSplit 标准数据分片
  */
 public class ChainSplit implements Split {
 

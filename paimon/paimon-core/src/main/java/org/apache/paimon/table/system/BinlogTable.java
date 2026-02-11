@@ -45,16 +45,91 @@ import static org.apache.paimon.CoreOptions.TABLE_READ_SEQUENCE_NUMBER_ENABLED;
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
 /**
- * A {@link Table} for reading binlog of table. The binlog format is as below.
+ * Binlog 表。
  *
- * <p>INSERT: [+I, [co1], [col2]]
+ * <p>用于读取表的 Binlog 格式变更日志。与审计日志表不同,Binlog 表将 UPDATE 操作合并为单行记录,
+ * 使用数组格式同时展示更新前后的值,更接近传统数据库的 Binlog 格式。
  *
- * <p>UPDATE: [+U, [co1_ub, col1_ua], [col2_ub, col2_ua]]
+ * <h2>Binlog 格式说明</h2>
+ * <p>不同操作类型的记录格式:
+ * <ul>
+ *   <li><b>INSERT</b>: [+I, [col1], [col2], ...]<br>
+ *       每个字段值在长度为 1 的数组中</li>
+ *   <li><b>UPDATE</b>: [+U, [col1_before, col1_after], [col2_before, col2_after], ...]<br>
+ *       每个字段值在长度为 2 的数组中,分别表示更新前后的值</li>
+ *   <li><b>DELETE</b>: [-D, [col1], [col2], ...]<br>
+ *       每个字段值在长度为 1 的数组中</li>
+ * </ul>
  *
- * <p>DELETE: [-D, [co1], [col2]]
+ * <h2>表结构 (Schema)</h2>
+ * <p>Binlog 表的 Schema 由以下部分组成:
+ * <ul>
+ *   <li><b>_ROW_KIND</b> (STRING): 行操作类型(+I/-D/+U)</li>
+ *   <li><b>_SEQUENCE_NUMBER</b> (BIGINT, 可选): 序列号</li>
+ *   <li><b>数据字段</b>: 原表的所有字段,但每个字段的类型变为 {@code ARRAY<原类型>}</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- 查询所有 Binlog 记录
+ * SELECT * FROM my_table$binlog;
+ *
+ * -- 解析 UPDATE 操作的前后值
+ * SELECT
+ *   _ROW_KIND,
+ *   id[0] AS id_before,
+ *   id[1] AS id_after,
+ *   name[0] AS name_before,
+ *   name[1] AS name_after
+ * FROM my_table$binlog
+ * WHERE _ROW_KIND = '+U';
+ *
+ * -- 流式消费 Binlog
+ * SELECT * FROM my_table$binlog /*+ OPTIONS('scan.mode'='latest') */;
+ * }</pre>
+ *
+ * <h2>与审计日志表的对比</h2>
+ * <table border="1">
+ *   <tr><th>特性</th><th>AuditLogTable</th><th>BinlogTable</th></tr>
+ *   <tr>
+ *     <td>INSERT 格式</td>
+ *     <td>[+I, col1, col2]</td>
+ *     <td>[+I, [col1], [col2]]</td>
+ *   </tr>
+ *   <tr>
+ *     <td>UPDATE 格式</td>
+ *     <td>两行:<br>[-U, old_col1, old_col2]<br>[+U, new_col1, new_col2]</td>
+ *     <td>一行:<br>[+U, [old_col1, new_col1], [old_col2, new_col2]]</td>
+ *   </tr>
+ *   <tr>
+ *     <td>DELETE 格式</td>
+ *     <td>[-D, col1, col2]</td>
+ *     <td>[-D, [col1], [col2]]</td>
+ *   </tr>
+ *   <tr>
+ *     <td>字段类型</td>
+ *     <td>与原表相同</td>
+ *     <td>ARRAY<原类型></td>
+ *   </tr>
+ * </table>
+ *
+ * <h2>流式读取支持</h2>
+ * <p>在流式模式下,Binlog 表使用 {@link org.apache.paimon.reader.PackChangelogReader} 自动将
+ * UPDATE 的前后值合并为单行记录。批式模式下每条记录独立输出。
+ *
+ * <h2>注意事项</h2>
+ * <ul>
+ *   <li>所有字段类型都转换为数组,需要使用数组下标访问具体值</li>
+ *   <li>不支持通过 hint 动态设置 {@code table-read.sequence-number.enabled}</li>
+ *   <li>UPDATE 操作在数组中的顺序固定为 [旧值, 新值]</li>
+ * </ul>
+ *
+ * @see AuditLogTable
+ * @see org.apache.paimon.reader.PackChangelogReader
  */
 public class BinlogTable extends AuditLogTable {
 
+    /** 系统表名称常量。 */
     public static final String BINLOG = "binlog";
 
     public BinlogTable(FileStoreTable wrapped) {

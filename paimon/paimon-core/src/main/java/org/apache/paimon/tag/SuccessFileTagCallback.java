@@ -26,7 +26,7 @@ import org.apache.paimon.table.sink.TagCallback;
 
 import java.io.IOException;
 
-/** A {@link TagCallback} which create "{tagName}_SUCCESS" file. */
+/** 创建 "{tagName}_SUCCESS" 文件的 {@link TagCallback}。 */
 public class SuccessFileTagCallback implements TagCallback {
     private static final String SUCCESS_FILE_SUFFIX = "_SUCCESS";
     private static final String SUCCESS_FILE_DIRECTORY = "tag-success-file";

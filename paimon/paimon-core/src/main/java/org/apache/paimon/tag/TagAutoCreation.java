@@ -44,7 +44,7 @@ import static org.apache.paimon.Snapshot.FIRST_SNAPSHOT_ID;
 import static org.apache.paimon.shade.guava30.com.google.common.base.MoreObjects.firstNonNull;
 import static org.apache.paimon.utils.Preconditions.checkState;
 
-/** A manager to create tags automatically. */
+/** 自动创建标签的管理器。 */
 public class TagAutoCreation {
 
     private static final Logger LOG = LoggerFactory.getLogger(TagAutoCreation.class);
@@ -136,7 +136,7 @@ public class TagAutoCreation {
                 tryToCreateTags(snapshotManager.snapshot(nextSnapshot));
                 nextSnapshot++;
             } else {
-                // avoid snapshot has been expired
+                // 避免快照已过期
                 Long earliest = snapshotManager.earliestSnapshotId();
                 if (earliest != null && earliest > nextSnapshot) {
                     nextSnapshot = earliest;
@@ -167,13 +167,13 @@ public class TagAutoCreation {
             }
             String tagName = periodHandler.timeToTag(thisTag);
             LOG.info("The tag name is {}.", tagName);
-            // shouldn't throw exception when tag exists
+            // 当标签存在时不应抛出异常
             tagManager.createTag(snapshot, tagName, defaultTimeRetained, callbacks, true);
             nextTag = periodHandler.nextTagTime(thisTag);
             LOG.info("The next tag time after this is {}.", nextTag);
 
             if (numRetainedMax != null) {
-                // only handle auto-created tags here
+                // 这里只处理自动创建的标签
                 SortedMap<Snapshot, List<String>> tags = tagManager.tags(periodHandler::isAutoTag);
                 if (tags.size() > numRetainedMax) {
                     int toDelete = tags.size() - numRetainedMax;

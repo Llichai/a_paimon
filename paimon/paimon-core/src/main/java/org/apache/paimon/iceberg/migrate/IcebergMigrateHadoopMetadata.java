@@ -32,7 +32,37 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-/** Get iceberg table latest snapshot metadata in hadoop. */
+/**
+ * Hadoop Catalog 的 Iceberg 表元数据访问器。
+ *
+ * <p>用于从 Hadoop Catalog 中获取 Iceberg 表的最新快照元数据。
+ * Hadoop Catalog 使用文件系统直接存储元数据,通过 version-hint.text 文件获取最新版本号。
+ *
+ * <p>元数据获取流程:
+ * <ol>
+ *   <li>从配置中获取 Iceberg 仓库路径(iceberg_warehouse)
+ *   <li>构建元数据目录路径: {warehouse}/{database}/{table}/metadata
+ *   <li>读取 version-hint.text 文件获取最新元数据版本号
+ *   <li>读取对应的元数据文件: v{version}.metadata.json
+ *   <li>解析 JSON 文件得到 IcebergMetadata 对象
+ * </ol>
+ *
+ * <p>目录结构示例:
+ * <pre>
+ * iceberg_warehouse/
+ *   ├── my_db/
+ *   │   ├── my_table/
+ *   │   │   ├── data/
+ *   │   │   ├── metadata/
+ *   │   │   │   ├── version-hint.text  (内容: 3)
+ *   │   │   │   ├── v1.metadata.json
+ *   │   │   │   ├── v2.metadata.json
+ *   │   │   │   └── v3.metadata.json
+ * </pre>
+ *
+ * @see IcebergMigrateMetadata 元数据访问接口
+ * @see IcebergMigrateHadoopMetadataFactory 对应的工厂类
+ */
 public class IcebergMigrateHadoopMetadata implements IcebergMigrateMetadata {
     private static final Logger LOG = LoggerFactory.getLogger(IcebergMigrateHadoopMetadata.class);
 

@@ -58,24 +58,23 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A {@link PrivilegeManager} based on user and privilege system tables. The directories of these
- * system tables are created at the root of warehouse (table-root/user.sys and
- * table-root/privilege.sys).
+ * 基于文件的权限管理器。
  *
- * <p>User table is the table which stores all user information. The schema of user table is:
+ * <p>基于用户表和权限表实现权限管理。这些系统表的目录创建在warehouse根目录下
+ * (table-root/user.sys 和 table-root/privilege.sys)。
  *
+ * <p>用户表(user.sys)存储所有用户信息,Schema如下:
  * <ul>
- *   <li>user (string): user name (primary key)
- *   <li>sha256 (bytes): sha256 of password
+ *   <li>user (string): 用户名(主键)</li>
+ *   <li>sha256 (bytes): 密码的SHA256哈希值</li>
  * </ul>
  *
- * <p>Privilege table is the table storing what privileges each user have. Its schema is:
- *
+ * <p>权限表(privilege.sys)存储每个用户拥有的权限,Schema如下:
  * <ul>
- *   <li>name (string): user or role name (primary key)
- *   <li>entity_type (string): user or role (primary key)
- *   <li>identifier (string): identifier of object (primary key)
- *   <li>privilege (string): name of privilege (primary key), see {@link PrivilegeType}
+ *   <li>name (string): 用户或角色名(主键)</li>
+ *   <li>entity_type (string): 用户或角色(主键)</li>
+ *   <li>identifier (string): 对象标识符(主键)</li>
+ *   <li>privilege (string): 权限名称(主键),参见 {@link PrivilegeType}</li>
  * </ul>
  */
 public class FileBasedPrivilegeManager implements PrivilegeManager {

@@ -34,7 +34,17 @@ import java.util.Objects;
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
 /**
- * Metadata of index file.
+ * 索引文件元数据。
+ *
+ * <p>描述索引文件的基本信息,包括:
+ * <ul>
+ *   <li>索引类型 (HASH_INDEX 或 DELETION_VECTORS_INDEX)</li>
+ *   <li>文件名和文件大小</li>
+ *   <li>行数统计</li>
+ *   <li>删除向量范围(仅用于删除向量索引)</li>
+ *   <li>外部路径(可选)</li>
+ *   <li>全局索引元数据(可选)</li>
+ * </ul>
  *
  * @since 0.9.0
  */

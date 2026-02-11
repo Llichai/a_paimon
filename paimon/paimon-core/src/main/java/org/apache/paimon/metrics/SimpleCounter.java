@@ -18,38 +18,69 @@
 
 package org.apache.paimon.metrics;
 
-/** A simple low-overhead {@link org.apache.paimon.metrics.Counter}. */
+/**
+ * 简单低开销的计数器实现。
+ *
+ * <p>提供 {@link Counter} 接口的基本实现，使用简单的long变量存储计数。
+ *
+ * <h3>特点：</h3>
+ * <ul>
+ *   <li>低内存开销：仅使用一个long字段
+ *   <li>高性能：直接操作基本类型
+ *   <li>非线程安全：适用于单线程场景
+ * </ul>
+ *
+ * <h3>注意事项：</h3>
+ * <ul>
+ *   <li>不提供线程同步
+ *   <li>并发访问需要外部同步
+ *   <li>适用于指标采集等非严格场景
+ * </ul>
+ *
+ * <h3>使用示例：</h3>
+ * <pre>
+ * Counter counter = new SimpleCounter();
+ * counter.inc();        // 递增1
+ * counter.inc(10);      // 递增10
+ * counter.dec();        // 递减1
+ * long count = counter.getCount();  // 获取当前值
+ * </pre>
+ */
 public class SimpleCounter implements Counter {
 
-    /** the current count. */
+    /** 当前计数值 */
     private long count;
 
-    /** Increment the current count by 1. */
+    /**
+     * 递增计数1。
+     */
     @Override
     public void inc() {
         count++;
     }
 
     /**
-     * Increment the current count by the given value.
+     * 按指定值递增计数。
      *
-     * @param n value to increment the current count by
+     * @param n 递增值
      */
     @Override
     public void inc(long n) {
         count += n;
     }
 
-    /** Decrement the current count by 1. */
+    /**
+     * 递减计数1。
+     */
     @Override
     public void dec() {
         count--;
     }
 
     /**
-     * Decrement the current count by the given value.
+     * 按指定值递减计数。
      *
-     * @param n value to decrement the current count by
+     * @param n 递减值
      */
     @Override
     public void dec(long n) {
@@ -57,9 +88,9 @@ public class SimpleCounter implements Counter {
     }
 
     /**
-     * Returns the current count.
+     * 返回当前计数值。
      *
-     * @return current count
+     * @return 当前计数
      */
     @Override
     public long getCount() {

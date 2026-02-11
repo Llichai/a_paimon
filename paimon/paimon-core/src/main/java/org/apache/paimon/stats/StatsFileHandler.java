@@ -24,7 +24,7 @@ import org.apache.paimon.utils.SnapshotManager;
 
 import java.util.Optional;
 
-/** Handler of StatsFile. */
+/** StatsFile 的处理器。 */
 public class StatsFileHandler {
 
     private final SnapshotManager snapshotManager;
@@ -39,9 +39,9 @@ public class StatsFileHandler {
     }
 
     /**
-     * Write stats to a stats file.
+     * 将统计信息写入统计文件。
      *
-     * @return the written file name
+     * @return 写入的文件名
      */
     public String writeStats(Statistics stats) {
         stats.serializeFieldsToString(schemaManager.schema(stats.schemaId()));
@@ -49,9 +49,9 @@ public class StatsFileHandler {
     }
 
     /**
-     * Read stats of the latest snapshot.
+     * 读取最新快照的统计信息。
      *
-     * @return stats
+     * @return 统计信息
      */
     public Optional<Statistics> readStats() {
         Snapshot latestSnapshot = snapshotManager.latestSnapshot();
@@ -62,9 +62,9 @@ public class StatsFileHandler {
     }
 
     /**
-     * Read stats of the specified snapshot.
+     * 读取指定快照的统计信息。
      *
-     * @return stats
+     * @return 统计信息
      */
     public Optional<Statistics> readStats(Snapshot snapshot) {
         String file = snapshot.statistics();
@@ -77,7 +77,7 @@ public class StatsFileHandler {
         return stats;
     }
 
-    /** Delete stats of the specified snapshot. */
+    /** 删除指定快照的统计信息。 */
     public void deleteStats(long snapshotId) {
         Snapshot snapshot = snapshotManager.snapshot(snapshotId);
         if (snapshot.statistics() != null) {

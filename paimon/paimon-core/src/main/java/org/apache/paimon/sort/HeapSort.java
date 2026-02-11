@@ -19,13 +19,20 @@
 package org.apache.paimon.sort;
 
 /**
- * This file is based on source code from the Hadoop Project (<a
- * href="http://hadoop.apache.org/">Apache Hadoop</a>), licensed by the Apache Software Foundation
- * (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
- * additional information regarding copyright ownership.
+ * 堆排序实现。
+ *
+ * <p>基于 Hadoop 项目的源代码。
  */
 public final class HeapSort implements IndexedSorter {
 
+    /**
+     * 向下调整堆。
+     *
+     * @param s 可排序对象
+     * @param b 基础索引
+     * @param i 起始索引
+     * @param n 堆大小
+     */
     private static void downHeap(final IndexedSortable s, final int b, int i, final int n) {
         for (int idx = i << 1; idx < n; idx = i << 1) {
             if (idx + 1 < n && s.compare(b + idx, b + idx + 1) < 0) {
@@ -44,6 +51,13 @@ public final class HeapSort implements IndexedSorter {
         }
     }
 
+    /**
+     * 对指定范围进行排序。
+     *
+     * @param s 可排序对象
+     * @param p 起始位置
+     * @param r 结束位置
+     */
     public void sort(final IndexedSortable s, final int p, final int r) {
         final int n = r - p;
         // build heap w/ reverse comparator, then write in-place from end

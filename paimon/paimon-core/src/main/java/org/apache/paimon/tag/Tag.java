@@ -39,7 +39,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
 
-/** Snapshot with tagCreateTime and tagTimeRetained. */
+/** 带有标签创建时间和标签保留时间的快照。 */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Tag extends Snapshot {
 
@@ -192,7 +192,7 @@ public class Tag extends Snapshot {
                 && Objects.equals(tagTimeRetained, that.tagTimeRetained);
     }
 
-    // =================== Utils for reading =========================
+    // =================== 用于读取的工具方法 =========================
 
     public static Tag fromJson(String json) {
         return JsonSerdeUtil.fromJson(json, Tag.class);

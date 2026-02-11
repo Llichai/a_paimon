@@ -39,7 +39,24 @@ import static org.apache.paimon.partition.PartitionPredicate.createPartitionPred
 import static org.apache.paimon.partition.PartitionPredicate.fromPredicate;
 import static org.apache.paimon.utils.Preconditions.checkState;
 
-/** Implementation for {@link ReadBuilder}. */
+/**
+ * {@link ReadBuilder} 的实现类，用于构建 TableScan 和 TableRead。
+ *
+ * <p>ReadBuilderImpl 维护了读取配置的状态（如过滤条件、列裁剪、分片等），
+ * 并提供了创建扫描器和读取器的工厂方法。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li>存储和管理读取配置（filter、partition、projection等）</li>
+ *   <li>创建批量扫描器（{@link #newScan()}）</li>
+ *   <li>创建流式扫描器（{@link #newStreamScan()}）</li>
+ *   <li>创建读取器（{@link #newRead()}）</li>
+ *   <li>验证配置冲突（如 shard 和 bucketFilter 不能同时使用）</li>
+ * </ul>
+ *
+ * @see ReadBuilder 读取构建器接口
+ * @see InnerTable 内部表接口
+ */
 public class ReadBuilderImpl implements ReadBuilder {
 
     private static final long serialVersionUID = 1L;

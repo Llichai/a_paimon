@@ -23,7 +23,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Objects;
 
-/** Format Key for read a file. */
+/** 读取文件的格式键。 */
 public class FormatKey {
 
     public final long schemaId;

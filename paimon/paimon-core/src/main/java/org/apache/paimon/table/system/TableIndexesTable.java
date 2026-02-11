@@ -67,7 +67,30 @@ import java.util.OptionalLong;
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
-/** A {@link Table} for showing indexes. */
+/**
+ * 表索引系统表。
+ *
+ * <p>用于展示表的索引信息,包括删除向量(Deletion Vector)等索引文件的元数据。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>partition (STRING): 分区值</li>
+ *   <li>bucket (INT NOT NULL): 分桶编号</li>
+ *   <li>index_type (STRING NOT NULL): 索引类型(如 deletion-vectors)</li>
+ *   <li>file_name (STRING NOT NULL): 索引文件名(主键)</li>
+ *   <li>file_size (BIGINT NOT NULL): 文件大小(字节)</li>
+ *   <li>row_count (BIGINT NOT NULL): 行数</li>
+ *   <li>dv_ranges (ARRAY<ROW>): 删除向量的范围信息</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * SELECT * FROM my_table$table_indexes;
+ * SELECT * FROM my_table$table_indexes WHERE index_type = 'deletion-vectors';
+ * }</pre>
+ *
+ * @see ReadonlyTable
+ */
 public class TableIndexesTable implements ReadonlyTable {
 
     private static final Logger LOG = LoggerFactory.getLogger(TableIndexesTable.class);

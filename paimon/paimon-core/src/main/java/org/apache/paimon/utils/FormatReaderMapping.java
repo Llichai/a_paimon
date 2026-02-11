@@ -49,24 +49,111 @@ import java.util.function.Function;
 import static org.apache.paimon.predicate.PredicateBuilder.excludePredicateWithFields;
 import static org.apache.paimon.table.SpecialFields.KEY_FIELD_ID_START;
 
-/** Class with index mapping and format reader. */
+/**
+ * 格式读取器映射
+ *
+ * <p>FormatReaderMapping 封装了索引映射和格式读取器，用于处理表模式演化（Schema Evolution）和字段读取优化。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>模式演化：{@link #indexMapping} - 数据模式字段到表模式字段的索引映射
+ *   <li>类型转换：{@link #castMapping} - 协助 indexMapping 进行不同数据类型的转换
+ *   <li>分区字段：{@link #partitionPair} - 分区字段映射，将分区字段添加到读取字段
+ *   <li>键字段裁剪：避免同时读取 _KEY_a 和 a 字段
+ *   <li>字段投影：仅读取需要的字段，减少 I/O
+ * </ul>
+ *
+ * <p>三步构建过程（详见 {@link Builder#build}）：
+ * <ol>
+ *   <li><b>字段映射</b>：计算 readDataFields，生成 indexCastMapping
+ *   <li><b>键字段裁剪</b>：避免同时读取 _KEY_a 和 a（示例：[_KEY_a, _KEY_b, a, b, c] -> [a, b, c]，映射为 [0,1,0,1,2]）
+ *   <li><b>分区字段裁剪</b>：移除分区字段，减少实际读取字段数量
+ * </ol>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>读取优化：仅读取需要的字段，减少 I/O
+ *   <li>模式演化：兼容不同版本的数据模式
+ *   <li>类型转换：自动处理数据类型变化
+ *   <li>分区过滤：跳过分区字段的读取
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 创建 FormatReaderMapping.Builder
+ * FormatReaderMapping.Builder builder = new FormatReaderMapping.Builder(
+ *     formatDiscover,
+ *     readFields,      // 需要读取的字段
+ *     fieldsExtractor, // 字段提取器
+ *     filters,         // 过滤条件
+ *     topN,            // TopN 优化
+ *     limit            // Limit 优化
+ * );
+ *
+ * // 构建 FormatReaderMapping
+ * FormatReaderMapping mapping = builder.build(
+ *     "parquet",       // 文件格式
+ *     tableSchema,     // 表模式
+ *     dataSchema       // 数据模式
+ * );
+ *
+ * // 使用 FormatReaderMapping
+ * int[] indexMapping = mapping.getIndexMapping();      // 获取索引映射
+ * CastFieldGetter[] castMapping = mapping.getCastMapping(); // 获取类型转换映射
+ * FormatReaderFactory readerFactory = mapping.getReaderFactory(); // 获取读取器工厂
+ * }</pre>
+ *
+ * @see Builder
+ * @see org.apache.paimon.schema.SchemaEvolutionUtil
+ */
 public class FormatReaderMapping {
 
-    // Index mapping from data schema fields to table schema fields, this is used to realize paimon
-    // schema evolution. And it combines trimeedKeyMapping, which maps key fields to the value
-    // fields
+    /**
+     * 索引映射（数据模式字段到表模式字段）
+     *
+     * <p>用于实现 Paimon 的模式演化。它结合了 trimmedKeyMapping，
+     * 将键字段映射到值字段。
+     */
     @Nullable private final int[] indexMapping;
-    // help indexMapping to cast different data type
+
+    /** 类型转换映射（协助 indexMapping 进行不同数据类型的转换） */
     @Nullable private final CastFieldGetter[] castMapping;
-    // partition fields mapping, add partition fields to the read fields
+
+    /** 分区字段映射（将分区字段添加到读取字段） */
     @Nullable private final Pair<int[], RowType> partitionPair;
+
+    /** 格式读取器工厂 */
     private final FormatReaderFactory readerFactory;
+
+    /** 数据模式 */
     private final TableSchema dataSchema;
+
+    /** 数据过滤器 */
     private final List<Predicate> dataFilters;
+
+    /** 系统字段映射（字段名 -> 字段索引） */
     private final Map<String, Integer> systemFields;
+
+    /** TopN 优化 */
     @Nullable private final TopN topN;
+
+    /** Limit 优化 */
     @Nullable private final Integer limit;
 
+    /**
+     * 构造 FormatReaderMapping
+     *
+     * @param indexMapping 索引映射
+     * @param castMapping 类型转换映射
+     * @param trimmedKeyMapping 裁剪后的键字段映射
+     * @param partitionPair 分区字段映射
+     * @param readerFactory 格式读取器工厂
+     * @param dataSchema 数据模式
+     * @param dataFilters 数据过滤器
+     * @param systemFields 系统字段映射
+     * @param topN TopN 优化
+     * @param limit Limit 优化
+     */
     public FormatReaderMapping(
             @Nullable int[] indexMapping,
             @Nullable CastFieldGetter[] castMapping,
@@ -89,6 +176,13 @@ public class FormatReaderMapping {
         this.limit = limit;
     }
 
+    /**
+     * 组合索引映射和裁剪后的键字段映射
+     *
+     * @param indexMapping 索引映射
+     * @param trimmedKeyMapping 裁剪后的键字段映射
+     * @return 组合后的映射
+     */
     private int[] combine(@Nullable int[] indexMapping, @Nullable int[] trimmedKeyMapping) {
         if (indexMapping == null) {
             return trimmedKeyMapping;
@@ -153,13 +247,29 @@ public class FormatReaderMapping {
     /** Builder for {@link FormatReaderMapping}. */
     public static class Builder {
 
+        /** 文件格式发现器 */
         private final FileFormatDiscover formatDiscover;
+        /** 读取字段列表 */
         private final List<DataField> readFields;
+        /** 字段提取器（从表模式中提取字段） */
         private final Function<TableSchema, List<DataField>> fieldsExtractor;
+        /** 过滤条件列表 */
         @Nullable private final List<Predicate> filters;
+        /** TopN 优化 */
         @Nullable private final TopN topN;
+        /** Limit 优化 */
         @Nullable private final Integer limit;
 
+        /**
+         * 构造 Builder
+         *
+         * @param formatDiscover 文件格式发现器
+         * @param readFields 读取字段列表
+         * @param fieldsExtractor 字段提取器
+         * @param filters 过滤条件列表
+         * @param topN TopN 优化
+         * @param limit Limit 优化
+         */
         public Builder(
                 FileFormatDiscover formatDiscover,
                 List<DataField> readFields,
@@ -176,22 +286,36 @@ public class FormatReaderMapping {
         }
 
         /**
-         * There are three steps here to build {@link FormatReaderMapping}:
+         * 构建 FormatReaderMapping（三步构建过程）
          *
-         * <p>1. Calculate the readDataFields, which is what we intend to read from the data schema.
-         * Meanwhile, generate the indexCastMapping, which is used to map the index of the
-         * readDataFields to the index of the data schema.
+         * <p>步骤 1：计算 readDataFields，生成 indexCastMapping
+         * <ul>
+         *   <li>readDataFields：从数据模式中读取的字段
+         *   <li>indexCastMapping：将 readDataFields 的索引映射到数据模式的索引
+         * </ul>
          *
-         * <p>2. Calculate the mapping to trim _KEY_ fields. For example: we want _KEY_a, _KEY_b,
-         * _FIELD_SEQUENCE, _ROW_KIND, a, b, c, d, e, f, g from the data, but actually we don't need
-         * to read _KEY_a and a, _KEY_b and b the same time, so we need to trim them. So we mapping
-         * it: read before: _KEY_a, _KEY_b, _FIELD_SEQUENCE, _ROW_KIND, a, b, c, d, e, f, g read
-         * after: a, b, _FIELD_SEQUENCE, _ROW_KIND, c, d, e, f, g and the mapping is
-         * [0,1,2,3,0,1,4,5,6,7,8], it converts the [read after] columns to [read before] columns.
+         * <p>步骤 2：计算裁剪 _KEY_ 字段的映射
+         * <ul>
+         *   <li>问题：我们需要 _KEY_a, _KEY_b, _FIELD_SEQUENCE, _ROW_KIND, a, b, c, d, e, f, g
+         *   <li>优化：不需要同时读取 _KEY_a 和 a，_KEY_b 和 b
+         *   <li>裁剪前：_KEY_a, _KEY_b, _FIELD_SEQUENCE, _ROW_KIND, a, b, c, d, e, f, g
+         *   <li>裁剪后：a, b, _FIELD_SEQUENCE, _ROW_KIND, c, d, e, f, g
+         *   <li>映射：[0,1,2,3,0,1,4,5,6,7,8]（将裁剪后的列转换为裁剪前的列）
+         * </ul>
          *
-         * <p>3. We want read much fewer fields than readDataFields, so we kick out the partition
-         * fields. We generate the partitionMappingAndFieldsWithoutPartitionPair which helps reduce
-         * the real read fields and tell us how to map it back.
+         * <p>步骤 3：移除分区字段
+         * <ul>
+         *   <li>我们希望读取的字段数远少于 readDataFields
+         *   <li>移除分区字段，生成 partitionMappingAndFieldsWithoutPartitionPair
+         *   <li>减少实际读取字段数量，并告诉我们如何将其映射回来
+         * </ul>
+         *
+         * @param formatIdentifier 格式标识符（如 "parquet", "orc"）
+         * @param tableSchema 表模式
+         * @param dataSchema 数据模式
+         * @param expectedFields 预期字段
+         * @param enabledFilterPushDown 是否启用过滤器下推
+         * @return FormatReaderMapping 实例
          */
         public FormatReaderMapping build(
                 String formatIdentifier,
@@ -242,6 +366,15 @@ public class FormatReaderMapping {
                     limit);
         }
 
+        /**
+         * 演化 TopN（检查字段是否发生变化）
+         *
+         * <p>如果 TopN 中的字段在表模式和数据模式之间发生了变化，则不推送 TopN。
+         *
+         * @param tableSchema 表模式
+         * @param dataSchema 数据模式
+         * @return 演化后的 TopN，如果字段发生变化则返回 null
+         */
         @Nullable
         private TopN evolutionTopN(TableSchema tableSchema, TableSchema dataSchema) {
             TopN pushTopN = topN;
@@ -265,6 +398,12 @@ public class FormatReaderMapping {
             return build(formatIdentifier, tableSchema, dataSchema, readFields, true);
         }
 
+        /**
+         * 查找系统字段（如 _KEY_、_FIELD_SEQUENCE 等）
+         *
+         * @param readTableFields 读取的表字段
+         * @return 系统字段映射（字段名 -> 字段索引）
+         */
         private Map<String, Integer> findSystemFields(List<DataField> readTableFields) {
             Map<String, Integer> systemFields = new HashMap<>();
             for (int i = 0; i < readTableFields.size(); i++) {
@@ -276,6 +415,20 @@ public class FormatReaderMapping {
             return systemFields;
         }
 
+        /**
+         * 裁剪键字段（避免同时读取 _KEY_a 和 a）
+         *
+         * <p>示例：
+         * <pre>
+         * 输入字段：_KEY_a, _KEY_b, _FIELD_SEQUENCE, _ROW_KIND, a, b, c
+         * 输出字段：a, b, _FIELD_SEQUENCE, _ROW_KIND, c
+         * 映射：[0, 1, 2, 3, 0, 1, 4]
+         * </pre>
+         *
+         * @param fieldsWithoutPartition 不包含分区的字段
+         * @param fields 全部字段
+         * @return 映射和裁剪后的字段类型
+         */
         static Pair<int[], RowType> trimKeyFields(
                 List<DataField> fieldsWithoutPartition, List<DataField> fields) {
             int[] map = new int[fieldsWithoutPartition.size()];
@@ -313,6 +466,13 @@ public class FormatReaderMapping {
             return Pair.of(map, new RowType(trimmedFields));
         }
 
+        /**
+         * 计算实际需要读取的数据字段
+         *
+         * @param allDataFields 全部数据字段
+         * @param expectedFields 预期字段
+         * @return 实际读取的数据字段
+         */
         private List<DataField> readDataFields(
                 List<DataField> allDataFields, List<DataField> expectedFields) {
             List<DataField> readDataFields = new ArrayList<>();
@@ -332,6 +492,15 @@ public class FormatReaderMapping {
             return readDataFields;
         }
 
+        /**
+         * 裁剪数据类型（仅读取需要的嵌套字段）
+         *
+         * <p>对于复杂类型（ROW、MAP、ARRAY），仅读取需要的子字段。
+         *
+         * @param readType 读取类型
+         * @param dataType 数据类型
+         * @return 裁剪后的数据类型，如果全部字段被裁剪则返回 null
+         */
         @Nullable
         private DataType pruneDataType(DataType readType, DataType dataType) {
             switch (readType.getTypeRoot()) {
@@ -384,6 +553,14 @@ public class FormatReaderMapping {
             }
         }
 
+        /**
+         * 计算读取过滤器（演化过滤器并排除分区字段）
+         *
+         * @param filters 原始过滤器
+         * @param tableSchema 表模式
+         * @param fileSchema 文件模式
+         * @return 读取过滤器（不包含分区过滤器）
+         */
         private List<Predicate> readFilters(
                 List<Predicate> filters, TableSchema tableSchema, TableSchema fileSchema) {
             List<Predicate> dataFilters =

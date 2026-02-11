@@ -28,9 +28,58 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Entry of an Iceberg manifest file.
+ * Iceberg Manifest 文件的条目。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#manifests">Iceberg spec</a>.
+ * <p>表示 Manifest 文件中的单个文件记录，包含文件元数据和状态信息。
+ *
+ * <h3>功能说明</h3>
+ * <ul>
+ *   <li>记录数据文件或删除文件的状态变更
+ *   <li>跟踪文件的添加、删除或保持不变
+ *   <li>维护序列号用于快照隔离
+ * </ul>
+ *
+ * <h3>状态类型（Status）</h3>
+ * <ul>
+ *   <li><b>EXISTING (0)</b>：文件已存在（从上个快照继承）
+ *   <li><b>ADDED (1)</b>：新添加的文件
+ *   <li><b>DELETED (2)</b>：已删除的文件
+ * </ul>
+ *
+ * <h3>序列号说明</h3>
+ * <ul>
+ *   <li><b>sequenceNumber</b>：数据写入时的序列号
+ *   <li><b>fileSequenceNumber</b>：文件首次添加到表的序列号
+ *   <li>示例：文件在快照3和快照5合并生成新文件在快照6
+ *     <ul>
+ *       <li>sequenceNumber = max(3, 5) = 5
+ *       <li>fileSequenceNumber = 6
+ *     </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h3>生命周期</h3>
+ * <ol>
+ *   <li>新文件：状态为 ADDED
+ *   <li>保留文件：状态变为 EXISTING
+ *   <li>删除文件：状态变为 DELETED（用于跟踪）
+ * </ol>
+ *
+ * <h3>Schema 结构</h3>
+ * <p>提供了符合 Iceberg 规范的 RowType，字段ID固定：
+ * <ul>
+ *   <li>0 - status
+ *   <li>1 - snapshot_id
+ *   <li>2 - data_file
+ *   <li>3 - sequence_number
+ *   <li>4 - file_sequence_number
+ * </ul>
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#manifests">Iceberg Manifest 规范</a>
+ *
+ * @see IcebergManifestFile
+ * @see IcebergDataFileMeta
  */
 public class IcebergManifestEntry {
 

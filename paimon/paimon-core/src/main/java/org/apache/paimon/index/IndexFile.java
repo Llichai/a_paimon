@@ -24,7 +24,11 @@ import org.apache.paimon.fs.Path;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-/** Base index file. */
+/**
+ * 索引文件基类。
+ *
+ * <p>提供索引文件的基础操作,包括路径管理、文件大小查询、删除和存在性检查等。
+ */
 public abstract class IndexFile {
 
     protected final FileIO fileIO;

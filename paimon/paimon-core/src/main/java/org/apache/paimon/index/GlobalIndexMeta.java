@@ -28,7 +28,12 @@ import javax.annotation.Nullable;
 
 import java.util.Arrays;
 
-/** Schema for global index. */
+/**
+ * 全局索引元数据。
+ *
+ * <p>存储全局索引的元信息,包括行范围、索引字段ID、额外字段ID和索引元数据。
+ * 全局索引用于跨分区的高效数据检索。
+ */
 public class GlobalIndexMeta {
 
     public static final RowType SCHEMA =

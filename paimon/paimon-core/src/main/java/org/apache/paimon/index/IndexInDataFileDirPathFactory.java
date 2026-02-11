@@ -26,7 +26,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.paimon.utils.FileStorePathFactory.INDEX_PREFIX;
 
-/** Path factory to create an index path. */
+/**
+ * 数据文件目录中的索引路径工厂。
+ *
+ * <p>在数据文件所在目录中创建索引文件路径。
+ * 索引文件与数据文件存储在同一目录下,便于管理和访问。
+ */
 public class IndexInDataFileDirPathFactory implements IndexPathFactory {
 
     private final String uuid;

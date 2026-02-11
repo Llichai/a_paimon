@@ -38,7 +38,68 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Cache records to {@link SegmentsCache} by compacted serializer. */
+/**
+ * 简单对象缓存
+ *
+ * <p>SimpleObjectsCache 是 {@link ObjectsCache} 的简单实现，用于将对象列表缓存到 {@link SegmentsCache}。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>对象缓存：使用紧凑序列化格式缓存对象列表
+ *   <li>过滤支持：支持在读取时进行过滤
+ *   <li>内存优化：使用 Segments 减少内存占用
+ * </ul>
+ *
+ * <p>与 ObjectsCache 的关系：
+ * <ul>
+ *   <li>继承自 ObjectsCache，实现了抽象方法
+ *   <li>使用 Segments（而非子类如 BytesSegments）作为存储格式
+ *   <li>提供了简单直接的实现
+ * </ul>
+ *
+ * <p>过滤机制：
+ * <ul>
+ *   <li>readFilter：在 InternalRow 级别过滤
+ *   <li>readVFilter：在业务对象级别过滤
+ *   <li>两级过滤可以提高效率
+ * </ul>
+ *
+ * <p>序列化流程：
+ * <pre>
+ * 写入：
+ *   对象列表 → InternalRow → 紧凑序列化 → Segments → 缓存
+ *
+ * 读取：
+ *   缓存 → Segments → 反序列化 → InternalRow → 对象列表
+ * </pre>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 创建缓存
+ * SegmentsCache<Path> segmentsCache = SegmentsCache.create(...);
+ * SimpleObjectsCache<Path, MyObject> cache = new SimpleObjectsCache<>(
+ *     segmentsCache,
+ *     objectSerializer,
+ *     formatSchema,
+ *     path -> fileIO.getFileSize(path),
+ *     (path, size) -> fileIO.readObjects(path)
+ * );
+ *
+ * // 读取并缓存
+ * Path filePath = new Path("/path/to/file");
+ * List<MyObject> objects = cache.read(
+ *     filePath,
+ *     null,  // 文件大小（null 表示自动获取）
+ *     row -> true,  // InternalRow 过滤器
+ *     obj -> obj.isValid()  // 对象过滤器
+ * );
+ * }</pre>
+ *
+ * @param <K> 缓存键类型
+ * @param <V> 对象类型
+ * @see ObjectsCache
+ * @see SegmentsCache
+ */
 @ThreadSafe
 public class SimpleObjectsCache<K, V> extends ObjectsCache<K, V, Segments> {
 

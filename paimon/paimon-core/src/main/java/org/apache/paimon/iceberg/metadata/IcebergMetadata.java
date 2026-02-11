@@ -37,9 +37,92 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Iceberg's metadata json file.
+ * Iceberg 的元数据 JSON 文件。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#table-metadata-fields">Iceberg spec</a>.
+ * <p>表示 Iceberg 表的完整元数据，包含 Schema、分区规范、快照历史等信息。
+ *
+ * <h3>功能说明</h3>
+ * <ul>
+ *   <li>存储表的 Schema 定义和演化历史
+ *   <li>记录分区规范和排序规则
+ *   <li>维护快照历史和引用（分支/标签）
+ *   <li>支持 JSON 序列化和反序列化
+ * </ul>
+ *
+ * <h3>核心字段</h3>
+ * <ul>
+ *   <li><b>format-version</b>：格式版本（2 或 3）
+ *   <li><b>table-uuid</b>：表的唯一标识
+ *   <li><b>location</b>：表的根路径
+ *   <li><b>last-sequence-number</b>：最新序列号
+ *   <li><b>last-updated-ms</b>：最后更新时间
+ *   <li><b>current-snapshot-id</b>：当前快照 ID
+ * </ul>
+ *
+ * <h3>Schema 管理</h3>
+ * <ul>
+ *   <li><b>schemas</b>：所有 Schema 版本列表
+ *   <li><b>current-schema-id</b>：当前使用的 Schema ID
+ *   <li><b>last-column-id</b>：最大字段 ID
+ * </ul>
+ *
+ * <h3>分区规范</h3>
+ * <ul>
+ *   <li><b>partition-specs</b>：分区规范列表
+ *   <li><b>default-spec-id</b>：默认分区规范 ID
+ *   <li><b>last-partition-id</b>：最大分区字段 ID
+ * </ul>
+ *
+ * <h3>排序规则</h3>
+ * <ul>
+ *   <li><b>sort-orders</b>：排序规则列表
+ *   <li><b>default-sort-order-id</b>：默认排序规则 ID
+ * </ul>
+ *
+ * <h3>快照和引用</h3>
+ * <ul>
+ *   <li><b>snapshots</b>：快照历史列表
+ *   <li><b>refs</b>：分支和标签引用（Map<名称, 引用>）
+ * </ul>
+ *
+ * <h3>格式版本</h3>
+ * <ul>
+ *   <li><b>V2 (2)</b>：支持基本功能
+ *   <li><b>V3 (3)</b>：支持删除向量、纳秒时间戳等新特性
+ * </ul>
+ *
+ * <h3>文件组织</h3>
+ * <ul>
+ *   <li>文件名：{version}-{uuid}.metadata.json
+ *   <li>位置：{table_location}/metadata/
+ *   <li>版本号与快照 ID 一致
+ * </ul>
+ *
+ * <h3>JSON 示例</h3>
+ * <pre>
+ * {
+ *   "format-version": 2,
+ *   "table-uuid": "xxx-xxx-xxx",
+ *   "location": "hdfs://path/to/table",
+ *   "current-snapshot-id": 10,
+ *   "schemas": [...],
+ *   "current-schema-id": 0,
+ *   "partition-specs": [...],
+ *   "snapshots": [...],
+ *   "refs": {
+ *     "main": {"snapshot-id": 10}
+ *   }
+ * }
+ * </pre>
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#table-metadata-fields">
+ * Iceberg Table Metadata 规范</a>
+ *
+ * @see IcebergSchema
+ * @see IcebergSnapshot
+ * @see IcebergPartitionSpec
+ * @see IcebergRef
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergMetadata {

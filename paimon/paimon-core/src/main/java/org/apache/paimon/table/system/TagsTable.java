@@ -72,7 +72,27 @@ import java.util.TreeMap;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing tags of table. */
+/**
+ * 标签系统表。
+ *
+ * <p>用于展示表的所有标签(Tag)信息。标签是对特定快照的命名引用,用于版本管理和回溯。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>tag_name (STRING NOT NULL): 标签名称(主键)</li>
+ *   <li>snapshot_id (BIGINT NOT NULL): 关联的快照 ID</li>
+ *   <li>schema_id (BIGINT NOT NULL): Schema 版本 ID</li>
+ *   <li>commit_time (TIMESTAMP(3) NOT NULL): 快照提交时间</li>
+ *   <li>record_count (BIGINT): 记录总数</li>
+ *   <li>create_time (TIMESTAMP(3)): 标签创建时间</li>
+ *   <li>time_retained (STRING): 标签保留时间(Duration 格式)</li>
+ * </ul>
+ *
+ * <h2>过滤优化</h2>
+ * <p>支持对 tag_name 的等值和 IN 过滤。
+ *
+ * @see ReadonlyTable
+ */
 public class TagsTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

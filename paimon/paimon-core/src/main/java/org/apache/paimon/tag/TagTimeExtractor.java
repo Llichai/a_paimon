@@ -28,12 +28,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
 
-/** Extractor to extract tag time from {@link Snapshot}. */
+/** 从 {@link Snapshot} 提取标签时间的提取器。 */
 public interface TagTimeExtractor {
 
     Optional<LocalDateTime> extract(long timeMilli, @Nullable Long watermark);
 
-    /** Extract time from snapshot time millis. */
+    /** 从快照时间毫秒数提取时间。 */
     class ProcessTimeExtractor implements TagTimeExtractor {
 
         private final ZoneId processTimeZoneId;
@@ -49,7 +49,7 @@ public interface TagTimeExtractor {
         }
     }
 
-    /** Extract time from snapshot watermark. */
+    /** 从快照水位线提取时间。 */
     class WatermarkExtractor implements TagTimeExtractor {
 
         private final ZoneId watermarkZoneId;

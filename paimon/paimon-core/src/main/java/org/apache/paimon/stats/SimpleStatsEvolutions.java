@@ -37,7 +37,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.paimon.schema.SchemaEvolutionUtil.createIndexCastMapping;
 import static org.apache.paimon.schema.SchemaEvolutionUtil.devolveFilters;
 
-/** Converters to create col stats array serializer. */
+/** 用于创建列统计数组序列化器的转换器。 */
 public class SimpleStatsEvolutions {
 
     private final Function<Long, List<DataField>> schemaFields;
@@ -79,8 +79,7 @@ public class SimpleStatsEvolutions {
     }
 
     /**
-     * If the file's schema id != current table schema id, convert the filter to evolution safe
-     * filter or null if can't.
+     * 如果文件的模式 ID 不等于当前表模式 ID,则将过滤器转换为演化安全的过滤器,如果无法转换则返回 null。
      */
     @Nullable
     public Predicate tryDevolveFilter(long dataSchemaId, @Nullable Predicate filter) {
@@ -88,8 +87,7 @@ public class SimpleStatsEvolutions {
             return filter;
         }
 
-        // Filter p1 && p2, if only p1 is safe, we can return only p1 to try best filter and let the
-        // compute engine to perform p2.
+        // 过滤器 p1 && p2,如果只有 p1 安全,我们只返回 p1 以尽最大努力进行过滤,并让计算引擎执行 p2。
         List<Predicate> filters = PredicateBuilder.splitAnd(filter);
         List<Predicate> devolved =
                 devolveFilters(tableDataFields, schemaFields.apply(dataSchemaId), filters, false);
@@ -98,8 +96,8 @@ public class SimpleStatsEvolutions {
     }
 
     /**
-     * Filter unsafe filter, for example, filter is 'a > 9', old type is String, new type is Int, if
-     * records are 9, 10 and 11, the evolved filter is not safe.
+     * 过滤不安全的过滤器,例如过滤器为 'a > 9',旧类型为 String,新类型为 Int,
+     * 如果记录为 9、10 和 11,则演化的过滤器不安全。
      */
     @Nullable
     public Predicate filterUnsafeFilter(

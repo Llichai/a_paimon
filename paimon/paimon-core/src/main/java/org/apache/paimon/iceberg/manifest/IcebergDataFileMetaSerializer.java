@@ -27,7 +27,38 @@ import org.apache.paimon.types.DataTypes;
 import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.ObjectSerializer;
 
-/** Serializer for {@link IcebergDataFileMeta}. */
+/**
+ * {@link IcebergDataFileMeta} 的序列化器。
+ *
+ * <p>负责 IcebergDataFileMeta 对象与 InternalRow 之间的转换。
+ *
+ * <h3>序列化字段</h3>
+ * <ol>
+ *   <li>content - 内容类型（DATA/POSITION_DELETES/EQUALITY_DELETES）
+ *   <li>file_path - 文件路径
+ *   <li>file_format - 文件格式（orc/parquet/avro）
+ *   <li>partition - 分区信息
+ *   <li>record_count - 记录数量
+ *   <li>file_size_in_bytes - 文件大小
+ *   <li>null_value_counts - 空值计数 Map
+ *   <li>lower_bounds - 最小值 Map
+ *   <li>upper_bounds - 最大值 Map
+ *   <li>referenced_data_file - 引用的数据文件（删除文件专用）
+ *   <li>content_offset - 内容偏移量（删除文件专用）
+ *   <li>content_size_in_bytes - 内容大小（删除文件专用）
+ * </ol>
+ *
+ * <h3>嵌套序列化器</h3>
+ * <ul>
+ *   <li><b>partSerializer</b>：分区信息序列化
+ *   <li><b>nullValueCountsSerializer</b>：空值计数 Map 序列化
+ *   <li><b>lowerBoundsSerializer</b>：最小值 Map 序列化
+ *   <li><b>upperBoundsSerializer</b>：最大值 Map 序列化
+ * </ul>
+ *
+ * @see IcebergDataFileMeta
+ * @see org.apache.paimon.utils.ObjectSerializer
+ */
 public class IcebergDataFileMetaSerializer extends ObjectSerializer<IcebergDataFileMeta> {
 
     private static final long serialVersionUID = 1L;

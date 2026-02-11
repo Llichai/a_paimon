@@ -21,8 +21,29 @@ package org.apache.paimon.metrics;
 import org.apache.paimon.annotation.Public;
 
 /**
- * The histogram allows to record values, get the current count of recorded values and create
- * histogram statistics for the currently seen elements.
+ * 直方图指标接口。
+ *
+ * <p>直方图用于记录数值分布，支持统计分位数、平均值、标准差等。
+ *
+ * <h3>核心功能：</h3>
+ * <ul>
+ *   <li>记录观测值
+ *   <li>统计观测值的数量
+ *   <li>生成统计快照（分位数、均值、标准差等）
+ * </ul>
+ *
+ * <h3>使用场景：</h3>
+ * <ul>
+ *   <li>测量请求响应时间分布
+ *   <li>测量文件大小分布
+ *   <li>测量批处理记录数分布
+ *   <li>测量延迟的P50、P95、P99
+ * </ul>
+ *
+ * <h3>实现类：</h3>
+ * <ul>
+ *   <li>{@link DescriptiveStatisticsHistogram}: 基于滑动窗口的实现
+ * </ul>
  *
  * @since 0.5.0
  */
@@ -30,23 +51,31 @@ import org.apache.paimon.annotation.Public;
 public interface Histogram extends Metric {
 
     /**
-     * Update the histogram with the given value.
+     * 使用指定值更新直方图。
      *
-     * @param value Value to update the histogram with
+     * @param value 观测值
      */
     void update(long value);
 
     /**
-     * Get the count of seen elements.
+     * 获取已观测元素的数量。
      *
-     * @return Count of seen elements
+     * @return 观测元素数量
      */
     long getCount();
 
     /**
-     * Create statistics for the currently recorded elements.
+     * 为当前记录的元素创建统计快照。
      *
-     * @return Statistics about the currently recorded elements
+     * <p>返回的统计信息包括：
+     * <ul>
+     *   <li>分位数（P50、P95、P99等）
+     *   <li>平均值
+     *   <li>标准差
+     *   <li>最大值和最小值
+     * </ul>
+     *
+     * @return 当前元素的统计信息
      */
     HistogramStatistics getStatistics();
 

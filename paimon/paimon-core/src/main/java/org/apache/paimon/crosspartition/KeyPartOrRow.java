@@ -18,11 +18,35 @@
 
 package org.apache.paimon.crosspartition;
 
-/** Type of record, key or full row. */
+/**
+ * 记录类型枚举
+ *
+ * <p>标识记录是仅包含主键和分区，还是完整的行数据。
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>KEY_PART：Bootstrap 阶段的记录，仅包含主键和分区字段
+ *   <li>ROW：完整的数据记录，包含所有字段
+ * </ul>
+ *
+ * <p>序列化：
+ * <ul>
+ *   <li>KEY_PART -> 0
+ *   <li>ROW -> 1
+ * </ul>
+ */
 public enum KeyPartOrRow {
+    /** 仅包含主键和分区字段 */
     KEY_PART,
+
+    /** 完整的行记录 */
     ROW;
 
+    /**
+     * 转换为字节值（用于序列化）
+     *
+     * @return 字节表示（0 或 1）
+     */
     public byte toByteValue() {
         switch (this) {
             case KEY_PART:
@@ -34,6 +58,13 @@ public enum KeyPartOrRow {
         }
     }
 
+    /**
+     * 从字节值反序列化
+     *
+     * @param value 字节值
+     * @return 对应的枚举值
+     * @throws UnsupportedOperationException 如果字节值无效
+     */
     public static KeyPartOrRow fromByteValue(byte value) {
         switch (value) {
             case 0:

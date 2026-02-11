@@ -28,17 +28,51 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Iceberg partition summary stored in manifest file.
+ * Iceberg Manifest 文件中存储的分区汇总信息类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#manifest-lists">Iceberg spec</a>.
+ * <p>在 Iceberg 的 Manifest List 文件中,为每个分区存储汇总统计信息,
+ * 用于查询优化和数据跳过(data skipping)。
+ *
+ * <p>包含的统计信息:
+ * <ul>
+ *   <li>containsNull: 分区是否包含 NULL 值
+ *   <li>containsNan: 分区是否包含 NaN 值(用于浮点数)
+ *   <li>lowerBound: 分区值的下界(二进制格式)
+ *   <li>upperBound: 分区值的上界(二进制格式)
+ * </ul>
+ *
+ * <p>使用场景:
+ * <ul>
+ *   <li>查询优化:根据分区边界值跳过不相关的分区
+ *   <li>统计信息:快速了解分区的数据分布情况
+ * </ul>
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#manifest-lists">Iceberg 规范</a>
+ *
+ * @see IcebergPartitionSummarySerializer 序列化器
  */
 public class IcebergPartitionSummary {
 
+    /** 是否包含 NULL 值 */
     private final boolean containsNull;
+
+    /** 是否包含 NaN 值 */
     private final boolean containsNan;
+
+    /** 分区值下界(二进制序列化) */
     private final byte[] lowerBound;
+
+    /** 分区值上界(二进制序列化) */
     private final byte[] upperBound;
 
+    /**
+     * 构造分区汇总信息。
+     *
+     * @param containsNull 是否包含 NULL
+     * @param containsNan 是否包含 NaN
+     * @param lowerBound 下界值
+     * @param upperBound 上界值
+     */
     public IcebergPartitionSummary(
             boolean containsNull, boolean containsNan, byte[] lowerBound, byte[] upperBound) {
         this.containsNull = containsNull;

@@ -53,17 +53,30 @@ import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
- * This is a system table to display all the database-table properties.
+ * 所有表选项系统表。
  *
- * <pre>
- *  For example:
- *     If we select * from sys.all_table_options, we will get
- *     databasename       tablename       key      value
- *         default           test0         a         b
- *         my_db             test1         c         d
- *          ...               ...         ...       ...
- *     We can write sql to fetch the information we need.
- * </pre>
+ * <p>这是一个全局系统表,用于展示 Catalog 中所有数据库和表的配置选项。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>database_name (VARCHAR): 数据库名称</li>
+ *   <li>table_name (VARCHAR): 表名称</li>
+ *   <li>key (VARCHAR): 配置项名称</li>
+ *   <li>value (VARCHAR): 配置项值</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- 查询所有表的配置
+ * SELECT * FROM sys.all_table_options;
+ *
+ * -- 查询特定配置项
+ * SELECT database_name, table_name, value
+ * FROM sys.all_table_options
+ * WHERE key = 'bucket';
+ * }</pre>
+ *
+ * @see ReadonlyTable
  */
 public class AllTableOptionsTable implements ReadonlyTable {
 

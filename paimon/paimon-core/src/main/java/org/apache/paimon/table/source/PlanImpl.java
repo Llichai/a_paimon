@@ -24,7 +24,19 @@ import javax.annotation.Nullable;
 
 import java.util.List;
 
-/** An implementation of {@link SnapshotReader.Plan}. */
+/**
+ * {@link SnapshotReader.Plan} 的实现类，包含扫描计划的完整信息。
+ *
+ * <p>PlanImpl 封装了一次扫描的结果，包括：
+ * <ul>
+ *   <li><b>watermark</b>: 水位线（时间戳）</li>
+ *   <li><b>snapshotId</b>: 扫描的快照 ID</li>
+ *   <li><b>splits</b>: 要读取的分片列表</li>
+ * </ul>
+ *
+ * @see SnapshotReader.Plan 快照读取计划接口
+ * @see TableScan.Plan 表扫描计划接口
+ */
 public class PlanImpl implements SnapshotReader.Plan {
 
     private final Long watermark;

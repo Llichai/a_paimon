@@ -26,13 +26,26 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 import java.util.Objects;
 
 /**
- * Partition field in Iceberg's partition spec.
+ * Iceberg 分区规范中的分区字段类。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#partition-specs">Iceberg spec</a>.
+ * <p>表示 Iceberg 分区规范中的一个分区字段,定义了如何从源字段派生分区值。
+ *
+ * <p>主要属性:
+ * <ul>
+ *   <li>name: 分区字段的名称
+ *   <li>transform: 转换函数(当前 Paimon 仅支持 "identity" 转换)
+ *   <li>sourceId: 源字段的 ID
+ *   <li>fieldId: 分区字段的 ID(从 1000 开始)
+ * </ul>
+ *
+ * <p>参考: <a href="https://iceberg.apache.org/spec/#partition-specs">Iceberg 规范</a>
+ *
+ * @see IcebergPartitionSpec 分区规范
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class IcebergPartitionField {
 
+    /** 分区字段 ID 的起始值(Iceberg 规范约定) */
     // not sure why, but the sample in Iceberg spec is like this
     public static final int FIRST_FIELD_ID = 1000;
 
@@ -41,18 +54,30 @@ public class IcebergPartitionField {
     private static final String FIELD_SOURCE_ID = "source-id";
     private static final String FIELD_FIELD_ID = "field-id";
 
+    /** 分区字段名称 */
     @JsonProperty(FIELD_NAME)
     private final String name;
 
+    /** 转换函数名称(Paimon 仅支持 identity) */
     @JsonProperty(FIELD_TRANSFORM)
     private final String transform;
 
+    /** 源字段 ID */
     @JsonProperty(FIELD_SOURCE_ID)
     private final int sourceId;
 
+    /** 分区字段 ID */
     @JsonProperty(FIELD_FIELD_ID)
     private final int fieldId;
 
+    /**
+     * 从数据字段构造分区字段。
+     *
+     * <p>使用 identity 转换,表示分区值直接来自源字段,无需转换。
+     *
+     * @param dataField 数据字段
+     * @param fieldId 分区字段 ID
+     */
     public IcebergPartitionField(IcebergDataField dataField, int fieldId) {
         this(
                 dataField.name(),
@@ -62,6 +87,14 @@ public class IcebergPartitionField {
                 fieldId);
     }
 
+    /**
+     * 完整构造函数。
+     *
+     * @param name 分区字段名称
+     * @param transform 转换函数名称
+     * @param sourceId 源字段 ID
+     * @param fieldId 分区字段 ID
+     */
     @JsonCreator
     public IcebergPartitionField(
             @JsonProperty(FIELD_NAME) String name,

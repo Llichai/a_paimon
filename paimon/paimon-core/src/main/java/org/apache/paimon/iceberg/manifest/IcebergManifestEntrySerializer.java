@@ -23,7 +23,36 @@ import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.ObjectSerializer;
 
-/** Serializer for {@link IcebergManifestEntry}. */
+/**
+ * {@link IcebergManifestEntry} 的序列化器。
+ *
+ * <p>负责 Manifest Entry 对象与 InternalRow 之间的转换。
+ *
+ * <h3>序列化字段</h3>
+ * <ol>
+ *   <li>status - 条目状态（EXISTING/ADDED/DELETED）
+ *   <li>snapshot_id - 快照 ID
+ *   <li>sequence_number - 数据序列号
+ *   <li>file_sequence_number - 文件序列号
+ *   <li>data_file - 数据文件元数据（嵌套对象）
+ * </ol>
+ *
+ * <h3>特殊处理</h3>
+ * <p>反序列化时支持从 ManifestFileMeta 继承字段：
+ * <ul>
+ *   <li>如果 snapshot_id 为 null，使用 meta.addedSnapshotId()
+ *   <li>如果 sequence_number 为 null 且满足条件，使用 meta.sequenceNumber()
+ *   <li>如果 file_sequence_number 为 null 且满足条件，使用 meta.sequenceNumber()
+ * </ul>
+ *
+ * <h3>依赖序列化器</h3>
+ * <ul>
+ *   <li><b>fileSerializer</b>：{@link IcebergDataFileMetaSerializer}
+ * </ul>
+ *
+ * @see IcebergManifestEntry
+ * @see IcebergDataFileMetaSerializer
+ */
 public class IcebergManifestEntrySerializer extends ObjectSerializer<IcebergManifestEntry> {
 
     private static final long serialVersionUID = 1L;

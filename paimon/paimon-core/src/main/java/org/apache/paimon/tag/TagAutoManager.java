@@ -28,7 +28,7 @@ import javax.annotation.Nullable;
 
 import java.util.List;
 
-/** A manager to create and expire tags. */
+/** 创建和过期标签的管理器。 */
 public class TagAutoManager {
 
     @Nullable private final TagAutoCreation tagAutoCreation;

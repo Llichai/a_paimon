@@ -27,8 +27,8 @@ import java.util.List;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /**
- * A factory which creates {@link MemorySegmentPool} from {@link MemoryOwner}. The returned memory
- * pool will try to preempt memory when there is no memory left.
+ * 从 {@link MemoryOwner} 创建 {@link MemorySegmentPool} 的工厂。
+ * 当没有剩余内存时,返回的内存池将尝试抢占内存。
  */
 public class MemoryPoolFactory {
 
@@ -74,8 +74,7 @@ public class MemoryPoolFactory {
         long maxMemory = 0;
         MemoryOwner max = null;
         for (MemoryOwner other : owners) {
-            // Don't preempt yourself! Write and flush at the same time, which may lead to
-            // inconsistent state
+            // 不要抢占自己!同时写入和刷新,可能导致状态不一致
             if (other != owner && other.memoryOccupancy() > maxMemory) {
                 maxMemory = other.memoryOccupancy();
                 max = other;

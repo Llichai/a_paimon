@@ -33,60 +33,118 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Base class for {@code BytesHashMap}.
+ * {@code BytesHashMap} 的基类。
  *
- * @param <K> type of the map key.
- * @param <V> type of the map value.
+ * <p>提供基于字节的哈希映射的核心功能，包括：
+ * <ul>
+ *   <li>内存管理：管理桶区域和记录区域的内存段
+ *   <li>哈希冲突处理：使用双重哈希的开放地址法
+ *   <li>动态扩容：当元素数量超过阈值时自动扩容和重哈希
+ *   <li>查找操作：通过哈希码快速定位键值对
+ * </ul>
+ *
+ * <p><b>内存布局：</b>
+ * <ul>
+ *   <li>桶区域（Bucket Area）：存储指针和哈希码，每个桶占用 8 字节
+ *   <li>记录区域（Record Area）：存储实际的键值对数据
+ * </ul>
+ *
+ * <p><b>哈希冲突解决：</b>
+ * 使用双重哈希（Double Hashing）的开放地址法：
+ * <ul>
+ *   <li>第一个哈希函数：H1(K) = hashCode(K) & numBucketsMask
+ *   <li>第二个哈希函数：H2(K) = 1 + 2 * ((H1(K)/M) mod (M-1))，保证为奇数
+ *   <li>探测序列：pos = (H1(K) + i * H2(K)) & numBucketsMask
+ * </ul>
+ *
+ * @param <K> 映射键的类型
+ * @param <V> 映射值的类型
  */
 public abstract class BytesMap<K, V> {
 
     private static final Logger LOG = LoggerFactory.getLogger(BytesMap.class);
 
+    /** 每个桶的大小（字节）。 */
     public static final int BUCKET_SIZE = 8;
+
+    /** 链表结束标记，表示该桶为空。 */
     protected static final int END_OF_LIST = Integer.MAX_VALUE;
+
+    /** 探测步长增量，用于线性探测。 */
     protected static final int STEP_INCREMENT = 1;
+
+    /** 元素指针的长度（字节）。 */
     protected static final int ELEMENT_POINT_LENGTH = 4;
+
+    /** 记录额外信息的长度（字节）。 */
     public static final int RECORD_EXTRA_LENGTH = 8;
+
+    /** 桶大小的位数（log2(BUCKET_SIZE)）。 */
     protected static final int BUCKET_SIZE_BITS = 3;
 
+    /** 每个内存段中的桶数量。 */
     protected final int numBucketsPerSegment;
+
+    /** 每个内存段中桶数量的位数。 */
     protected final int numBucketsPerSegmentBits;
+
+    /** 每个内存段中桶数量的掩码。 */
     protected final int numBucketsPerSegmentMask;
+
+    /** 最后一个桶在段中的位置。 */
     protected final int lastBucketPosition;
 
+    /** 内存段的大小（字节）。 */
     protected final int segmentSize;
+
+    /** 内存段池，用于分配和回收内存段。 */
     protected final MemorySegmentPool memoryPool;
+
+    /** 存储桶的内存段列表。 */
     protected List<MemorySegment> bucketSegments;
 
+    /** 预留的内存缓冲区数量。 */
     protected final int reservedNumBuffers;
 
+    /** 哈希映射中的元素数量。 */
     protected int numElements = 0;
+
+    /** 桶数量的掩码，用于计算桶索引。 */
     protected int numBucketsMask;
-    // get the second hashcode based log2NumBuckets and numBucketsMask2
+
+    /** 基于 log2NumBuckets 和 numBucketsMask2 计算第二个哈希码。 */
     protected int log2NumBuckets;
+
+    /** 第二个哈希函数使用的掩码。 */
     protected int numBucketsMask2;
 
+    /** 负载因子，当元素数量超过 (桶数量 * LOAD_FACTOR) 时触发扩容。 */
     protected static final double LOAD_FACTOR = 0.75;
-    // a smaller bucket can make the best of l1/l2/l3 cache.
+
+    /** 初始桶内存大小（字节），使用较小的桶可以更好地利用 L1/L2/L3 缓存。 */
     protected static final long INIT_BUCKET_MEMORY_IN_BYTES = 1024 * 1024L;
 
-    /** The map will be expanded once the number of elements exceeds this threshold. */
+    /** 扩容阈值，当元素数量超过此值时，哈希映射将进行扩容。 */
     protected int growthThreshold;
 
-    /** The segments where the actual data is stored. */
+    /** 存储实际数据的记录区域。 */
     protected RecordArea<K, V> recordArea;
 
-    /** Used as a reused object when lookup and iteration. */
+    /** 查找和迭代时使用的可重用键对象。 */
     protected K reusedKey;
 
-    /** Used as a reused object when retrieve the map's value by key and iteration. */
+    /** 通过键检索映射值和迭代时使用的可重用值对象。 */
     protected V reusedValue;
 
-    /** Used as a reused object which lookup returned. */
+    /** 查找操作返回的可重用查找信息对象。 */
     private final LookupInfo<K, V> reuseLookupInfo;
 
-    // metric
+    // metric - 性能指标
+
+    /** 溢出文件的数量。 */
     protected long numSpillFiles;
+
+    /** 溢出到磁盘的字节数。 */
     protected long spillInBytes;
 
     public BytesMap(MemorySegmentPool memoryPool, PagedTypeSerializer<K> keySerializer) {

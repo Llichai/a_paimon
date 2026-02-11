@@ -38,16 +38,15 @@ import static org.apache.paimon.utils.SerializationUtils.newBytesType;
 import static org.apache.paimon.utils.SerializationUtils.serializeBinaryRow;
 
 /**
- * The statistics for columns, supports the following stats.
+ * 列的统计信息,支持以下统计指标。
  *
  * <ul>
- *   <li>minValues: the minimum values of the columns
- *   <li>maxValues: the maximum values of the columns
- *   <li>nullCounts: the number of nulls of the columns
+ *   <li>minValues: 列的最小值
+ *   <li>maxValues: 列的最大值
+ *   <li>nullCounts: 列的空值数量
  * </ul>
  *
- * <p>All statistics are stored in the form of a Binary, which can significantly reduce its memory
- * consumption, but the cost is that the column type needs to be known when getting.
+ * <p>所有统计信息都以二进制形式存储，可显著减少内存消耗，但代价是获取时需要知道列类型。
  *
  * @since 0.9.0
  */
@@ -62,7 +61,7 @@ public class SimpleStats {
                             new DataField(1, "_MAX_VALUES", newBytesType(false)),
                             new DataField(2, "_NULL_COUNTS", new ArrayType(new BigIntType(true)))));
 
-    /** Empty stats for 0 column number. */
+    /** 列数为 0 时的空统计信息。 */
     public static final SimpleStats EMPTY_STATS =
             new SimpleStats(EMPTY_ROW, EMPTY_ROW, BinaryArray.fromLongArray(new Long[0]));
 

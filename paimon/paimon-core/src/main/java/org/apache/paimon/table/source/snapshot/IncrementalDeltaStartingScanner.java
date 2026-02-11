@@ -50,7 +50,56 @@ import static org.apache.paimon.utils.ManifestReadThreadPool.randomlyExecuteSequ
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * Get incremental data by reading delta or changelog files from snapshots between start and end.
+ * 增量 Delta 起始扫描器
+ *
+ * <p>通过读取快照之间的 delta 或 changelog 文件来获取增量数据。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>读取 (start, end] 范围内的增量数据（左开右闭区间）
+ *   <li>支持两种扫描模式：DELTA 和 CHANGELOG
+ *   <li>并行读取多个快照的 manifest 文件
+ * </ul>
+ *
+ * <p><b>扫描模式：</b>
+ * <table border="1">
+ *   <tr>
+ *     <th>模式</th>
+ *     <th>读取内容</th>
+ *     <th>过滤规则</th>
+ *   </tr>
+ *   <tr>
+ *     <td>ScanMode.DELTA</td>
+ *     <td>deltaManifestList</td>
+ *     <td>只读取 APPEND 快照，忽略 COMPACT/OVERWRITE</td>
+ *   </tr>
+ *   <tr>
+ *     <td>ScanMode.CHANGELOG</td>
+ *     <td>changelogManifestList</td>
+ *     <td>读取 APPEND/COMPACT，忽略 OVERWRITE</td>
+ *   </tr>
+ * </table>
+ *
+ * <p><b>创建方法：</b>
+ * <ul>
+ *   <li>{@link #betweenSnapshotIds}：指定快照 ID 范围
+ *   <li>{@link #betweenTimestamps}：指定时间戳范围
+ * </ul>
+ *
+ * <p><b>使用示例：</b>
+ * <pre>
+ * // 1. 快照 ID 范围
+ * StartingScanner scanner = IncrementalDeltaStartingScanner.betweenSnapshotIds(
+ *     10, 20, snapshotManager, ScanMode.DELTA);
+ *
+ * // 2. 时间戳范围
+ * IncrementalDeltaStartingScanner scanner = IncrementalDeltaStartingScanner.betweenTimestamps(
+ *     startTimestamp, endTimestamp, snapshotManager, ScanMode.DELTA);
+ * </pre>
+ *
+ * @see CoreOptions.StartupMode#INCREMENTAL
+ * @see ScanMode#DELTA
+ * @see ScanMode#CHANGELOG
  */
 public class IncrementalDeltaStartingScanner extends AbstractStartingScanner {
 

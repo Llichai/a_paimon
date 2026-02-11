@@ -53,7 +53,25 @@ import java.util.OptionalLong;
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
-/** A {@link Table} for showing options of table. */
+/**
+ * 表选项系统表。
+ *
+ * <p>用于展示表的配置选项(来自最新 Schema)。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>key (STRING NOT NULL): 配置项名称(主键)</li>
+ *   <li>value (STRING NOT NULL): 配置项值</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * SELECT * FROM my_table$options;
+ * SELECT value FROM my_table$options WHERE key = 'bucket';
+ * }</pre>
+ *
+ * @see ReadonlyTable
+ */
 public class OptionsTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 2L;

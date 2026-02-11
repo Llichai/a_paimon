@@ -23,33 +23,76 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * Adapter class that wraps a {@link MutableObjectIterator} into a standard Java {@link Iterator}.
+ * 可变对象迭代器适配器
  *
- * <p>This adapter handles the key differences between {@link MutableObjectIterator} and standard
- * {@link Iterator}:
+ * <p>MutableObjectIteratorAdapter 将 {@link MutableObjectIterator} 包装为标准的 Java {@link Iterator}。
  *
+ * <p>核心功能：
  * <ul>
- *   <li>{@link MutableObjectIterator} returns {@code null} to indicate the end of iteration, while
- *       {@link Iterator} uses {@link #hasNext()} and {@link #next()} separation.
- *   <li>{@link MutableObjectIterator} can throw {@link IOException} from its {@code next()} method,
- *       while standard {@link Iterator} does not declare checked exceptions. This adapter wraps
- *       {@link IOException} into {@link RuntimeException}.
+ *   <li>适配器模式：将 MutableObjectIterator 适配为 Iterator 接口
+ *   <li>预取机制：提前读取下一个元素以支持 hasNext() 检查
+ *   <li>异常包装：将 IOException 包装为 RuntimeException
  * </ul>
  *
- * @param <E> The element type of the iterator.
+ * <p>关键差异处理：
+ * <ul>
+ *   <li>{@link MutableObjectIterator} 返回 {@code null} 表示迭代结束，而 {@link Iterator} 使用 {@link #hasNext()} 和 {@link #next()} 分离
+ *   <li>{@link MutableObjectIterator} 的 {@code next()} 方法可能抛出 {@link IOException}，而标准 {@link Iterator} 不声明受检异常。此适配器将 {@link IOException} 包装为 {@link RuntimeException}
+ * </ul>
+ *
+ * <p>预取机制：
+ * <ul>
+ *   <li>在 hasNext() 中预取下一个元素
+ *   <li>在 next() 中返回预取的元素
+ *   <li>提前读取一个元素以支持标准 Iterator 接口
+ * </ul>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>迭代器转换：将 MutableObjectIterator 转换为标准 Iterator
+ *   <li>流处理：在流式处理中使用标准 Iterator
+ *   <li>兼容性：与需要标准 Iterator 的 API 兼容
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 创建 MutableObjectIterator
+ * MutableObjectIterator<MyObject> mutableIterator = ...;
+ * MyObject instance = new MyObject();
+ *
+ * // 包装为标准 Iterator
+ * Iterator<MyObject> iterator = new MutableObjectIteratorAdapter<>(mutableIterator, instance);
+ *
+ * // 使用标准 Iterator 接口
+ * while (iterator.hasNext()) {
+ *     MyObject obj = iterator.next();
+ *     // 处理对象
+ * }
+ * }</pre>
+ *
+ * @param <I> 输入元素类型（extends E）
+ * @param <E> 输出元素类型
+ * @see MutableObjectIterator
+ * @see Iterator
  */
 public class MutableObjectIteratorAdapter<I extends E, E> implements Iterator<E> {
 
+    /** 被包装的 MutableObjectIterator */
     private final MutableObjectIterator<I> delegate;
+    /** 可重用的实例（用于对象复用） */
     private final I instance;
+    /** 下一个元素（预取） */
     private E nextElement;
+    /** 是否有下一个元素 */
     private boolean hasNext = false;
+    /** 是否已初始化 */
     private boolean initialized = false;
 
     /**
-     * Creates a new adapter wrapping the given {@link MutableObjectIterator}.
+     * 构造可变对象迭代器适配器
      *
-     * @param delegate The iterator to wrap.
+     * @param delegate 被包装的 MutableObjectIterator
+     * @param instance 可重用的实例
      */
     public MutableObjectIteratorAdapter(MutableObjectIterator<I> delegate, I instance) {
         this.delegate = delegate;
@@ -75,10 +118,11 @@ public class MutableObjectIteratorAdapter<I extends E, E> implements Iterator<E>
     }
 
     /**
-     * Prefetches the next element from the delegate iterator.
+     * 预取下一个元素
      *
-     * <p>This method reads ahead one element to support the {@link #hasNext()} check required by
-     * the standard {@link Iterator} interface.
+     * <p>此方法提前读取一个元素以支持标准 {@link Iterator} 接口所需的 {@link #hasNext()} 检查。
+     *
+     * <p>将 {@link MutableObjectIterator#next} 抛出的 {@link IOException} 包装为 {@link RuntimeException}。
      */
     private void prefetch() {
         try {

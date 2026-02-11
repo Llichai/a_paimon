@@ -19,26 +19,22 @@
 package org.apache.paimon.privilege;
 
 /**
- * Interface for the privilege system which supports identity-based and role-based access control.
+ * 权限管理器接口。
  *
- * <p>When the privilege system is initialized two special users, root and anonymous, will be
- * created by default.
+ * <p>支持基于身份和基于角色的访问控制。
  *
+ * <p>初始化权限系统时,会默认创建两个特殊用户:
  * <ul>
- *   <li>root is the user with all privileges. The password of root is set when calling {@link
- *       PrivilegeManager#initializePrivilege}.
- *   <li>anonymous is the default username if no user and password are provided when creating the
- *       catalog. The default password of anonymous is <code>anonymous</code>.
+ *   <li>root - 拥有所有权限的用户,密码在调用 {@link #initializePrivilege} 时设置
+ *   <li>anonymous - 默认用户(未提供用户名和密码时使用),默认密码为 "anonymous"
  * </ul>
  *
- * <p>The privilege system also follows a hierarchical model. That is, If a user has a privilege on
- * an identifier A, he also has this privilege on identifier B, where A is a prefix of B.
- * Identifiers can be
- *
+ * <p>权限系统遵循层次模型:如果用户在标识符A上有某个权限,
+ * 则他在标识符B上也有该权限(其中A是B的前缀)。标识符可以是:
  * <ul>
- *   <li>the whole catalog (identifier is an empty string)
- *   <li>a database (identifier is &lt;database-name&gt;)
- *   <li>a table (identifier is &lt;database-name&gt;.&lt;table-name&gt;)
+ *   <li>整个catalog(标识符为空字符串)</li>
+ *   <li>数据库(标识符为 &lt;database-name&gt;)</li>
+ *   <li>表(标识符为 &lt;database-name&gt;.&lt;table-name&gt;)</li>
  * </ul>
  */
 public interface PrivilegeManager {
@@ -48,33 +44,59 @@ public interface PrivilegeManager {
     String PASSWORD_ANONYMOUS = "anonymous";
     String IDENTIFIER_WHOLE_CATALOG = "";
 
-    /** Check if the privilege system is enabled. */
+    /** 检查权限系统是否已启用 */
     boolean privilegeEnabled();
 
     /**
-     * Initialize the privilege system if not enabled. Also creates two special users: root and
-     * anonymous.
+     * 初始化权限系统(如果未启用)。
+     *
+     * <p>同时创建两个特殊用户:root和anonymous。
+     *
+     * @param rootPassword root用户的密码
      */
     void initializePrivilege(String rootPassword);
 
-    /** Create {@code user} with {@code password}. */
+    /**
+     * 创建用户。
+     *
+     * @param user 用户名
+     * @param password 密码
+     */
     void createUser(String user, String password);
 
-    /** Remove {@code user} from the privilege system. */
+    /**
+     * 从权限系统中删除用户。
+     *
+     * @param user 用户名
+     */
     void dropUser(String user);
 
-    /** Grant {@code user} with {@code privilege} on {@code identifier}. */
+    /**
+     * 授予用户权限。
+     *
+     * @param user 用户名
+     * @param identifier 对象标识符
+     * @param privilege 权限类型
+     */
     void grant(String user, String identifier, PrivilegeType privilege);
 
     /**
-     * Revoke {@code privilege} from {@code user} on {@code identifier}. Note that {@code user} will
-     * also lose {@code privilege} on all descendants of {@code identifier}.
+     * 撤销用户权限。
+     *
+     * <p>注意:用户也会失去该标识符所有子对象上的该权限。
+     *
+     * @param user 用户名
+     * @param identifier 对象标识符
+     * @param privilege 权限类型
+     * @return 撤销的权限数量
      */
     int revoke(String user, String identifier, PrivilegeType privilege);
 
     /**
-     * Notify the privilege system that the identifier of an object is changed from {@code oldName}
-     * to {@code newName}.
+     * 通知权限系统对象标识符已更改。
+     *
+     * @param oldName 旧标识符
+     * @param newName 新标识符
      */
     void objectRenamed(String oldName, String newName);
 

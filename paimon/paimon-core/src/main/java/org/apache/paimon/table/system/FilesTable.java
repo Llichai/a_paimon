@@ -86,7 +86,67 @@ import java.util.stream.Collectors;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing files of a snapshot in specific table. */
+/**
+ * 文件系统表。
+ *
+ * <p>用于展示表在特定快照中的所有数据文件的详细信息。这是诊断表性能和数据分布的重要工具。
+ *
+ * <h2>表结构 (Schema)</h2>
+ * <table border="1">
+ *   <tr><th>字段名</th><th>类型</th><th>描述</th></tr>
+ *   <tr><td>partition</td><td>STRING</td><td>分区值(格式: "key1=val1/key2=val2")</td></tr>
+ *   <tr><td>bucket</td><td>INT NOT NULL</td><td>分桶编号</td></tr>
+ *   <tr><td>file_path</td><td>STRING NOT NULL</td><td>文件路径(主键)</td></tr>
+ *   <tr><td>file_format</td><td>STRING NOT NULL</td><td>文件格式(如 orc, parquet)</td></tr>
+ *   <tr><td>schema_id</td><td>BIGINT NOT NULL</td><td>Schema 版本 ID</td></tr>
+ *   <tr><td>level</td><td>INT NOT NULL</td><td>LSM 层级(0表示最新数据)</td></tr>
+ *   <tr><td>record_count</td><td>BIGINT NOT NULL</td><td>记录数</td></tr>
+ *   <tr><td>file_size_in_bytes</td><td>BIGINT NOT NULL</td><td>文件大小(字节)</td></tr>
+ *   <tr><td>min_key</td><td>STRING</td><td>最小主键(JSON格式)</td></tr>
+ *   <tr><td>max_key</td><td>STRING</td><td>最大主键(JSON格式)</td></tr>
+ *   <tr><td>null_value_counts</td><td>STRING NOT NULL</td><td>空值统计(JSON格式)</td></tr>
+ *   <tr><td>min_value_stats</td><td>STRING NOT NULL</td><td>最小值统计(JSON格式)</td></tr>
+ *   <tr><td>max_value_stats</td><td>STRING NOT NULL</td><td>最大值统计(JSON格式)</td></tr>
+ *   <tr><td>min_sequence_number</td><td>BIGINT</td><td>最小序列号</td></tr>
+ *   <tr><td>max_sequence_number</td><td>BIGINT</td><td>最大序列号</td></tr>
+ *   <tr><td>creation_time</td><td>TIMESTAMP_MILLIS</td><td>文件创建时间</td></tr>
+ *   <tr><td>deleteRowCount</td><td>BIGINT</td><td>删除标记的行数</td></tr>
+ *   <tr><td>file_source</td><td>STRING</td><td>文件来源</td></tr>
+ *   <tr><td>first_row_id</td><td>BIGINT</td><td>第一行的行 ID</td></tr>
+ *   <tr><td>write_cols</td><td>ARRAY<STRING></td><td>写入的列名列表</td></tr>
+ * </table>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- 查询所有文件
+ * SELECT * FROM my_table$files;
+ *
+ * -- 查询特定分区的文件
+ * SELECT * FROM my_table$files WHERE partition = '{dt=2024-01-01}';
+ *
+ * -- 查询特定分桶的文件
+ * SELECT * FROM my_table$files WHERE bucket = 0;
+ *
+ * -- 查询特定层级的文件
+ * SELECT * FROM my_table$files WHERE level = 0;
+ *
+ * -- 统计每个分区的文件数和总大小
+ * SELECT partition, COUNT(*), SUM(file_size_in_bytes)
+ * FROM my_table$files
+ * GROUP BY partition;
+ * }</pre>
+ *
+ * <h2>过滤优化</h2>
+ * <p>支持以下字段的谓词下推以提高查询性能:
+ * <ul>
+ *   <li>{@code partition} - 分区过滤(仅支持等值匹配)</li>
+ *   <li>{@code bucket} - 分桶过滤</li>
+ *   <li>{@code level} - LSM 层级过滤</li>
+ * </ul>
+ *
+ * @see Table
+ * @see ReadonlyTable
+ */
 public class FilesTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

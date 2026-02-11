@@ -38,25 +38,43 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Spilled files Merger of {@link BinaryExternalSortBuffer}. It merges {@link #maxFanIn} spilled
- * files at most once.
+ * {@link BinaryExternalSortBuffer} 的溢出文件合并器。
  *
- * @param <Entry> Type of Entry to Merge sort.
+ * <p>一次最多合并 {@link #maxFanIn} 个溢出文件。
+ *
+ * @param <Entry> 要合并排序的条目类型
  */
 public abstract class AbstractBinaryExternalMerger<Entry> implements Closeable {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractBinaryExternalMerger.class);
 
+    /** 是否已关闭标志 */
     private volatile boolean closed;
 
+    /** 最大合并扇入数 */
     private final int maxFanIn;
+    /** 溢出通道管理器 */
     private final SpillChannelManager channelManager;
+    /** 压缩编解码工厂 */
     private final BlockCompressionFactory compressionCodecFactory;
+    /** 压缩块大小 */
     private final int compressionBlockSize;
 
+    /** 页大小 */
     protected final int pageSize;
+    /** IO管理器 */
     protected final IOManager ioManager;
 
+    /**
+     * 构造二进制外部合并器。
+     *
+     * @param ioManager IO管理器
+     * @param pageSize 页大小
+     * @param maxFanIn 最大合并扇入数
+     * @param channelManager 溢出通道管理器
+     * @param compressionCodecFactory 压缩编解码工厂
+     * @param compressionBlockSize 压缩块大小
+     */
     public AbstractBinaryExternalMerger(
             IOManager ioManager,
             int pageSize,
@@ -78,11 +96,12 @@ public abstract class AbstractBinaryExternalMerger<Entry> implements Closeable {
     }
 
     /**
-     * Returns an iterator that iterates over the merged result from all given channels.
+     * 返回遍历所有给定通道合并结果的迭代器。
      *
-     * @param channelIDs The channels that are to be merged and returned.
-     * @return An iterator over the merged records of the input channels.
-     * @throws IOException Thrown, if the readers encounter an I/O problem.
+     * @param channelIDs 要合并的通道ID列表
+     * @param openChannels 打开的通道列表
+     * @return 遍历合并记录的迭代器
+     * @throws IOException 如果读取器遇到IO问题
      */
     public BinaryMergeIterator<Entry> getMergingIterator(
             List<ChannelWithMeta> channelIDs, List<FileIOChannel> openChannels) throws IOException {
@@ -109,11 +128,11 @@ public abstract class AbstractBinaryExternalMerger<Entry> implements Closeable {
     }
 
     /**
-     * Merges the given sorted runs to a smaller number of sorted runs.
+     * 将给定的已排序运行合并为更少数量的已排序运行。
      *
-     * @param channelIDs The IDs of the sorted runs that need to be merged.
-     * @return A list of the IDs of the merged channels.
-     * @throws IOException Thrown, if the readers or writers encountered an I/O problem.
+     * @param channelIDs 需要合并的已排序运行的ID列表
+     * @return 合并后通道的ID列表
+     * @throws IOException 如果读取器或写入器遇到IO问题
      */
     public List<ChannelWithMeta> mergeChannelList(List<ChannelWithMeta> channelIDs)
             throws IOException {
@@ -157,10 +176,11 @@ public abstract class AbstractBinaryExternalMerger<Entry> implements Closeable {
     }
 
     /**
-     * Merges the sorted runs described by the given Channel IDs into a single sorted run.
+     * 将由给定通道ID描述的已排序运行合并为单个已排序运行。
      *
-     * @param channelIDs The IDs of the runs' channels.
-     * @return The ID and number of blocks of the channel that describes the merged run.
+     * @param channelIDs 运行通道的ID列表
+     * @return 描述合并运行的通道ID和块数
+     * @throws IOException 如果遇到IO问题
      */
     private ChannelWithMeta mergeChannels(List<ChannelWithMeta> channelIDs) throws IOException {
         // the list with the target iterators
@@ -206,17 +226,37 @@ public abstract class AbstractBinaryExternalMerger<Entry> implements Closeable {
 
     // -------------------------------------------------------------------------------------------
 
-    /** @return entry iterator reading from inView. */
+    /**
+     * 创建从输入视图读取的条目迭代器。
+     *
+     * @param inView 通道读取器输入视图
+     * @return 条目迭代器
+     */
     protected abstract MutableObjectIterator<Entry> channelReaderInputViewIterator(
             ChannelReaderInputView inView);
 
-    /** @return merging comparator used in merging. */
+    /**
+     * 获取合并时使用的比较器。
+     *
+     * @return 合并比较器
+     */
     protected abstract Comparator<Entry> mergeComparator();
 
-    /** @return reused entry object used in merging. */
+    /**
+     * 获取合并时使用的可重用条目对象列表。
+     *
+     * @param size 条目数量
+     * @return 可重用条目对象列表
+     */
     protected abstract List<Entry> mergeReusedEntries(int size);
 
-    /** read the merged stream and write the data back. */
+    /**
+     * 读取合并流并将数据写回。
+     *
+     * @param mergeIterator 合并迭代器
+     * @param output 输出视图
+     * @throws IOException 如果遇到IO问题
+     */
     protected abstract void writeMergingOutput(
             MutableObjectIterator<Entry> mergeIterator, AbstractPagedOutputView output)
             throws IOException;

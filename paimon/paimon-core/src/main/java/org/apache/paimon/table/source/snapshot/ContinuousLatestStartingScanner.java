@@ -26,8 +26,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#LATEST} startup mode of a
- * streaming read.
+ * 连续最新起始扫描器
+ *
+ * <p>对应流式读取的 {@link CoreOptions.StartupMode#LATEST} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>从最新快照之后开始流式读取
+ *   <li>不读取历史数据，只读取新写入的数据
+ *   <li>返回 NextSnapshot（下一个要读取的快照 ID）
+ * </ul>
+ *
+ * <p><b>逻辑：</b>
+ * <pre>
+ * 1. 如果启动时有快照 → 返回 NextSnapshot(latestSnapshotId + 1)
+ * 2. 如果启动时没有快照 → 等待第一个快照出现，返回 NextSnapshot(1)
+ * </pre>
+ *
+ * @see CoreOptions.StartupMode#LATEST
  */
 public class ContinuousLatestStartingScanner extends AbstractStartingScanner {
 

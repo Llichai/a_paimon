@@ -39,13 +39,107 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/** Utils for chain table. */
+/**
+ * 链表工具类
+ *
+ * <p>ChainTableUtils 提供链表（Chain Table）相关的工具方法。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>链表检测：{@link #isChainTable} - 检查表是否为链表
+ *   <li>分区映射：{@link #findFirstLatestPartitions} - 查找源分区到目标分区的映射
+ *   <li>增量分区计算：{@link #getDeltaPartitions} - 计算两个分区之间的增量分区
+ *   <li>谓词构建：{@link #createTriangularPredicate}, {@link #createLinearPredicate} - 创建谓词
+ *   <li>分区值计算：{@link #calPartValues} - 计算分区值
+ *   <li>回退扫描检测：{@link #isScanFallbackDeltaBranch} - 检查是否为回退扫描
+ * </ul>
+ *
+ * <p>链表（Chain Table）：
+ * <ul>
+ *   <li>链表是一种特殊的表类型，用于增量数据同步
+ *   <li>源表（Source）和目标表（Target）之间存在链接关系
+ *   <li>支持增量分区计算和分区映射
+ * </ul>
+ *
+ * <p>分区映射策略：
+ * <ul>
+ *   <li>查找源分区对应的最新目标分区
+ *   <li>使用分区比较器进行排序和比较
+ *   <li>返回第一个小于源分区的目标分区
+ * </ul>
+ *
+ * <p>增量分区计算：
+ * <ul>
+ *   <li>计算开始分区和结束分区之间的所有分区
+ *   <li>支持每日分区和每小时分区
+ *   <li>使用时间戳模式和格式化器提取分区时间
+ * </ul>
+ *
+ * <p>谓词构建：
+ * <ul>
+ *   <li>三角形谓词（Triangular Predicate）：用于范围查询
+ *   <li>线性谓词（Linear Predicate）：用于等值查询
+ * </ul>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>增量同步：计算增量分区
+ *   <li>分区过滤：构建分区谓词
+ *   <li>链表查询：查找分区映射
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 检查是否为链表
+ * Map<String, String> options = tableOptions;
+ * boolean isChain = ChainTableUtils.isChainTable(options);
+ *
+ * // 查找分区映射
+ * List<BinaryRow> sourcePartitions = ...;
+ * List<BinaryRow> targetPartitions = ...;
+ * RecordComparator comparator = ...;
+ * Map<BinaryRow, BinaryRow> mapping = ChainTableUtils.findFirstLatestPartitions(
+ *     sourcePartitions,
+ *     targetPartitions,
+ *     comparator
+ * );
+ *
+ * // 计算增量分区
+ * BinaryRow beginPartition = ...;
+ * BinaryRow endPartition = ...;
+ * List<BinaryRow> deltaPartitions = ChainTableUtils.getDeltaPartitions(
+ *     beginPartition,
+ *     endPartition,
+ *     partitionColumns,
+ *     partType,
+ *     options,
+ *     comparator,
+ *     partitionComputer
+ * );
+ * }</pre>
+ */
 public class ChainTableUtils {
 
+    /**
+     * 检查表是否为链表
+     *
+     * @param tblOptions 表选项
+     * @return 如果是链表返回 true
+     */
     public static boolean isChainTable(Map<String, String> tblOptions) {
         return CoreOptions.fromMap(tblOptions).isChainTable();
     }
 
+    /**
+     * 查找源分区到目标分区的映射
+     *
+     * <p>对于每个源分区，查找第一个小于它的目标分区。
+     *
+     * @param sortedSourcePartitions 排序后的源分区列表
+     * @param sortedTargetPartitions 排序后的目标分区列表
+     * @param partitionComparator 分区比较器
+     * @return 源分区到目标分区的映射
+     */
     public static Map<BinaryRow, BinaryRow> findFirstLatestPartitions(
             List<BinaryRow> sortedSourcePartitions,
             List<BinaryRow> sortedTargetPartitions,
@@ -66,6 +160,20 @@ public class ChainTableUtils {
         return partitionMapping;
     }
 
+    /**
+     * 计算增量分区
+     *
+     * <p>计算开始分区和结束分区之间的所有分区。
+     *
+     * @param beginPartition 开始分区
+     * @param endPartition 结束分区
+     * @param partitionColumns 分区列
+     * @param partType 分区类型
+     * @param options 核心选项
+     * @param partitionComparator 分区比较器
+     * @param partitionComputer 分区计算器
+     * @return 增量分区列表
+     */
     public static List<BinaryRow> getDeltaPartitions(
             BinaryRow beginPartition,
             BinaryRow endPartition,
@@ -131,6 +239,22 @@ public class ChainTableUtils {
         return deltaPartitions;
     }
 
+    /**
+     * 创建三角形谓词
+     *
+     * <p>三角形谓词用于范围查询，生成如下形式的谓词：
+     * <pre>
+     * (f0 = v0 AND f1 = v1 AND f2 > v2) OR
+     * (f0 = v0 AND f1 > v1) OR
+     * (f0 > v0)
+     * </pre>
+     *
+     * @param binaryRow 分区行
+     * @param converter 行数据到对象数组转换器
+     * @param innerFunc 内部函数（等值谓词）
+     * @param outerFunc 外部函数（范围谓词）
+     * @return 三角形谓词
+     */
     public static Predicate createTriangularPredicate(
             BinaryRow binaryRow,
             RowDataToObjectArrayConverter converter,
@@ -151,6 +275,19 @@ public class ChainTableUtils {
         return PredicateBuilder.or(fieldPredicates);
     }
 
+    /**
+     * 创建线性谓词
+     *
+     * <p>线性谓词用于等值查询，生成如下形式的谓词：
+     * <pre>
+     * f0 = v0 AND f1 = v1 AND f2 = v2
+     * </pre>
+     *
+     * @param binaryRow 分区行
+     * @param converter 行数据到对象数组转换器
+     * @param func 谓词函数
+     * @return 线性谓词
+     */
     public static Predicate createLinearPredicate(
             BinaryRow binaryRow,
             RowDataToObjectArrayConverter converter,
@@ -163,6 +300,15 @@ public class ChainTableUtils {
         return PredicateBuilder.and(fieldPredicates);
     }
 
+    /**
+     * 计算分区值
+     *
+     * @param dateTime 日期时间
+     * @param partitionKeys 分区键
+     * @param timestampPattern 时间戳模式（如 "$year-$month-$day"）
+     * @param timestampFormatter 时间戳格式化器（如 "yyyy-MM-dd"）
+     * @return 分区值映射（分区键 -> 分区值）
+     */
     public static LinkedHashMap<String, String> calPartValues(
             LocalDateTime dateTime,
             List<String> partitionKeys,
@@ -205,6 +351,12 @@ public class ChainTableUtils {
         return res;
     }
 
+    /**
+     * 检查是否为扫描回退增量分支
+     *
+     * @param options 核心选项
+     * @return 如果是扫描回退增量分支返回 true
+     */
     public static boolean isScanFallbackDeltaBranch(CoreOptions options) {
         return options.isChainTable()
                 && options.scanFallbackDeltaBranch().equalsIgnoreCase(options.branch());

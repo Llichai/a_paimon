@@ -56,15 +56,105 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Delegated {@link FileStoreTable}. */
+/**
+ * 委托模式 FileStoreTable 实现 - 通过组合方式扩展 FileStoreTable
+ *
+ * <p>DelegatedFileStoreTable 是一个抽象基类，使用<b>委托模式（Delegation Pattern）</b>
+ * 包装了一个内部的 FileStoreTable 实例（wrapped），并将所有方法调用转发给它。
+ *
+ * <p><b>为什么需要委托模式？</b>
+ * <ul>
+ *   <li><b>避免继承层次过深</b>：通过组合而非继承扩展功能
+ *   <li><b>选择性覆盖</b>：子类可以只覆盖需要修改的方法，其他方法自动转发
+ *   <li><b>多重装饰</b>：可以层层包装，添加多种行为（如缓存、日志、权限检查）
+ *   <li><b>运行时灵活性</b>：可以在运行时动态替换被委托的对象
+ * </ul>
+ *
+ * <p><b>委托的所有方法（>40个）：</b>
+ * <ul>
+ *   <li><b>元数据访问</b>：name、fullName、uuid、schema、location、fileIO
+ *   <li><b>管理器</b>：snapshotManager、changelogManager、schemaManager、consumerManager、tagManager、branchManager
+ *   <li><b>快照操作</b>：latestSnapshot、snapshot、rollbackTo
+ *   <li><b>Tag 操作</b>：createTag、deleteTag、renameTag、replaceTag、rollbackTo(tagName)
+ *   <li><b>Branch 操作</b>：createBranch、deleteBranch、fastForward
+ *   <li><b>过期操作</b>：newExpireSnapshots、newExpireChangelog
+ *   <li><b>读写操作</b>：newScan、newStreamScan、newRead、newWrite、newCommit
+ *   <li><b>缓存设置</b>：setManifestCache、setSnapshotCache、setStatsCache、setDVMetaCache
+ *   <li><b>其他</b>：store、coreOptions、manifestListReader、manifestFileReader、indexManifestFileReader
+ * </ul>
+ *
+ * <p><b>典型子类及其覆盖的方法：</b>
+ * <ul>
+ *   <li><b>{@link FallbackReadFileStoreTable}</b>：覆盖 newScan、newRead、copy 等方法，实现主分支/回退分支切换逻辑
+ *   <li><b>{@link ChainGroupReadTable}</b>：覆盖 newScan、newRead 方法，实现链式分组读取
+ *   <li><b>SystemTable</b>：覆盖 newScan、newRead 方法，实现系统表查询
+ * </ul>
+ *
+ * <p><b>装饰器模式与委托模式的区别：</b>
+ * <ul>
+ *   <li><b>装饰器模式</b>：在原有功能基础上<b>增强</b>行为（before/after logic）
+ *   <li><b>委托模式</b>：完全<b>替换</b>行为或仅转发调用
+ *   <li>DelegatedFileStoreTable 更接近<b>代理模式</b>（Proxy Pattern）
+ * </ul>
+ *
+ * <p><b>使用示例：</b>
+ * <pre>{@code
+ * // 1. 创建一个添加日志的委托表
+ * public class LoggingFileStoreTable extends DelegatedFileStoreTable {
+ *     public LoggingFileStoreTable(FileStoreTable wrapped) {
+ *         super(wrapped);
+ *     }
+ *
+ *     @Override
+ *     public DataTableScan newScan() {
+ *         LOG.info("Creating new scan for table: {}", wrapped.name());
+ *         return wrapped.newScan(); // 转发调用
+ *     }
+ *
+ *     @Override
+ *     public InnerTableRead newRead() {
+ *         LOG.info("Creating new read for table: {}", wrapped.name());
+ *         return wrapped.newRead();
+ *     }
+ *
+ *     // 其他方法自动继承默认的转发行为
+ * }
+ *
+ * // 2. 使用
+ * FileStoreTable baseTable = ...;
+ * FileStoreTable loggingTable = new LoggingFileStoreTable(baseTable);
+ * loggingTable.newScan(); // 会打印日志，然后调用 baseTable.newScan()
+ * }</pre>
+ *
+ * <p><b>注意事项：</b>
+ * <ul>
+ *   <li>equals 方法基于 wrapped 对象比较，确保语义正确
+ *   <li>所有方法都是直接转发，子类可以选择性覆盖
+ *   <li>不要创建循环委托（A 委托 B，B 又委托 A）
+ * </ul>
+ *
+ * @see FallbackReadFileStoreTable
+ * @see ChainGroupReadTable
+ */
 public abstract class DelegatedFileStoreTable implements FileStoreTable {
 
+    /** 被委托的内部 FileStoreTable 实例 */
     protected final FileStoreTable wrapped;
 
+    /**
+     * 构造委托表
+     *
+     * @param wrapped 被委托的 FileStoreTable 实例
+     */
     public DelegatedFileStoreTable(FileStoreTable wrapped) {
         this.wrapped = wrapped;
     }
 
+    /**
+     * 获取被委托的表
+     *
+     * @return 内部的 FileStoreTable 实例
+     */
     public FileStoreTable wrapped() {
         return wrapped;
     }

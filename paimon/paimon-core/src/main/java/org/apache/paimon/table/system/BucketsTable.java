@@ -61,7 +61,25 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
-/** A {@link Table} for showing buckets info. */
+/**
+ * 分桶系统表。
+ *
+ * <p>用于展示表的分桶(Bucket)信息,包括每个分桶的统计数据。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>partition (STRING): 分区值</li>
+ *   <li>bucket (INT NOT NULL): 分桶编号</li>
+ *   <li>record_count (BIGINT NOT NULL): 记录数</li>
+ *   <li>file_size_in_bytes (BIGINT NOT NULL): 文件总大小(字节)</li>
+ *   <li>file_count (BIGINT NOT NULL): 文件数量</li>
+ *   <li>last_update_time (TIMESTAMP_MILLIS): 最后更新时间</li>
+ * </ul>
+ *
+ * <p>主键: (partition, bucket)
+ *
+ * @see ReadonlyTable
+ */
 public class BucketsTable implements ReadonlyTable {
 
     private static final long serialVersionUID = 1L;

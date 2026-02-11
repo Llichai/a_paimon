@@ -18,7 +18,43 @@
 
 package org.apache.paimon.operation.commit;
 
-/** Result of a commit. */
+/**
+ * 提交结果接口
+ *
+ * <p>表示提交操作的结果。
+ *
+ * <h2>结果类型</h2>
+ * <p>提交操作有三种可能的结果：
+ * <ul>
+ *   <li><b>成功</b>：{@link SuccessCommitResult} - 提交成功完成
+ *   <li><b>需要重试</b>：{@link RetryCommitResult} - 提交失败，需要重试
+ *       <ul>
+ *         <li>提交失败重试：{@link RetryCommitResult.CommitFailRetryResult}
+ *         <li>回滚重试：{@link RetryCommitResult.RollbackRetryResult}
+ *       </ul>
+ * </ul>
+ *
+ * <h2>使用模式</h2>
+ * <p>通过 {@link #isSuccess()} 判断提交结果：
+ * <pre>{@code
+ * CommitResult result = commitOperation();
+ * if (result.isSuccess()) {
+ *     // 提交成功
+ * } else {
+ *     RetryCommitResult retry = (RetryCommitResult) result;
+ *     // 处理重试逻辑
+ * }
+ * }</pre>
+ *
+ * @see SuccessCommitResult 成功结果
+ * @see RetryCommitResult 重试结果
+ */
 public interface CommitResult {
+
+    /**
+     * 判断提交是否成功
+     *
+     * @return true表示提交成功，false表示需要重试
+     */
     boolean isSuccess();
 }

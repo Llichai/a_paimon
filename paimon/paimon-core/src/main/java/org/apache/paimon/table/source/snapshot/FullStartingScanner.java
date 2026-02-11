@@ -26,7 +26,27 @@ import org.apache.paimon.utils.SnapshotManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** {@link StartingScanner} for the {@link CoreOptions.StartupMode#LATEST_FULL} startup mode. */
+/**
+ * 全量起始扫描器
+ *
+ * <p>对应 {@link CoreOptions.StartupMode#LATEST_FULL} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>使用最新快照进行全量扫描
+ *   <li>扫描模式：ScanMode.ALL（读取 baseManifestList）
+ *   <li>返回完整快照数据
+ * </ul>
+ *
+ * <p><b>适用场景：</b>
+ * <ul>
+ *   <li>批量读取：读取最新的完整数据
+ *   <li>流式读取初始化：先全量读取最新数据，然后切换到增量
+ * </ul>
+ *
+ * @see CoreOptions.StartupMode#LATEST_FULL
+ * @see ReadPlanStartingScanner
+ */
 public class FullStartingScanner extends ReadPlanStartingScanner {
 
     private static final Logger LOG = LoggerFactory.getLogger(FullStartingScanner.class);

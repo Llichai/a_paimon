@@ -26,8 +26,26 @@ import org.apache.paimon.utils.SnapshotManager;
 import javax.annotation.Nullable;
 
 /**
- * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_TIMESTAMP} startup mode of a
- * batch read.
+ * 静态时间戳起始扫描器
+ *
+ * <p>对应批量读取的 {@link CoreOptions.StartupMode#FROM_TIMESTAMP} 启动模式。
+ *
+ * <p><b>功能：</b>
+ * <ul>
+ *   <li>查找小于等于指定时间戳的最新快照
+ *   <li>扫描模式：ScanMode.ALL
+ *   <li>如果所有快照都晚于指定时间，抛出异常
+ * </ul>
+ *
+ * <p><b>时间戳匹配逻辑：</b>
+ * <ul>
+ *   <li>找到 snapshot.timeMillis() <= startupMillis 的最大快照 ID
+ *   <li>使用二分查找优化性能
+ * </ul>
+ *
+ * @see CoreOptions.StartupMode#FROM_TIMESTAMP
+ * @see CoreOptions#SCAN_TIMESTAMP
+ * @see CoreOptions#SCAN_TIMESTAMP_MILLIS
  */
 public class StaticFromTimestampStartingScanner extends ReadPlanStartingScanner {
 

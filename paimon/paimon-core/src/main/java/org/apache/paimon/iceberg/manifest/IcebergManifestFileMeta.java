@@ -27,9 +27,62 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Metadata of an Iceberg manifest file.
+ * Iceberg Manifest 文件的元数据。
  *
- * <p>See <a href="https://iceberg.apache.org/spec/#manifest-lists">Iceberg spec</a>.
+ * <p>存储 Manifest 文件的统计信息和元数据，用于查询优化和分区裁剪。
+ *
+ * <h3>功能说明</h3>
+ * <ul>
+ *   <li>记录 Manifest 文件路径和大小
+ *   <li>统计文件和行数的变更
+ *   <li>记录分区范围信息
+ *   <li>支持快速分区过滤
+ * </ul>
+ *
+ * <h3>内容类型（Content）</h3>
+ * <ul>
+ *   <li><b>DATA (0)</b>：数据文件的 Manifest
+ *   <li><b>DELETES (1)</b>：删除文件的 Manifest
+ * </ul>
+ *
+ * <h3>统计信息</h3>
+ * <ul>
+ *   <li><b>addedFilesCount</b>：新增文件数
+ *   <li><b>existingFilesCount</b>：保留文件数
+ *   <li><b>deletedFilesCount</b>：删除文件数
+ *   <li><b>addedRowsCount</b>：新增行数
+ *   <li><b>existingRowsCount</b>：保留行数
+ *   <li><b>deletedRowsCount</b>：删除行数
+ * </ul>
+ *
+ * <h3>序列号</h3>
+ * <ul>
+ *   <li><b>sequenceNumber</b>：Manifest 的序列号
+ *   <li><b>minSequenceNumber</b>：包含文件的最小序列号
+ *   <li><b>addedSnapshotId</b>：Manifest 被添加的快照 ID
+ * </ul>
+ *
+ * <h3>分区摘要</h3>
+ * <p>partitions 字段包含每个分区字段的统计：
+ * <ul>
+ *   <li>是否包含 null 值
+ *   <li>最小值（lowerBound）
+ *   <li>最大值（upperBound）
+ * </ul>
+ *
+ * <h3>Schema 版本</h3>
+ * <p>支持两种 Schema 格式：
+ * <ul>
+ *   <li><b>Iceberg 1.4+</b>：字段名 added_files_count, existing_files_count, deleted_files_count
+ *   <li><b>Legacy</b>：字段名 added_data_files_count, existing_data_files_count, deleted_data_files_count
+ * </ul>
+ *
+ * <h3>参考规范</h3>
+ * <p>参见 <a href="https://iceberg.apache.org/spec/#manifest-lists">Iceberg Manifest List 规范</a>
+ *
+ * @see IcebergManifestList
+ * @see IcebergManifestFile
+ * @see IcebergPartitionSummary
  */
 public class IcebergManifestFileMeta {
 

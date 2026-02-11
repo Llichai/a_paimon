@@ -21,21 +21,45 @@ package org.apache.paimon.query;
 import java.net.InetSocketAddress;
 
 /**
- * An interface for the Server running on each Node in the cluster. This server is responsible for
- * serving requests coming from the client.
+ * 查询服务器接口。
+ *
+ * <p>在集群的每个节点上运行的服务器，负责处理来自客户端的查询请求。
+ *
+ * <p><b>主要功能：</b>
+ * <ul>
+ *   <li>提供主键查找服务：根据主键快速查询数据
+ *   <li>处理网络请求：接收和响应客户端查询
+ *   <li>数据本地化：利用节点本地数据减少网络传输
+ * </ul>
+ *
+ * <p><b>生命周期：</b>
+ * <ol>
+ *   <li>创建服务器实例
+ *   <li>调用 {@link #start()} 启动服务
+ *   <li>监听指定端口，处理请求
+ *   <li>调用 {@link #shutdown()} 优雅关闭
+ * </ol>
+ *
+ * @see QueryLocation
  */
 public interface QueryServer {
 
     /**
-     * Returns the {@link InetSocketAddress address} the server is listening to.
+     * 返回服务器监听的地址。
      *
-     * @return Server address.
+     * @return 服务器地址（包含IP和端口）
      */
     InetSocketAddress getServerAddress();
 
-    /** Starts the server. */
+    /**
+     * 启动服务器。
+     *
+     * @throws Throwable 如果启动失败
+     */
     void start() throws Throwable;
 
-    /** Shuts down the server and all related thread pools. */
+    /**
+     * 关闭服务器并释放所有相关的线程池资源。
+     */
     void shutdown();
 }

@@ -26,8 +26,49 @@ import java.io.IOException;
 import java.util.Objects;
 
 /**
- * A data file from the table which can be read directly without merging.
+ * 原始数据文件，表示可以不经合并直接读取的数据文件。
  *
+ * <p>RawFile 用于表示可以直接读取的数据文件（不需要合并），通常用于：
+ * <ul>
+ *   <li><b>追加表</b>: 所有文件都可以直接读取</li>
+ *   <li><b>主键表（单文件）</b>: 如果 Split 只包含一个文件，也可以直接读取</li>
+ *   <li><b>外部引擎</b>: 将文件信息传递给外部引擎（如 Spark、Flink）直接读取</li>
+ * </ul>
+ *
+ * <h3>字段说明</h3>
+ * <ul>
+ *   <li><b>path</b>: 文件的完整路径（可能是本地路径或对象存储路径）</li>
+ *   <li><b>fileSize</b>: 文件的总大小（字节）</li>
+ *   <li><b>offset</b>: 数据在文件中的起始偏移量（字节）</li>
+ *   <li><b>length</b>: 数据的长度（字节）</li>
+ *   <li><b>format</b>: 文件格式（小写字符串，如 "orc", "parquet", "avro"）</li>
+ *   <li><b>schemaId</b>: 文件使用的 Schema ID</li>
+ *   <li><b>rowCount</b>: 文件中的行数</li>
+ * </ul>
+ *
+ * <h3>使用场景</h3>
+ * <pre>{@code
+ * // 从 DataSplit 转换为 RawFile
+ * Optional<List<RawFile>> rawFiles = dataSplit.convertToRawFiles();
+ * if (rawFiles.isPresent()) {
+ *     // 可以直接读取，传递给外部引擎
+ *     for (RawFile rawFile : rawFiles.get()) {
+ *         String path = rawFile.path();
+ *         String format = rawFile.format();
+ *         long rowCount = rawFile.rowCount();
+ *         // 使用 Spark/Flink 直接读取文件
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h3>与 DataFileMeta 的关系</h3>
+ * <ul>
+ *   <li><b>DataFileMeta</b>: 内部元数据，包含统计信息、层级等详细信息</li>
+ *   <li><b>RawFile</b>: 外部视图，只包含读取文件所需的基本信息</li>
+ * </ul>
+ *
+ * @see Split#convertToRawFiles() 将 Split 转换为 RawFile 列表
+ * @see DataSplit#convertToRawFiles() DataSplit 的转换实现
  * @since 0.6.0
  */
 @Public
@@ -41,6 +82,17 @@ public class RawFile {
     private final long schemaId;
     private final long rowCount;
 
+    /**
+     * 构造原始文件对象。
+     *
+     * @param path 文件路径
+     * @param fileSize 文件总大小（字节）
+     * @param offset 数据起始偏移量（字节）
+     * @param length 数据长度（字节）
+     * @param format 文件格式（小写字符串，如 "orc", "parquet"）
+     * @param schemaId 文件使用的 Schema ID
+     * @param rowCount 文件中的行数
+     */
     public RawFile(
             String path,
             long fileSize,
@@ -58,41 +110,46 @@ public class RawFile {
         this.rowCount = rowCount;
     }
 
-    /** Path of the file. */
+    /** 获取文件路径。 */
     public String path() {
         return path;
     }
 
-    /** Size of this file. */
+    /** 获取文件总大小（字节）。 */
     public long fileSize() {
         return fileSize;
     }
 
-    /** Starting offset of data in the file. */
+    /** 获取数据在文件中的起始偏移量（字节）。 */
     public long offset() {
         return offset;
     }
 
-    /** Length of data in the file. */
+    /** 获取数据的长度（字节）。 */
     public long length() {
         return length;
     }
 
-    /** Format of the file, which is a lower-cased string. e.g. avro, orc, parquet. */
+    /**
+     * 获取文件格式（小写字符串）。
+     *
+     * @return 文件格式，如 "orc", "parquet", "avro"
+     */
     public String format() {
         return format;
     }
 
-    /** Schema id of the file. */
+    /** 获取文件使用的 Schema ID。 */
     public long schemaId() {
         return schemaId;
     }
 
-    /** row count of the file. */
+    /** 获取文件中的行数。 */
     public long rowCount() {
         return rowCount;
     }
 
+    /** 序列化原始文件到输出流。 */
     public void serialize(DataOutputView out) throws IOException {
         out.writeUTF(path);
         out.writeLong(fileSize);
@@ -103,6 +160,7 @@ public class RawFile {
         out.writeLong(rowCount);
     }
 
+    /** 从输入流反序列化原始文件。 */
     public static RawFile deserialize(DataInputView in) throws IOException {
         String path = in.readUTF();
         long fileSize = in.readLong();

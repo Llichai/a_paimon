@@ -33,13 +33,73 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
-/** Utils for file reading and writing. */
+/**
+ * 文件读写工具类
+ *
+ * <p>FileUtils 提供了文件读取和写入的实用工具方法。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>版本文件列举：{@link #listVersionedFiles} - 列举目录中的版本文件
+ *   <li>文件状态查询：{@link #listVersionedFileStatus} - 获取版本文件的状态
+ *   <li>目录列举：{@link #listVersionedDirectories} - 列举版本目录
+ *   <li>文件存在性检查：{@link #checkExists} - 检查文件是否存在
+ *   <li>格式读取器创建：{@link #createFormatReader} - 创建格式读取器
+ * </ul>
+ *
+ * <p>版本文件命名规则：
+ * <ul>
+ *   <li>文件名格式：prefix + version（如 "snapshot-1", "snapshot-2"）
+ *   <li>版本号：Long 类型的数字
+ *   <li>前缀：用于区分不同类型的文件（如 "snapshot-", "changelog-"）
+ * </ul>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>快照管理：列举快照文件
+ *   <li>Changelog 管理：列举 Changelog 文件
+ *   <li>文件扫描：查找特定前缀的版本文件
+ *   <li>文件验证：检查文件是否存在
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * FileIO fileIO = ...;
+ * Path snapshotDir = new Path("/path/to/snapshot");
+ *
+ * // 列举快照版本
+ * Stream<Long> snapshots = FileUtils.listVersionedFiles(fileIO, snapshotDir, "snapshot-");
+ * snapshots.forEach(version -> System.out.println("Snapshot: " + version));
+ *
+ * // 列举文件状态
+ * Stream<FileStatus> fileStatuses = FileUtils.listVersionedFileStatus(fileIO, snapshotDir, "snapshot-");
+ * fileStatuses.forEach(status -> System.out.println("File: " + status.getPath()));
+ *
+ * // 检查文件是否存在
+ * Path snapshotFile = new Path("/path/to/snapshot/snapshot-1");
+ * try {
+ *     FileUtils.checkExists(fileIO, snapshotFile);
+ *     System.out.println("File exists");
+ * } catch (FileNotFoundException e) {
+ *     System.err.println("File not found: " + e.getMessage());
+ * }
+ *
+ * // 创建格式读取器
+ * FormatReaderFactory format = ...;
+ * Path dataFile = new Path("/path/to/data.parquet");
+ * RecordReader<InternalRow> reader = FileUtils.createFormatReader(fileIO, format, dataFile, null);
+ * }</pre>
+ */
 public class FileUtils {
 
     /**
-     * List versioned files for the directory.
+     * 列举目录中的版本文件
      *
-     * @return version stream
+     * @param fileIO 文件 I/O
+     * @param dir 目录路径
+     * @param prefix 文件前缀
+     * @return 版本号流
+     * @throws IOException 如果 I/O 错误
      */
     public static Stream<Long> listVersionedFiles(FileIO fileIO, Path dir, String prefix)
             throws IOException {
@@ -47,9 +107,13 @@ public class FileUtils {
     }
 
     /**
-     * List original versioned files for the directory.
+     * 列举目录中的原始版本文件名（保留前缀后的完整字符串）
      *
-     * @return version stream
+     * @param fileIO 文件 I/O
+     * @param dir 目录路径
+     * @param prefix 文件前缀
+     * @return 版本字符串流
+     * @throws IOException 如果 I/O 错误
      */
     public static Stream<String> listOriginalVersionedFiles(FileIO fileIO, Path dir, String prefix)
             throws IOException {
@@ -60,9 +124,13 @@ public class FileUtils {
     }
 
     /**
-     * List versioned file status for the directory.
+     * 列举目录中的版本文件状态
      *
-     * @return file status stream
+     * @param fileIO 文件 I/O
+     * @param dir 目录路径
+     * @param prefix 文件前缀
+     * @return 文件状态流
+     * @throws IOException 如果 I/O 错误
      */
     public static Stream<FileStatus> listVersionedFileStatus(FileIO fileIO, Path dir, String prefix)
             throws IOException {
@@ -84,9 +152,13 @@ public class FileUtils {
     }
 
     /**
-     * List versioned directories for the directory.
+     * 列举目录中的版本子目录
      *
-     * @return file status stream
+     * @param fileIO 文件 I/O
+     * @param dir 目录路径
+     * @param prefix 目录前缀
+     * @return 文件状态流
+     * @throws IOException 如果 I/O 错误
      */
     public static Stream<FileStatus> listVersionedDirectories(
             FileIO fileIO, Path dir, String prefix) throws IOException {
@@ -107,6 +179,19 @@ public class FileUtils {
                 .filter(status -> status.getPath().getName().startsWith(prefix));
     }
 
+    /**
+     * 检查文件是否存在
+     *
+     * <p>如果文件不存在，抛出 FileNotFoundException，并提供可能的原因：
+     * <ul>
+     *   <li>快照过期太快：可配置 'snapshot.time-retained' 选项
+     *   <li>消费太慢：可提高消费性能（如增加并行度）
+     * </ul>
+     *
+     * @param fileIO 文件 I/O
+     * @param file 文件路径
+     * @throws IOException 如果文件不存在或 I/O 错误
+     */
     public static void checkExists(FileIO fileIO, Path file) throws IOException {
         if (!fileIO.exists(file)) {
             throw new FileNotFoundException(
@@ -120,6 +205,16 @@ public class FileUtils {
         }
     }
 
+    /**
+     * 创建格式读取器
+     *
+     * @param fileIO 文件 I/O
+     * @param format 格式读取器工厂
+     * @param file 文件路径
+     * @param fileSize 文件大小（可选，如果为 null 则自动获取）
+     * @return 记录读取器
+     * @throws IOException 如果 I/O 错误或文件不存在
+     */
     public static RecordReader<InternalRow> createFormatReader(
             FileIO fileIO, FormatReaderFactory format, Path file, @Nullable Long fileSize)
             throws IOException {

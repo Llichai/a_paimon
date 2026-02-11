@@ -40,7 +40,7 @@ import static org.apache.paimon.utils.BranchManager.branchPath;
 import static org.apache.paimon.utils.FileUtils.listOriginalVersionedFiles;
 import static org.apache.paimon.utils.FileUtils.listVersionedFileStatus;
 
-/** Manage consumer groups. */
+/** 管理消费者组。 */
 public class ConsumerManager implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -108,7 +108,7 @@ public class ConsumerManager implements Serializable {
         }
     }
 
-    /** Clear consumers. */
+    /** 清除消费者。 */
     public void clearConsumers(Pattern includingPattern, Pattern excludingPattern) {
         try {
             listVersionedFileStatus(fileIO, consumerDirectory(), CONSUMER_PREFIX)
@@ -137,7 +137,7 @@ public class ConsumerManager implements Serializable {
         }
     }
 
-    /** Get all consumer. */
+    /** 获取所有消费者。 */
     public Map<String, Long> consumers() throws IOException {
         Map<String, Long> consumers = new HashMap<>();
         listOriginalVersionedFiles(fileIO, consumerDirectory(), CONSUMER_PREFIX)
@@ -149,7 +149,7 @@ public class ConsumerManager implements Serializable {
         return consumers;
     }
 
-    /** List all consumer IDs. */
+    /** 列出所有消费者 ID。 */
     public List<String> listAllIds() {
         try {
             return listOriginalVersionedFiles(fileIO, consumerDirectory(), CONSUMER_PREFIX)

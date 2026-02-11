@@ -53,16 +53,85 @@ import java.util.Optional;
 import static org.apache.paimon.catalog.Identifier.SYSTEM_TABLE_SPLITTER;
 
 /**
- * A {@link Table} optimized for reading by avoiding merging files.
+ * 读优化表(Read-Optimized Table)。
  *
+ * <p>这是一个为读取性能优化的系统表,通过避免合并文件来提升查询速度。适用于对延迟要求不严格,
+ * 但需要高吞吐量的查询场景。
+ *
+ * <h2>工作原理</h2>
  * <ul>
- *   <li>For primary key tables, this system table only scans files on top level.
- *   <li>For append only tables, as all files can be read without merging, this system table does
- *       nothing special.
+ *   <li><b>主键表</b>: 只扫描 LSM 树的最顶层(level N-1),跳过底层需要合并的文件<br>
+ *       优点: 查询速度快,无需合并文件<br>
+ *       缺点: 可能读取到非最新的数据(缺少底层的更新)</li>
+ *   <li><b>追加表(Append-Only)</b>: 与普通表相同,因为追加表本身不需要合并</li>
  * </ul>
+ *
+ * <h2>适用场景</h2>
+ * <ul>
+ *   <li>大批量数据扫描,对单条记录的精确性要求不高</li>
+ *   <li>历史数据分析,不需要最新的增量更新</li>
+ *   <li>数据抽样和统计分析</li>
+ *   <li>离线报表生成</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * -- Flink SQL 查询读优化表
+ * SELECT * FROM my_table$ro;
+ *
+ * -- 统计分析(不需要最新数据)
+ * SELECT region, COUNT(*), SUM(amount)
+ * FROM sales_table$ro
+ * GROUP BY region;
+ *
+ * -- 大批量数据导出
+ * INSERT INTO target_table
+ * SELECT * FROM source_table$ro;
+ * }</pre>
+ *
+ * <h2>性能对比</h2>
+ * <table border="1">
+ *   <tr><th>特性</th><th>普通表</th><th>读优化表</th></tr>
+ *   <tr>
+ *     <td>读取速度</td>
+ *     <td>较慢(需要合并)</td>
+ *     <td>快(跳过合并)</td>
+ *   </tr>
+ *   <tr>
+ *     <td>数据完整性</td>
+ *     <td>完整(包含所有更新)</td>
+ *     <td>部分(可能缺少底层更新)</td>
+ *   </tr>
+ *   <tr>
+ *     <td>扫描文件数</td>
+ *     <td>多(所有层级)</td>
+ *     <td>少(仅顶层)</td>
+ *   </tr>
+ *   <tr>
+ *     <td>适用场景</td>
+ *     <td>精确查询</td>
+ *     <td>批量分析</td>
+ *   </tr>
+ * </table>
+ *
+ * <h2>限制</h2>
+ * <ul>
+ *   <li>主键表不支持流式扫描,仅支持批式查询</li>
+ *   <li>查询结果可能不包含所有最新的数据变更</li>
+ *   <li>不适用于需要强一致性的查询场景</li>
+ * </ul>
+ *
+ * <h2>配置说明</h2>
+ * <p>读优化表自动扫描 LSM 树的最顶层(level = num_levels - 1),并启用值过滤(value filter)
+ * 以进一步提升性能。
+ *
+ * @see DataTable
+ * @see ReadonlyTable
+ * @see org.apache.paimon.table.source.snapshot.SnapshotReader#withLevel(int)
  */
 public class ReadOptimizedTable implements DataTable, ReadonlyTable {
 
+    /** 系统表名称常量(缩写 "ro" 表示 read-optimized)。 */
     public static final String READ_OPTIMIZED = "ro";
 
     private final FileStoreTable wrapped;

@@ -20,7 +20,11 @@ package org.apache.paimon.privilege;
 
 import org.apache.paimon.fs.FileIO;
 
-/** Loader for creating a {@link FileBasedPrivilegeManager}. */
+/**
+ * {@link FileBasedPrivilegeManager} 的加载器。
+ *
+ * <p>用于创建基于文件的权限管理器实例。
+ */
 public class FileBasedPrivilegeManagerLoader implements PrivilegeManagerLoader {
 
     private static final long serialVersionUID = 1L;

@@ -33,7 +33,20 @@ import java.util.Set;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Assign bucket for key hashcode. */
+/**
+ * 基于哈希的Bucket分配器。
+ *
+ * <p>根据键的哈希值为记录分配bucket。
+ * 维护分区索引以跟踪bucket分配情况,支持动态扩展bucket数量。
+ *
+ * <p>主要特性:
+ * <ul>
+ *   <li>基于哈希的bucket分配策略</li>
+ *   <li>支持多个分配器并行工作</li>
+ *   <li>自动清理过期的分区索引</li>
+ *   <li>支持动态调整bucket数量上限</li>
+ * </ul>
+ */
 public class HashBucketAssigner implements BucketAssigner {
 
     private static final Logger LOG = LoggerFactory.getLogger(HashBucketAssigner.class);
@@ -70,7 +83,13 @@ public class HashBucketAssigner implements BucketAssigner {
         this.maxBucketsNum = maxBucketsNum;
     }
 
-    /** Assign a bucket for key hash of a record. */
+    /**
+     * 为记录的键哈希值分配bucket。
+     *
+     * @param partition 分区
+     * @param hash 键哈希值
+     * @return 分配的bucket ID
+     */
     @Override
     public int assign(BinaryRow partition, int hash) {
         int partitionHash = partition.hashCode();
@@ -98,7 +117,13 @@ public class HashBucketAssigner implements BucketAssigner {
         return assigned;
     }
 
-    /** Prepare commit to clear outdated partition index. */
+    /**
+     * 准备提交,清理过期的分区索引。
+     *
+     * <p>移除不再使用的分区索引以释放内存。
+     *
+     * @param commitIdentifier 提交标识符
+     */
     @Override
     public void prepareCommit(long commitIdentifier) {
         long latestCommittedIdentifier;

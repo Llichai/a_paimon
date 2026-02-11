@@ -37,7 +37,88 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Readonly table which only provide implementation for scan and read. */
+/**
+ * 只读表接口 - 只提供扫描和读取功能的表
+ *
+ * <p>ReadonlyTable 是一个简化的表接口，只实现了数据读取相关的方法，而将所有写入、快照管理、
+ * Tag/Branch 等操作设置为不支持。这种设计遵循"接口隔离原则"，避免子类实现不需要的方法。
+ *
+ * <p><b>支持的操作：</b>
+ * <ul>
+ *   <li>{@link #newScan()} - 创建表扫描器
+ *   <li>{@link #newRead()} - 创建读取器
+ *   <li>{@link #rowType()} - 获取表结构
+ *   <li>{@link #fileIO()} - 获取文件系统访问接口
+ * </ul>
+ *
+ * <p><b>不支持的操作（抛出 UnsupportedOperationException）：</b>
+ * <ul>
+ *   <li><b>写入操作</b>：newBatchWriteBuilder、newStreamWriteBuilder、newWrite、newCommit
+ *   <li><b>快照管理</b>：snapshot、latestSnapshot、expireSnapshots
+ *   <li><b>Manifest 访问</b>：manifestListReader、manifestFileReader
+ *   <li><b>Tag 管理</b>：createTag、deleteTag、renameTag、replaceTag
+ *   <li><b>Branch 管理</b>：createBranch、deleteBranch、fastForward
+ *   <li><b>回滚操作</b>：rollbackTo
+ * </ul>
+ *
+ * <p><b>默认返回值：</b>
+ * <ul>
+ *   <li>{@link #partitionKeys()} - 返回空列表
+ *   <li>{@link #options()} - 返回空 Map
+ *   <li>{@link #comment()} - 返回 Optional.empty()
+ *   <li>{@link #statistics()} - 返回 Optional.empty()
+ *   <li>{@link #latestSnapshot()} - 返回 Optional.empty()
+ * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li><b>系统表</b>：如 SnapshotsTable、ManifestsTable 等元数据表
+ *   <li><b>视图表</b>：只读的虚拟视图
+ *   <li><b>临时表</b>：只需要读取功能的临时表
+ *   <li><b>包装表</b>：如 KnownSplitsTable、VectorSearchTable
+ * </ul>
+ *
+ * <p><b>典型子类：</b>
+ * <ul>
+ *   <li>{@link KnownSplitsTable} - 持有已知分片的表（用于 Spark）
+ *   <li>{@link VectorSearchTable} - 包装向量搜索信息的表
+ *   <li>SnapshotsTable - 快照元数据表
+ *   <li>ManifestsTable - Manifest 元数据表
+ * </ul>
+ *
+ * <p><b>设计模式：</b>
+ * <ul>
+ *   <li>使用<b>模板方法模式</b>：提供默认实现，子类只需实现必要的方法
+ *   <li>使用<b>接口隔离原则</b>：分离读写职责，子类无需实现不需要的方法
+ * </ul>
+ *
+ * <p><b>示例：</b>
+ * <pre>{@code
+ * // 实现只读表
+ * public class MyReadonlyTable implements ReadonlyTable {
+ *     @Override
+ *     public String name() { return "my_table"; }
+ *
+ *     @Override
+ *     public RowType rowType() { return myRowType; }
+ *
+ *     @Override
+ *     public FileIO fileIO() { return myFileIO; }
+ *
+ *     @Override
+ *     public InnerTableScan newScan() { return new MyScan(); }
+ *
+ *     @Override
+ *     public InnerTableRead newRead() { return new MyRead(); }
+ *
+ *     // 其他方法使用默认实现（抛异常或返回默认值）
+ * }
+ * }</pre>
+ *
+ * @see InnerTable
+ * @see KnownSplitsTable
+ * @see VectorSearchTable
+ */
 public interface ReadonlyTable extends InnerTable {
 
     @Override

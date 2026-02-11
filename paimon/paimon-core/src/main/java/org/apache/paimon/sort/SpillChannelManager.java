@@ -25,23 +25,38 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
-/** Channel manager to manage the life cycle of spill channels. */
+/**
+ * 通道管理器,用于管理溢出通道的生命周期。
+ */
 public class SpillChannelManager {
 
+    /** 通道ID集合 */
     private final HashSet<FileIOChannel.ID> channels;
+    /** 打开的通道集合 */
     private final HashSet<FileIOChannel> openChannels;
 
+    /**
+     * 构造溢出通道管理器。
+     */
     public SpillChannelManager() {
         this.channels = new HashSet<>(64);
         this.openChannels = new HashSet<>(64);
     }
 
-    /** Add a new File channel. */
+    /**
+     * 添加新的文件通道。
+     *
+     * @param id 通道ID
+     */
     public synchronized void addChannel(FileIOChannel.ID id) {
         channels.add(id);
     }
 
-    /** Open File channels. */
+    /**
+     * 打开文件通道。
+     *
+     * @param toOpen 要打开的通道列表
+     */
     public synchronized void addOpenChannels(List<FileIOChannel> toOpen) {
         for (FileIOChannel channel : toOpen) {
             openChannels.add(channel);
@@ -49,10 +64,18 @@ public class SpillChannelManager {
         }
     }
 
+    /**
+     * 移除通道。
+     *
+     * @param id 通道ID
+     */
     public synchronized void removeChannel(FileIOChannel.ID id) {
         channels.remove(id);
     }
 
+    /**
+     * 重置管理器,关闭并删除所有通道。
+     */
     public synchronized void reset() {
         for (Iterator<FileIOChannel> channels = this.openChannels.iterator();
                 channels.hasNext(); ) {

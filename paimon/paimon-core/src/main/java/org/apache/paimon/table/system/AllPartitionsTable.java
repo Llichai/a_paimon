@@ -54,7 +54,25 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
 
-/** This is a system table to display all the database-table-partitions. */
+/**
+ * 所有分区系统表。
+ *
+ * <p>这是一个全局系统表,用于展示 Catalog 中所有数据库、表和分区的信息。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>database_name (STRING): 数据库名称</li>
+ *   <li>table_name (STRING): 表名称</li>
+ *   <li>partition_name (STRING): 分区名称(格式: key1=val1/key2=val2)</li>
+ *   <li>record_count (BIGINT): 记录数</li>
+ *   <li>file_size_in_bytes (BIGINT): 文件总大小</li>
+ *   <li>file_count (BIGINT): 文件数量</li>
+ *   <li>last_file_creation_time (BIGINT): 最后文件创建时间</li>
+ *   <li>done (BOOLEAN): 分区是否已完成写入</li>
+ * </ul>
+ *
+ * @see ReadonlyTable
+ */
 public class AllPartitionsTable implements ReadonlyTable {
 
     public static final String ALL_PARTITIONS = "partitions";

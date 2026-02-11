@@ -51,7 +51,19 @@ import java.util.OptionalLong;
 
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
-/** This is a system {@link Table} to display catalog options. */
+/**
+ * Catalog 选项系统表。
+ *
+ * <p>用于展示 Catalog 级别的配置选项。
+ *
+ * <h2>表结构</h2>
+ * <ul>
+ *   <li>key (STRING NOT NULL): 配置项名称(主键)</li>
+ *   <li>value (STRING NOT NULL): 配置项值</li>
+ * </ul>
+ *
+ * @see ReadonlyTable
+ */
 public class CatalogOptionsTable implements ReadonlyTable {
 
     public static final String CATALOG_OPTIONS = "catalog_options";
