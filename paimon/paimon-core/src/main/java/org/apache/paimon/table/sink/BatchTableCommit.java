@@ -26,7 +26,44 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A {@link TableCommit} for batch processing. Recommended for one-time committing.
+ * 批量处理的 {@link TableCommit} 接口。建议用于一次性提交场景。
+ *
+ * <p>批量提交的特点：
+ * <ul>
+ *     <li><b>一次性提交</b>：收集所有 CommitMessage 后一次性提交
+ *     <li><b>完整性保证</b>：提交前确保所有文件已写入完成
+ *     <li><b>自动过期</b>：提交后自动触发快照和分区的过期策略
+ *     <li><b>支持覆写</b>：支持 INSERT OVERWRITE 语义
+ * </ul>
+ *
+ * <p>提交后的维护策略：
+ * <ol>
+ *     <li><b>快照过期</b>：根据以下配置清理过期快照：
+ *         <ul>
+ *             <li>'snapshot.time-retained': 保留已完成快照的最长时间
+ *             <li>'snapshot.num-retained.min': 保留已完成快照的最小数量
+ *             <li>'snapshot.num-retained.max': 保留已完成快照的最大数量
+ *         </ul>
+ *     <li><b>分区过期</b>：根据 'partition.expiration-time' 删除过期分区。
+ *         分区检查开销较大，不是每次提交都检查，检查频率由
+ *         'partition.expiration-check-interval' 控制。分区过期会创建一个
+ *         'OVERWRITE' 类型的快照。
+ * </ol>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 1. 创建批量提交
+ * BatchTableCommit commit = builder.newCommit();
+ *
+ * // 2. 收集所有提交消息
+ * List<CommitMessage> messages = collectAllMessages();
+ *
+ * // 3. 提交
+ * commit.commit(messages);
+ *
+ * // 4. 关闭
+ * commit.close();
+ * }</pre>
  *
  * @since 0.4.0
  */
@@ -34,41 +71,65 @@ import java.util.Map;
 public interface BatchTableCommit extends TableCommit {
 
     /**
-     * Create a new commit. One commit may generate up to two snapshots, one for adding new files
-     * and the other for compaction. There will be some expiration policies after commit:
+     * 创建一个新的提交。
      *
-     * <p>1. Snapshot expiration may occur according to three options:
-     *
+     * <p>一次提交可能生成最多两个快照：
      * <ul>
-     *   <li>'snapshot.time-retained': The maximum time of completed snapshots to retain.
-     *   <li>'snapshot.num-retained.min': The minimum number of completed snapshots to retain.
-     *   <li>'snapshot.num-retained.max': The maximum number of completed snapshots to retain.
+     *     <li>一个用于添加新文件（CommitKind.APPEND）
+     *     <li>另一个用于压缩（CommitKind.COMPACT）
      * </ul>
      *
-     * <p>2. Partition expiration may occur according to 'partition.expiration-time'. The partition
-     * check is expensive, so all partitions are not checked every time when invoking this method.
-     * The check frequency is controlled by 'partition.expiration-check-interval'. Partition
-     * expiration will create an 'OVERWRITE' snapshot.
+     * <p>提交后会执行过期策略，详见类文档。
      *
-     * @param commitMessages commit messages from table write
+     * @param commitMessages 来自 TableWrite 的提交消息
      */
     void commit(List<CommitMessage> commitMessages);
 
     /**
-     * Truncate table, like normal {@link #commit}, files are not immediately deleted, they are only
-     * logically deleted and will be deleted after the snapshot expires.
+     * 清空表，类似于 SQL 的 TRUNCATE TABLE 语句。
+     *
+     * <p>与正常的 {@link #commit} 类似，文件不会立即删除，
+     * 只是逻辑删除，会在快照过期后被物理删除。
+     *
+     * <p>此操作会创建一个 'OVERWRITE' 类型的快照。
      */
     void truncateTable();
 
     /**
-     * Truncate partitions, like normal {@link #commit}, files are not immediately deleted, they are
-     * only logically deleted and will be deleted after the snapshot expires.
+     * 清空指定分区，类似于 SQL 的 TRUNCATE TABLE PARTITION 语句。
+     *
+     * <p>与正常的 {@link #commit} 类似，文件不会立即删除，
+     * 只是逻辑删除，会在快照过期后被物理删除。
+     *
+     * <p>此操作会创建一个 'OVERWRITE' 类型的快照。
+     *
+     * @param partitionSpecs 要清空的分区规格列表，每个分区用 Map 表示
      */
     void truncatePartitions(List<Map<String, String>> partitionSpecs);
 
-    /** Commit new statistics. Generates a snapshot with {@link CommitKind#ANALYZE}. */
+    /**
+     * 提交新的统计信息。
+     *
+     * <p>生成一个 {@link CommitKind#ANALYZE} 类型的快照。
+     *
+     * <p>统计信息用于查询优化，例如：
+     * <ul>
+     *     <li>行数估算
+     *     <li>数据分布统计
+     *     <li>列值范围统计
+     * </ul>
+     *
+     * @param statistics 新的统计信息
+     */
     void updateStatistics(Statistics statistics);
 
-    /** Compact the manifest entries. Generates a snapshot with {@link CommitKind#COMPACT}. */
+    /**
+     * 压缩 Manifest 条目。
+     *
+     * <p>生成一个 {@link CommitKind#COMPACT} 类型的快照。
+     *
+     * <p>Manifest 压缩会合并多个 Manifest 文件，减少元数据文件数量，
+     * 提高读取性能。
+     */
     void compactManifests();
 }

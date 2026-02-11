@@ -34,20 +34,76 @@ import java.util.Objects;
 import static org.apache.paimon.utils.SerializationUtils.deserializedBytes;
 import static org.apache.paimon.utils.SerializationUtils.serializeBytes;
 
-/** File committable for sink. */
+/**
+ * Sink 的文件提交消息实现。
+ *
+ * <p>此类包含了一次写入操作产生的所有文件变更信息，分为两部分：
+ * <ul>
+ *     <li><b>DataIncrement</b>：普通数据文件的增量
+ *         <ul>
+ *             <li>newFiles: 新写入的数据文件
+ *             <li>deletedFiles: 被删除的数据文件（通常为空，追加表除外）
+ *             <li>changelogFiles: 新生成的 changelog 文件
+ *             <li>newIndexFiles: 新创建的索引文件
+ *             <li>deletedIndexFiles: 被删除的索引文件
+ *         </ul>
+ *     <li><b>CompactIncrement</b>：压缩操作的增量
+ *         <ul>
+ *             <li>compactBefore: 压缩前的文件（将被删除）
+ *             <li>compactAfter: 压缩后的文件（新创建）
+ *             <li>changelogFiles: 压缩生成的 changelog 文件
+ *             <li>newIndexFiles: 压缩生成的索引文件
+ *             <li>deletedIndexFiles: 压缩删除的索引文件
+ *         </ul>
+ * </ul>
+ *
+ * <p>序列化机制：
+ * <ul>
+ *     <li>使用自定义的序列化器 {@link CommitMessageSerializer}
+ *     <li>支持多个版本的兼容性
+ *     <li>通过 ThreadLocal 缓存序列化器实例
+ *     <li>transient 字段在序列化时由自定义逻辑处理
+ * </ul>
+ *
+ * <p>与 Operation 层的关系：
+ * <ul>
+ *     <li>Operation 层也有 CommitMessageImpl
+ *     <li>两者名称相同但位于不同的包
+ *     <li>Table 层的 CommitMessage 会被转换为 Operation 层的 CommitMessage
+ * </ul>
+ */
 public class CommitMessageImpl implements CommitMessage {
 
     private static final long serialVersionUID = 1L;
 
+    /** 序列化器的 ThreadLocal 缓存 */
     private static final ThreadLocal<CommitMessageSerializer> CACHE =
             ThreadLocal.withInitial(CommitMessageSerializer::new);
 
+    /** 分区（transient，由自定义序列化处理） */
     private transient BinaryRow partition;
+
+    /** 分桶号（transient，由自定义序列化处理） */
     private transient int bucket;
+
+    /** 总分桶数（transient，由自定义序列化处理） */
     private transient @Nullable Integer totalBuckets;
+
+    /** 数据增量（transient，由自定义序列化处理） */
     private transient DataIncrement dataIncrement;
+
+    /** 压缩增量（transient，由自定义序列化处理） */
     private transient CompactIncrement compactIncrement;
 
+    /**
+     * 构造函数。
+     *
+     * @param partition 分区
+     * @param bucket 分桶号
+     * @param totalBuckets 总分桶数
+     * @param dataIncrement 数据增量
+     * @param compactIncrement 压缩增量
+     */
     public CommitMessageImpl(
             BinaryRow partition,
             int bucket,
@@ -76,18 +132,40 @@ public class CommitMessageImpl implements CommitMessage {
         return totalBuckets;
     }
 
+    /**
+     * 获取新文件增量。
+     *
+     * @return 数据增量
+     */
     public DataIncrement newFilesIncrement() {
         return dataIncrement;
     }
 
+    /**
+     * 获取压缩增量。
+     *
+     * @return 压缩增量
+     */
     public CompactIncrement compactIncrement() {
         return compactIncrement;
     }
 
+    /**
+     * 判断是否为空提交。
+     *
+     * <p>当没有任何文件变更时返回 true。
+     *
+     * @return true 如果是空提交
+     */
     public boolean isEmpty() {
         return dataIncrement.isEmpty() && compactIncrement.isEmpty();
     }
 
+    /**
+     * 自定义序列化方法。
+     *
+     * <p>使用 {@link CommitMessageSerializer} 进行序列化。
+     */
     private void writeObject(ObjectOutputStream out) throws IOException {
         out.defaultWriteObject();
         CommitMessageSerializer serializer = CACHE.get();
@@ -95,6 +173,11 @@ public class CommitMessageImpl implements CommitMessage {
         serializeBytes(new DataOutputViewStreamWrapper(out), serializer.serialize(this));
     }
 
+    /**
+     * 自定义反序列化方法。
+     *
+     * <p>使用 {@link CommitMessageSerializer} 进行反序列化。
+     */
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
         int version = in.readInt();

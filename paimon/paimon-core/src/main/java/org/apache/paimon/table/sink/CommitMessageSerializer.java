@@ -48,9 +48,54 @@ import java.util.List;
 import static org.apache.paimon.utils.SerializationUtils.deserializeBinaryRow;
 import static org.apache.paimon.utils.SerializationUtils.serializeBinaryRow;
 
-/** {@link VersionedSerializer} for {@link CommitMessage}. */
+/**
+ * {@link CommitMessage} 的版本化序列化器。
+ *
+ * <p>此序列化器负责将 {@link CommitMessageImpl} 序列化为字节数组，并支持多个版本的反序列化。
+ *
+ * <p>版本历史：
+ * <ul>
+ *     <li>Version 11 (当前)：添加了索引文件的完整支持
+ *     <li>Version 10：重构了数据增量和压缩增量的结构
+ *     <li>Version 9：更新了数据文件元数据格式
+ *     <li>Version 8：添加了 firstRowId 支持
+ *     <li>Version 7：添加了 totalBuckets 字段
+ *     <li>Version 6 及以前：旧版本格式
+ * </ul>
+ *
+ * <p>序列化内容：
+ * <ol>
+ *     <li>分区（BinaryRow）
+ *     <li>分桶号（int）
+ *     <li>总分桶数（Optional<Integer>）
+ *     <li>数据增量：
+ *         <ul>
+ *             <li>newFiles（List<DataFileMeta>）
+ *             <li>deletedFiles（List<DataFileMeta>）
+ *             <li>changelogFiles（List<DataFileMeta>）
+ *             <li>newIndexFiles（List<IndexFileMeta>）
+ *             <li>deletedIndexFiles（List<IndexFileMeta>）
+ *         </ul>
+ *     <li>压缩增量：
+ *         <ul>
+ *             <li>compactBefore（List<DataFileMeta>）
+ *             <li>compactAfter（List<DataFileMeta>）
+ *             <li>changelogFiles（List<DataFileMeta>）
+ *             <li>newIndexFiles（List<IndexFileMeta>）
+ *             <li>deletedIndexFiles（List<IndexFileMeta>）
+ *         </ul>
+ * </ol>
+ *
+ * <p>兼容性：
+ * <ul>
+ *     <li>支持向后兼容：新版本可以读取旧版本的数据
+ *     <li>不支持向前兼容：旧版本无法读取新版本的数据
+ *     <li>反序列化时根据版本号选择对应的反序列化器
+ * </ul>
+ */
 public class CommitMessageSerializer implements VersionedSerializer<CommitMessage> {
 
+    /** 当前版本号 */
     public static final int CURRENT_VERSION = 11;
 
     private final DataFileMetaSerializer dataFileSerializer;

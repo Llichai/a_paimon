@@ -26,20 +26,55 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 
 /**
- * Commit message for partition and bucket.
+ * 分区和分桶的提交消息接口。
+ *
+ * <p>CommitMessage 是 Table 层写入和提交之间的桥梁：
+ * <ul>
+ *     <li>{@link TableWrite} 在 prepareCommit 时生成 CommitMessage
+ *     <li>{@link TableCommit} 收集 CommitMessage 并创建快照
+ * </ul>
+ *
+ * <p>CommitMessage 包含的信息：
+ * <ul>
+ *     <li><b>分区</b>：数据所属的分区
+ *     <li><b>分桶</b>：数据所属的分桶
+ *     <li><b>总分桶数</b>：分区的总分桶数（动态分桶时使用）
+ *     <li><b>文件变更</b>：新增、删除、压缩的文件列表（在实现类中）
+ * </ul>
+ *
+ * <p>实现类：
+ * <ul>
+ *     <li>{@link CommitMessageImpl}：Table 层的完整实现
+ *     <li>包含 {@link DataIncrement} 和 {@link CompactIncrement}
+ * </ul>
  *
  * @since 0.4.0
  */
 @Public
 public interface CommitMessage extends Serializable {
 
-    /** Partition of this commit message. */
+    /**
+     * 获取此提交消息的分区。
+     *
+     * @return 分区的二进制表示
+     */
     BinaryRow partition();
 
-    /** Bucket of this commit message. */
+    /**
+     * 获取此提交消息的分桶号。
+     *
+     * @return 分桶号
+     */
     int bucket();
 
-    /** Total number of buckets in this partition. */
+    /**
+     * 获取分区的总分桶数。
+     *
+     * <p>对于动态分桶表，此值会随着数据写入而增长。
+     * 对于固定分桶表，此值等于表配置的分桶数。
+     *
+     * @return 总分桶数，如果不适用则返回 null
+     */
     @Nullable
     Integer totalBuckets();
 }

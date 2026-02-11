@@ -24,7 +24,45 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A {@link TableCommit} for stream processing. You can use this class to commit multiple times.
+ * 流处理的 {@link TableCommit} 接口。支持多次提交。
+ *
+ * <p>流式提交的特点：
+ * <ul>
+ *     <li><b>多次提交</b>：可以多次调用 commit 方法，每次对应一个 Checkpoint
+ *     <li><b>递增标识符</b>：使用递增的 commitIdentifier 确保 exactly-once
+ *     <li><b>过滤重复</b>：支持过滤已提交的消息，用于故障恢复
+ *     <li><b>自动过期</b>：提交后自动触发快照和分区的过期策略
+ * </ul>
+ *
+ * <p>提交后的维护策略：
+ * <ol>
+ *     <li><b>快照过期</b>：根据以下配置清理过期快照：
+ *         <ul>
+ *             <li>'snapshot.time-retained': 保留已完成快照的最长时间
+ *             <li>'snapshot.num-retained.min': 保留已完成快照的最小数量
+ *             <li>'snapshot.num-retained.max': 保留已完成快照的最大数量
+ *         </ul>
+ *     <li><b>分区过期</b>：根据 'partition.expiration-time' 删除过期分区。
+ *         分区检查开销较大，不是每次提交都检查，检查频率由
+ *         'partition.expiration-check-interval' 控制。分区过期会创建一个
+ *         'OVERWRITE' 类型的快照。
+ * </ol>
+ *
+ * <p>使用示例（Flink Streaming）：
+ * <pre>{@code
+ * // 1. 创建流式提交
+ * StreamTableCommit commit = builder.newCommit();
+ *
+ * // 2. 正常提交（快速路径）
+ * commit.commit(checkpointId, messages);
+ *
+ * // 3. 故障恢复时使用 filterAndCommit
+ * Map<Long, List<CommitMessage>> pending = restoreFromState();
+ * int committed = commit.filterAndCommit(pending);
+ *
+ * // 4. 关闭
+ * commit.close();
+ * }</pre>
  *
  * @since 0.4.0
  * @see StreamWriteBuilder
@@ -33,45 +71,68 @@ import java.util.Map;
 public interface StreamTableCommit extends TableCommit {
 
     /**
-     * Create a new commit. One commit may generate up to two snapshots, one for adding new files
-     * and the other for compaction. There will be some expiration policies after commit:
+     * 创建一个新的提交。
      *
-     * <p>1. Snapshot expiration may occur according to three options:
-     *
+     * <p>一次提交可能生成最多两个快照：
      * <ul>
-     *   <li>'snapshot.time-retained': The maximum time of completed snapshots to retain.
-     *   <li>'snapshot.num-retained.min': The minimum number of completed snapshots to retain.
-     *   <li>'snapshot.num-retained.max': The maximum number of completed snapshots to retain.
+     *     <li>一个用于添加新文件（CommitKind.APPEND）
+     *     <li>另一个用于压缩（CommitKind.COMPACT）
      * </ul>
      *
-     * <p>2. Partition expiration may occur according to 'partition.expiration-time'. The partition
-     * check is expensive, so all partitions are not checked every time when invoking this method.
-     * The check frequency is controlled by 'partition.expiration-check-interval'. Partition
-     * expiration will create an 'OVERWRITE' snapshot.
+     * <p>提交后会执行过期策略，详见类文档。
      *
-     * <p>Compared to {@link StreamTableCommit#filterAndCommit}, this method does not check if
-     * {@code commitIdentifier} has been committed, so this method might be faster. Please only use
-     * this method if you can make sure that the {@code commitIdentifier} hasn't been committed
-     * before.
+     * <p>与 {@link #filterAndCommit} 相比，此方法不检查 {@code commitIdentifier}
+     * 是否已经提交，因此速度更快。请仅在确保 {@code commitIdentifier} 之前未提交时使用此方法。
      *
-     * @param commitIdentifier Committed transaction ID, can start from 0. If there are multiple
-     *     commits, please increment this ID.
-     * @param commitMessages commit messages from table write
+     * <p>使用场景：
+     * <ul>
+     *     <li>正常的 Checkpoint 提交（快速路径）
+     *     <li>确定没有重复提交的场景
+     * </ul>
+     *
+     * @param commitIdentifier 提交的事务 ID，可以从 0 开始。如果有多次提交，请递增此 ID
+     * @param commitMessages 来自 TableWrite 的提交消息
      * @see StreamTableWrite#prepareCommit
      */
     void commit(long commitIdentifier, List<CommitMessage> commitMessages);
 
     /**
-     * Filter out all {@code List<CommitMessage>} which have been committed and commit the remaining
-     * ones.
+     * 过滤掉所有已提交的 {@code List<CommitMessage>}，并提交剩余的。
      *
-     * <p>Compared to {@link StreamTableCommit#commit}, this method will first check if a {@code
-     * commitIdentifier} has been committed, so this method might be slower. A common usage of this
-     * method is to retry the commit process after a failure.
+     * <p>与 {@link #commit} 相比，此方法会首先检查 {@code commitIdentifier}
+     * 是否已经提交，因此速度较慢。此方法的常见用途是在失败后重试提交过程。
      *
-     * @param commitIdentifiersAndMessages a map containing all {@link CommitMessage}s in question.
-     *     The key is the {@code commitIdentifier}.
-     * @return number of {@code List<CommitMessage>} committed.
+     * <p>工作原理：
+     * <ol>
+     *     <li>查询已提交的快照，获取已提交的 commitIdentifier 列表
+     *     <li>过滤掉已提交的 commitIdentifier 对应的 CommitMessage
+     *     <li>提交剩余的 CommitMessage
+     *     <li>返回实际提交的数量
+     * </ol>
+     *
+     * <p>使用场景：
+     * <ul>
+     *     <li>从检查点或保存点恢复
+     *     <li>任务失败后重试
+     *     <li>不确定是否重复提交的场景
+     * </ul>
+     *
+     * <p>示例：
+     * <pre>{@code
+     * // 恢复时可能包含已提交和未提交的消息
+     * Map<Long, List<CommitMessage>> pending = new HashMap<>();
+     * pending.put(100L, messages1);  // 可能已提交
+     * pending.put(101L, messages2);  // 可能已提交
+     * pending.put(102L, messages3);  // 未提交
+     *
+     * // filterAndCommit 会过滤已提交的，只提交未提交的
+     * int committed = commit.filterAndCommit(pending);
+     * // committed = 1 (只提交了 102)
+     * }</pre>
+     *
+     * @param commitIdentifiersAndMessages 包含所有待提交的 {@link CommitMessage} 的映射。
+     *                                     键是 {@code commitIdentifier}
+     * @return 实际提交的 {@code List<CommitMessage>} 数量
      */
     int filterAndCommit(Map<Long, List<CommitMessage>> commitIdentifiersAndMessages);
 }

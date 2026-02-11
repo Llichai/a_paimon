@@ -48,7 +48,22 @@ import static org.apache.paimon.utils.SerializationUtils.newBytesType;
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 import static org.apache.paimon.utils.SerializationUtils.serializeBinaryRow;
 
-/** A legacy version serializer for {@link CommitMessage}. */
+/**
+ * {@link CommitMessage} 的旧版本序列化器（V2）。
+ *
+ * <p>此序列化器用于读取 Paimon 早期版本（V2）的 CommitMessage 数据，
+ * 确保与旧版本数据的兼容性。
+ *
+ * <p>与当前版本的区别：
+ * <ul>
+ *     <li>不支持 totalBuckets 字段
+ *     <li>不支持 deletedFiles（DataIncrement 中）
+ *     <li>使用旧版本的 DataFileMeta 和 IndexFileMeta 格式
+ *     <li>索引文件的归属逻辑不同（根据 compactIncrement 是否为空决定）
+ * </ul>
+ *
+ * <p>此类仅用于反序列化，不支持序列化到旧版本格式。
+ */
 public class CommitMessageLegacyV2Serializer {
 
     private DataFileMetaLegacyV2Serializer dataFileSerializer;
