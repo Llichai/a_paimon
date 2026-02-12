@@ -18,15 +18,40 @@
 
 package org.apache.paimon.casting;
 
-/** Base class for all cast rules. */
+/**
+ * 所有类型转换规则的抽象基类。
+ *
+ * <p>该类为所有具体的转换规则提供了通用的谓词管理功能,子类只需:
+ *
+ * <ul>
+ *   <li>在构造函数中定义适用的输入和输出类型范围(通过 CastRulePredicate)
+ *   <li>实现 {@link #create(DataType, DataType)} 方法创建具体的转换执行器
+ * </ul>
+ *
+ * <p>设计模式: 模板方法模式,定义了转换规则的骨架
+ *
+ * @param <IN> 输入值的内部类型
+ * @param <OUT> 输出值的内部类型
+ */
 abstract class AbstractCastRule<IN, OUT> implements CastRule<IN, OUT> {
 
+    /** 转换规则的谓词,定义了该规则适用的类型范围 */
     private final CastRulePredicate predicate;
 
+    /**
+     * 构造函数。
+     *
+     * @param predicate 转换规则谓词,定义输入类型和目标类型的匹配条件
+     */
     protected AbstractCastRule(CastRulePredicate predicate) {
         this.predicate = predicate;
     }
 
+    /**
+     * 获取规则的谓词定义。
+     *
+     * @return 转换规则谓词
+     */
     @Override
     public CastRulePredicate getPredicateDefinition() {
         return predicate;

@@ -20,6 +20,13 @@ package org.apache.paimon.utils;
 
 import java.io.IOException;
 
-/** A {@link FunctionWithException} with {@link IOException}. */
+/**
+ * 抛出 {@link IOException} 的 {@link FunctionWithException}。
+ *
+ * <p>这是一个函数式接口,表示可能抛出 IOException 的函数。
+ *
+ * @param <T> 函数参数的类型
+ * @param <R> 函数结果的类型
+ */
 @FunctionalInterface
 public interface FunctionWithIOException<T, R> extends FunctionWithException<T, R, IOException> {}

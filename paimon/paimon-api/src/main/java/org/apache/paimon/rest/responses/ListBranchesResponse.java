@@ -27,7 +27,25 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing branches. */
+/**
+ * 列出分支响应对象。
+ *
+ * <p>该类表示列出表所有分支的响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>branches - 分支名称列表
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "branches": ["main", "dev", "feature-x"]
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListBranchesResponse implements RESTResponse {
 

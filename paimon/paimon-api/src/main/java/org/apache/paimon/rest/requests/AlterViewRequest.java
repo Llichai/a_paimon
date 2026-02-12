@@ -28,20 +28,62 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Request for altering view. */
+/**
+ * 修改视图请求。
+ *
+ * <p>用于向 REST 服务器发送视图变更请求,支持修改视图查询语句、注释等。
+ *
+ * <p>JSON 序列化格式:
+ *
+ * <pre>{@code
+ * {
+ *   "changes": [
+ *     {
+ *       "type": "UPDATE_COMMENT",
+ *       "comment": "new comment"
+ *     },
+ *     {
+ *       "type": "UPDATE_QUERY",
+ *       "query": "SELECT * FROM new_table"
+ *     }
+ *   ]
+ * }
+ * }</pre>
+ *
+ * <p>示例: 更新视图查询和注释
+ *
+ * <pre>{@code
+ * List<ViewChange> changes = Arrays.asList(
+ *     ViewChange.updateComment("Updated view"),
+ *     ViewChange.updateQuery("SELECT id, name FROM users WHERE active = true")
+ * );
+ * AlterViewRequest request = new AlterViewRequest(changes);
+ * }</pre>
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AlterViewRequest implements RESTRequest {
 
     private static final String FIELD_CHANGES = "changes";
 
+    /** 视图变更列表。 */
     @JsonProperty(FIELD_CHANGES)
     private final List<ViewChange> viewChanges;
 
+    /**
+     * 构造函数。
+     *
+     * @param viewChanges 视图变更列表
+     */
     @JsonCreator
     public AlterViewRequest(@JsonProperty(FIELD_CHANGES) List<ViewChange> viewChanges) {
         this.viewChanges = viewChanges;
     }
 
+    /**
+     * 获取视图变更列表。
+     *
+     * @return 视图变更列表
+     */
     @JsonGetter(FIELD_CHANGES)
     public List<ViewChange> viewChanges() {
         return viewChanges;

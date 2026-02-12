@@ -25,7 +25,27 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing tables. */
+/**
+ * 列出表响应对象。
+ *
+ * <p>该类表示列出数据库中所有表名称的分页响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>tables - 表名称列表
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "tables": ["table1", "table2", "table3"],
+ *   "nextPageToken": "token_abc123"
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListTablesResponse implements PagedResponse<String> {
 

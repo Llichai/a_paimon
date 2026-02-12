@@ -23,7 +23,43 @@ import org.apache.paimon.utils.IOUtils;
 
 import java.io.IOException;
 
-/** Wrap a {@link RecordReader} as an {@link CloseableIterator}. */
+/**
+ * 将 {@link RecordReader} 包装为 {@link CloseableIterator} 的适配器。
+ *
+ * <p>该类桥接了批量读取的 RecordReader 和单条迭代的 Iterator 接口,提供更简洁的迭代访问方式。
+ *
+ * <h2>核心功能</h2>
+ *
+ * <ul>
+ *   <li>批量转单条:自动处理批次边界,提供连续的单条记录访问
+ *   <li>延迟加载:仅在需要时才读取下一批数据
+ *   <li>资源管理:确保读取器和迭代器正确关闭
+ * </ul>
+ *
+ * <h2>工作原理</h2>
+ *
+ * <ol>
+ *   <li>首次访问时,从 RecordReader 读取第一批数据
+ *   <li>在批次内依次返回记录
+ *   <li>当前批次耗尽后,释放批次资源并读取下一批
+ *   <li>所有批次都耗尽后,迭代结束
+ * </ol>
+ *
+ * <h2>重要提示</h2>
+ *
+ * <p><b>警告:</b>在调用 {@link #hasNext()} 之前,确保之前返回的记录已不再使用!
+ * 因为内部可能复用对象以提高性能。
+ *
+ * <h2>异常处理</h2>
+ *
+ * <p>读取过程中的 IOException 会被包装为 RuntimeException 抛出。
+ *
+ * <h2>线程安全性</h2>
+ *
+ * <p>该类不是线程安全的,需要外部同步。
+ *
+ * @param <T> 记录类型
+ */
 public class RecordReaderIterator<T> implements CloseableIterator<T> {
 
     private final RecordReader<T> reader;

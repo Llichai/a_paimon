@@ -34,7 +34,60 @@ import java.util.Stack;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** {@link DataTypeFamily#CHARACTER_STRING} to {@link DataTypeRoot#ARRAY} cast rule. */
+/**
+ * {@link DataTypeFamily#CHARACTER_STRING} 到 {@link DataTypeRoot#ARRAY} 的类型转换规则。
+ *
+ * <p>功能说明: 将字符串解析为数组
+ *
+ * <p>支持的字符串格式:
+ *
+ * <ul>
+ *   <li>方括号格式: "[element1, element2, element3]"
+ *   <li>SQL 函数格式: "ARRAY(element1, element2, element3)"
+ *   <li>空数组: "[]" 或 "ARRAY()"
+ * </ul>
+ *
+ * <p>解析语义:
+ *
+ * <ul>
+ *   <li>元素分隔: 使用逗号分隔元素
+ *   <li>元素转换: 每个元素字符串递归地转换为目标元素类型
+ *   <li>NULL 处理: 字符串 "null" 解析为 null 元素
+ *   <li>嵌套支持: 支持嵌套数组,如 "[[1, 2], [3, 4]]"
+ *   <li>引号处理: 双引号内的逗号不作为分隔符
+ *   <li>括号平衡: 嵌套括号内的逗号不作为分隔符
+ * </ul>
+ *
+ * <p>转换示例:
+ *
+ * <pre>
+ * STRING '[1, 2, 3]' -> ARRAY[1, 2, 3] (INT ARRAY)
+ * STRING '[a, b, c]' -> ARRAY['a', 'b', 'c'] (STRING ARRAY)
+ * STRING '[1, null, 3]' -> ARRAY[1, null, 3]
+ * STRING '[]' -> ARRAY[] (空数组)
+ * STRING 'ARRAY(1, 2, 3)' -> ARRAY[1, 2, 3]
+ * STRING '[[1, 2], [3, 4]]' -> ARRAY[ARRAY[1, 2], ARRAY[3, 4]]
+ * </pre>
+ *
+ * <p>解析算法:
+ *
+ * <ol>
+ *   <li>使用正则表达式匹配方括号或 ARRAY 函数格式
+ *   <li>提取括号内的内容
+ *   <li>使用栈跟踪嵌套括号,在非嵌套位置分割逗号
+ *   <li>递归地将每个元素字符串转换为目标类型
+ * </ol>
+ *
+ * <p>异常情况:
+ *
+ * <ul>
+ *   <li>格式错误: 不符合支持格式时抛出异常
+ *   <li>类型不匹配: 元素无法转换为目标类型时抛出异常
+ *   <li>NULL 值处理: 输入字符串为 NULL 时,输出也为 NULL
+ * </ul>
+ *
+ * <p>SQL 标准兼容性: 符合 SQL:2016 标准中字符串到数组的显式转换规则
+ */
 class StringToArrayCastRule extends AbstractCastRule<BinaryString, InternalArray> {
 
     static final StringToArrayCastRule INSTANCE = new StringToArrayCastRule();

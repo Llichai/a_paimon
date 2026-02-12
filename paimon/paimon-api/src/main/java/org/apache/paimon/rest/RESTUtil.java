@@ -42,7 +42,67 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-/** Util for REST. */
+/**
+ * REST 工具类。
+ *
+ * <p>提供 REST API 相关的通用工具方法,包括:
+ * <ul>
+ *   <li>配置前缀提取
+ *   <li>Map 合并
+ *   <li>URL 编码/解码
+ *   <li>SQL LIKE 模式验证
+ *   <li>请求体编码
+ *   <li>响应体提取
+ *   <li>HTTP 状态码检查
+ *   <li>请求 URL 构建
+ * </ul>
+ *
+ * <h2>主要功能</h2>
+ *
+ * <h3>1. 配置前缀提取</h3>
+ * <p>从配置中提取具有特定前缀的键值对:
+ * <pre>{@code
+ * Options options = new Options();
+ * options.setString("header.User-Agent", "MyApp/1.0");
+ * options.setString("header.Accept", "application/json");
+ * options.setString("timeout", "30000");
+ *
+ * Map<String, String> headers = RESTUtil.extractPrefixMap(options, "header.");
+ * // 结果: {"User-Agent": "MyApp/1.0", "Accept": "application/json"}
+ * }</pre>
+ *
+ * <h3>2. Map 合并</h3>
+ * <p>合并两个 Map,override 优先级高于 base:
+ * <pre>{@code
+ * Map<String, String> base = ImmutableMap.of("a", "1", "b", "2");
+ * Map<String, String> override = ImmutableMap.of("b", "3", "c", "4");
+ *
+ * Map<String, String> result = RESTUtil.merge(base, override);
+ * // 结果: {"a": "1", "b": "3", "c": "4"}
+ * }</pre>
+ *
+ * <h3>3. URL 编码/解码</h3>
+ * <p>使用 UTF-8 进行 URL 编码和解码:
+ * <pre>{@code
+ * String encoded = RESTUtil.encodeString("my database");
+ * // 结果: "my+database" 或 "my%20database"
+ *
+ * String decoded = RESTUtil.decodeString(encoded);
+ * // 结果: "my database"
+ * }</pre>
+ *
+ * <h3>4. SQL LIKE 模式验证</h3>
+ * <p>验证 SQL LIKE 模式是否为前缀匹配:
+ * <pre>{@code
+ * RESTUtil.validatePrefixSqlPattern("abc%");     // 有效
+ * RESTUtil.validatePrefixSqlPattern("abc");      // 有效
+ * RESTUtil.validatePrefixSqlPattern("%abc%");    // 抛出异常
+ * RESTUtil.validatePrefixSqlPattern("abc%def");  // 抛出异常
+ * }</pre>
+ *
+ * @see Options
+ * @see RESTApi
+ */
 public class RESTUtil {
 
     private static final Joiner.MapJoiner FORM_JOINER = Joiner.on("&").withKeyValueSeparator("=");

@@ -21,8 +21,13 @@ package org.apache.paimon.types;
 import org.apache.paimon.annotation.Public;
 
 /**
- * Data type of an 8-byte signed integer with values from -9,223,372,036,854,775,808 to
- * 9,223,372,036,854,775,807.
+ * 8字节有符号整数数据类型,取值范围从 -9,223,372,036,854,775,808 到
+ * 9,223,372,036,854,775,807。
+ *
+ * <p>该类型对应 SQL 标准中的 BIGINT 类型,用于存储超出 INT 范围的大整数值,
+ * 如大型系统的主键、时间戳(毫秒)、大数值计数器等。
+ *
+ * <p>内部实现使用 Java 的 long 类型进行存储,占用 8 字节的内存空间。
  *
  * @since 0.4.0
  */
@@ -31,31 +36,63 @@ public final class BigIntType extends DataType {
 
     private static final long serialVersionUID = 1L;
 
+    /** SQL 格式字符串常量。 */
     private static final String FORMAT = "BIGINT";
 
+    /**
+     * 构造一个 BigInt 类型实例。
+     *
+     * @param isNullable 是否允许为 null 值
+     */
     public BigIntType(boolean isNullable) {
         super(isNullable, DataTypeRoot.BIGINT);
     }
 
+    /**
+     * 构造一个默认允许 null 的 BigInt 类型实例。
+     */
     public BigIntType() {
         this(true);
     }
 
+    /**
+     * 返回该类型的默认存储大小(字节数)。
+     *
+     * @return 8 字节
+     */
     @Override
     public int defaultSize() {
         return 8;
     }
 
+    /**
+     * 创建当前类型的副本,并指定新的可空性。
+     *
+     * @param isNullable 新类型是否允许为 null
+     * @return 新的 BigIntType 实例
+     */
     @Override
     public DataType copy(boolean isNullable) {
         return new BigIntType(isNullable);
     }
 
+    /**
+     * 返回该类型的 SQL 字符串表示形式。
+     *
+     * @return "BIGINT" 或 "BIGINT NOT NULL"(取决于可空性)
+     */
     @Override
     public String asSQLString() {
         return withNullability(FORMAT);
     }
 
+    /**
+     * 接受访问者访问,实现访问者模式。
+     *
+     * @param visitor 数据类型访问者
+     * @param <R> 访问结果类型
+     * @return 访问结果
+     */
     @Override
     public <R> R accept(DataTypeVisitor<R> visitor) {
         return visitor.visit(this);

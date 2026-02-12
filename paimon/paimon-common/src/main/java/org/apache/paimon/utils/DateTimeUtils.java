@@ -39,31 +39,53 @@ import static java.time.temporal.ChronoField.NANO_OF_SECOND;
 import static java.time.temporal.ChronoField.SECOND_OF_MINUTE;
 import static java.time.temporal.ChronoField.YEAR;
 
-/** Utils for date time. */
+/**
+ * 日期时间工具类。
+ *
+ * <p>提供全面的日期时间处理功能,包括:
+ * <ul>
+ *   <li>SQL DATE/TIME/TIMESTAMP 类型与 Java 类型之间的转换
+ *   <li>日期时间的解析和格式化
+ *   <li>儒略日(Julian Date)转换
+ *   <li>时区处理
+ *   <li>TIMESTAMP 与 TIMESTAMP_LTZ 的转换
+ *   <li>精度和标度处理
+ * </ul>
+ *
+ * <p>主要常量:
+ * <ul>
+ *   <li>EPOCH_JULIAN = 2440588 - 纪元(1970-01-01)的儒略日
+ *   <li>MILLIS_PER_DAY = 86400000 - 一天的毫秒数
+ *   <li>MILLIS_PER_HOUR = 3600000 - 一小时的毫秒数
+ *   <li>MILLIS_PER_MINUTE = 60000 - 一分钟的毫秒数
+ *   <li>MILLIS_PER_SECOND = 1000 - 一秒的毫秒数
+ * </ul>
+ */
 public class DateTimeUtils {
 
-    /** The julian date of the epoch, 1970-01-01. */
+    /** 纪元的儒略日,1970-01-01 */
     public static final int EPOCH_JULIAN = 2440588;
 
-    /** The number of milliseconds in a second. */
+    /** 一秒钟的毫秒数 */
     private static final long MILLIS_PER_SECOND = 1000L;
 
-    /** The number of milliseconds in a minute. */
+    /** 一分钟的毫秒数 */
     private static final long MILLIS_PER_MINUTE = 60000L;
 
-    /** The number of milliseconds in an hour. */
+    /** 一小时的毫秒数 */
     private static final long MILLIS_PER_HOUR = 3600000L; // = 60 * 60 * 1000
 
     /**
-     * The number of milliseconds in a day.
+     * 一天的毫秒数。
      *
-     * <p>This is the modulo 'mask' used when converting TIMESTAMP values to DATE and TIME values.
+     * <p>这是将 TIMESTAMP 值转换为 DATE 和 TIME 值时使用的模数'掩码'。
      */
     public static final long MILLIS_PER_DAY = 86400000L; // = 24 * 60 * 60 * 1000
 
-    /** The UTC time zone. */
+    /** UTC 时区 */
     public static final TimeZone UTC_ZONE = TimeZone.getTimeZone("UTC");
 
+    /** 默认的时间戳格式化器 */
     private static final DateTimeFormatter DEFAULT_TIMESTAMP_FORMATTER =
             new DateTimeFormatterBuilder()
                     .appendPattern("yyyy-[MM][M]-[dd][d]")
@@ -74,8 +96,10 @@ public class DateTimeUtils {
                     .toFormatter();
 
     /**
-     * Converts the internal representation of a SQL DATE (int) to the Java type used for UDF
-     * parameters ({@link java.sql.Date}).
+     * 将 SQL DATE 的内部表示(int)转换为用于 UDF 参数的 Java 类型({@link java.sql.Date})。
+     *
+     * @param v 内部表示的日期值(从纪元开始的天数)
+     * @return java.sql.Date 对象
      */
     public static java.sql.Date toSQLDate(int v) {
         // note that, in this case, can't handle Daylight Saving Time

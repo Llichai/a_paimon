@@ -44,12 +44,70 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * Data type of sequence of fields. A field consists of a field name, field type, and an optional
- * description. The most specific type of a row of a table is a row type. In this case, each column
- * of the row corresponds to the field of the row type that has the same ordinal position as the
- * column. Compared to the SQL standard, an optional field description simplifies the handling with
- * complex structures.
+ * 表示字段序列的数据类型。
  *
+ * <p>RowType(行类型)是 Paimon 最重要的复杂类型之一,它表示一个结构化的数据类型,
+ * 由多个命名字段组成。行类型是表的 Schema 的核心,每个表的行对应一个 RowType,
+ * 其中每列对应 RowType 的一个字段,字段的序号与列的位置相对应。
+ *
+ * <p>设计特点:
+ * <ul>
+ *     <li><b>字段组合</b>: 由一个或多个 {@link DataField} 组成</li>
+ *     <li><b>字段唯一性</b>: 同一RowType中的字段名称必须唯一</li>
+ *     <li><b>字段ID追踪</b>: 每个字段都有唯一的ID,用于 Schema 演化</li>
+ *     <li><b>嵌套支持</b>: 字段可以是任意类型,包括嵌套的 RowType</li>
+ *     <li><b>高效访问</b>: 提供多种索引方式(按名称、按ID、按位置)</li>
+ * </ul>
+ *
+ * <p>核心功能:
+ * <ul>
+ *     <li><b>字段查询</b>: 支持通过名称、ID、索引查询字段</li>
+ *     <li><b>类型投影</b>: 支持列裁剪,选择部分字段构造新的 RowType</li>
+ *     <li><b>Schema 演化</b>: 通过字段 ID 跟踪字段变更</li>
+ *     <li><b>类型比较</b>: 支持多种比较方式(完全相等、忽略ID、忽略可空性等)</li>
+ * </ul>
+ *
+ * <p>与 SQL 标准的关系:
+ * <p>在 SQL 标准中,RowType 是表行的最具体类型。相比 SQL 标准,Paimon 的 RowType
+ * 增加了可选的字段描述(description),简化了复杂结构的处理。
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * // 方式1: 使用 DataTypes 工厂方法
+ * RowType rowType = DataTypes.ROW(
+ *     DataTypes.FIELD(0, "id", DataTypes.INT()),
+ *     DataTypes.FIELD(1, "name", DataTypes.STRING()),
+ *     DataTypes.FIELD(2, "age", DataTypes.INT())
+ * );
+ *
+ * // 方式2: 使用 Builder
+ * RowType rowType2 = RowType.builder()
+ *     .field("id", DataTypes.INT())
+ *     .field("name", DataTypes.STRING(), "用户名称")
+ *     .field("age", DataTypes.INT())
+ *     .build();
+ *
+ * // 字段访问
+ * DataField nameField = rowType.getField("name");
+ * int nameIndex = rowType.getFieldIndex("name");
+ * DataType nameType = rowType.getTypeAt(1);
+ *
+ * // 列裁剪(投影)
+ * RowType projected = rowType.project("id", "name");  // 只保留id和name字段
+ * }</pre>
+ *
+ * <p>字段索引机制:
+ * <p>为了提高字段查询性能,RowType 内部维护了多个索引:
+ * <ul>
+ *     <li>nameToField: 字段名称 -> 字段对象</li>
+ *     <li>nameToIndex: 字段名称 -> 字段索引</li>
+ *     <li>fieldIdToField: 字段ID -> 字段对象</li>
+ *     <li>fieldIdToIndex: 字段ID -> 字段索引</li>
+ * </ul>
+ * 这些索引是延迟初始化的,只有在第一次使用时才会创建。
+ *
+ * @see DataField 数据字段
+ * @see DataTypes 数据类型工厂
  * @since 0.4.0
  */
 @Public
@@ -57,18 +115,34 @@ public final class RowType extends DataType {
 
     private static final long serialVersionUID = 1L;
 
+    /** JSON 序列化时的字段名称常量 */
     private static final String FIELD_FIELDS = "fields";
 
+    /** RowType 的 SQL 字符串格式模板 */
     public static final String FORMAT = "ROW<%s>";
 
+    /** 该 RowType 包含的所有字段,不可变列表 */
     private final List<DataField> fields;
 
+    // 以下字段是延迟初始化的索引,用于高效的字段查询
+    /** 字段名称到字段对象的映射(延迟初始化) */
     private transient volatile Map<String, DataField> laziedNameToField;
+
+    /** 字段名称到字段索引的映射(延迟初始化) */
     private transient volatile Map<String, Integer> laziedNameToIndex;
 
+    /** 字段 ID 到字段对象的映射(延迟初始化) */
     private transient volatile Map<Integer, DataField> laziedFieldIdToField;
+
+    /** 字段 ID 到字段索引的映射(延迟初始化) */
     private transient volatile Map<Integer, Integer> laziedFieldIdToIndex;
 
+    /**
+     * 创建一个行类型。
+     *
+     * @param isNullable 该行类型是否可为 null
+     * @param fields 字段列表
+     */
     public RowType(boolean isNullable, List<DataField> fields) {
         super(isNullable, DataTypeRoot.ROW);
         this.fields =
@@ -79,39 +153,90 @@ public final class RowType extends DataType {
         validateFields(fields);
     }
 
+    /**
+     * 创建一个可空的行类型。
+     *
+     * <p>此构造函数用于 JSON 反序列化。
+     *
+     * @param fields 字段列表
+     */
     @JsonCreator
     public RowType(@JsonProperty(FIELD_FIELDS) List<DataField> fields) {
         this(true, fields);
     }
 
+    /**
+     * 创建一个具有新字段列表的行类型副本。
+     *
+     * @param newFields 新的字段列表
+     * @return 新的行类型实例
+     */
     public RowType copy(List<DataField> newFields) {
         return new RowType(isNullable(), newFields);
     }
 
+    /**
+     * 获取该行类型的所有字段。
+     *
+     * @return 不可变的字段列表
+     */
     public List<DataField> getFields() {
         return fields;
     }
 
+    /**
+     * 获取所有字段的名称列表。
+     *
+     * @return 字段名称列表,顺序与字段顺序一致
+     */
     public List<String> getFieldNames() {
         return fields.stream().map(DataField::name).collect(Collectors.toList());
     }
 
+    /**
+     * 获取所有字段的类型列表。
+     *
+     * @return 字段类型列表,顺序与字段顺序一致
+     */
     public List<DataType> getFieldTypes() {
         return fields.stream().map(DataField::type).collect(Collectors.toList());
     }
 
+    /**
+     * 获取指定位置的字段类型。
+     *
+     * @param i 字段索引,从 0 开始
+     * @return 该位置的字段类型
+     */
     public DataType getTypeAt(int i) {
         return fields.get(i).type();
     }
 
+    /**
+     * 获取该行类型的字段数量。
+     *
+     * @return 字段数量
+     */
     public int getFieldCount() {
         return fields.size();
     }
 
+    /**
+     * 根据字段名称获取字段索引。
+     *
+     * @param fieldName 字段名称
+     * @return 字段索引,如果字段不存在则返回 -1
+     */
     public int getFieldIndex(String fieldName) {
         return nameToIndex().getOrDefault(fieldName, -1);
     }
 
+    /**
+     * 获取多个字段的索引数组。
+     *
+     * @param projectFields 字段名称列表
+     * @return 字段索引数组,顺序与输入列表一致
+     */
     public int[] getFieldIndices(List<String> projectFields) {
         int[] projection = new int[projectFields.size()];
         for (int i = 0; i < projection.length; i++) {
@@ -120,18 +245,43 @@ public final class RowType extends DataType {
         return projection;
     }
 
+    /**
+     * 判断该行类型是否包含指定名称的字段。
+     *
+     * @param fieldName 字段名称
+     * @return 如果包含该字段则返回 true,否则返回 false
+     */
     public boolean containsField(String fieldName) {
         return nameToField().containsKey(fieldName);
     }
 
+    /**
+     * 判断该行类型是否包含指定 ID 的字段。
+     *
+     * @param fieldId 字段 ID
+     * @return 如果包含该字段则返回 true,否则返回 false
+     */
     public boolean containsField(int fieldId) {
         return fieldIdToField().containsKey(fieldId);
     }
 
+    /**
+     * 判断该行类型是否不包含指定名称的字段。
+     *
+     * @param fieldName 字段名称
+     * @return 如果不包含该字段则返回 true,否则返回 false
+     */
     public boolean notContainsField(String fieldName) {
         return !containsField(fieldName);
     }
 
+    /**
+     * 根据字段名称获取字段对象。
+     *
+     * @param fieldName 字段名称
+     * @return 字段对象
+     * @throws RuntimeException 如果字段不存在
+     */
     public DataField getField(String fieldName) {
         DataField field = nameToField().get(fieldName);
         if (field == null) {
@@ -140,6 +290,13 @@ public final class RowType extends DataType {
         return field;
     }
 
+    /**
+     * 根据字段 ID 获取字段对象。
+     *
+     * @param fieldId 字段 ID
+     * @return 字段对象
+     * @throws RuntimeException 如果字段不存在
+     */
     public DataField getField(int fieldId) {
         DataField field = fieldIdToField().get(fieldId);
         if (field == null) {
@@ -148,6 +305,13 @@ public final class RowType extends DataType {
         return field;
     }
 
+    /**
+     * 根据字段 ID 获取字段索引。
+     *
+     * @param fieldId 字段 ID
+     * @return 字段索引(从 0 开始)
+     * @throws RuntimeException 如果字段不存在
+     */
     public int getFieldIndexByFieldId(int fieldId) {
         Integer index = fieldIdToIndex().get(fieldId);
         if (index == null) {

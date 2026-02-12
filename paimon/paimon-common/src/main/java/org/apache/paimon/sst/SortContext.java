@@ -20,15 +20,54 @@ package org.apache.paimon.sst;
 
 import org.apache.paimon.lookup.LookupStoreFactory.Context;
 
-/** A {@link Context} for sort store. */
+/**
+ * 排序上下文。
+ *
+ * <p>该类为排序存储提供上下文信息，实现了 {@link Context} 接口。主要用于在创建排序查找存储时传递文件大小等元数据信息。
+ *
+ * <p>主要功能：
+ * <ul>
+ *   <li>存储文件大小信息
+ *   <li>作为排序查找存储工厂的上下文参数
+ *   <li>提供文件大小的访问接口
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 创建排序上下文
+ * long fileSize = 1024 * 1024; // 1MB
+ * SortContext context = new SortContext(fileSize);
+ *
+ * // 获取文件大小
+ * long size = context.fileSize();
+ * }</pre>
+ *
+ * <p>应用场景：
+ * <ul>
+ *   <li>SST 文件的排序存储创建
+ *   <li>查找存储的初始化配置
+ *   <li>文件元数据的传递
+ * </ul>
+ */
 public class SortContext implements Context {
 
+    /** 文件大小（字节） */
     private final long fileSize;
 
+    /**
+     * 构造排序上下文。
+     *
+     * @param fileSize 文件大小（字节）
+     */
     public SortContext(long fileSize) {
         this.fileSize = fileSize;
     }
 
+    /**
+     * 获取文件大小。
+     *
+     * @return 文件大小（字节）
+     */
     public long fileSize() {
         return fileSize;
     }

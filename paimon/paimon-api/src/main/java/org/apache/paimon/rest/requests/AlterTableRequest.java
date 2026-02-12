@@ -28,20 +28,64 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Request for altering table. */
+/**
+ * 修改表请求。
+ *
+ * <p>用于向 REST 服务器发送表 Schema 变更请求,支持添加列、删除列、重命名列、修改表配置等操作。
+ *
+ * <p>JSON 序列化格式:
+ *
+ * <pre>{@code
+ * {
+ *   "changes": [
+ *     {
+ *       "type": "ADD_COLUMN",
+ *       "fieldName": "new_col",
+ *       "dataType": "INT"
+ *     },
+ *     {
+ *       "type": "SET_OPTION",
+ *       "key": "bucket",
+ *       "value": "10"
+ *     }
+ *   ]
+ * }
+ * }</pre>
+ *
+ * <p>示例: 添加列并修改配置
+ *
+ * <pre>{@code
+ * List<SchemaChange> changes = Arrays.asList(
+ *     SchemaChange.addColumn("age", DataTypes.INT()),
+ *     SchemaChange.setOption("bucket", "10")
+ * );
+ * AlterTableRequest request = new AlterTableRequest(changes);
+ * }</pre>
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AlterTableRequest implements RESTRequest {
 
     private static final String FIELD_NEW_UPDATE = "changes";
 
+    /** Schema 变更列表。 */
     @JsonProperty(FIELD_NEW_UPDATE)
     private final List<SchemaChange> changes;
 
+    /**
+     * 构造函数。
+     *
+     * @param changes Schema 变更列表
+     */
     @JsonCreator
     public AlterTableRequest(@JsonProperty(FIELD_NEW_UPDATE) List<SchemaChange> changes) {
         this.changes = changes;
     }
 
+    /**
+     * 获取 Schema 变更列表。
+     *
+     * @return Schema 变更列表
+     */
     @JsonGetter(FIELD_NEW_UPDATE)
     public List<SchemaChange> getChanges() {
         return changes;

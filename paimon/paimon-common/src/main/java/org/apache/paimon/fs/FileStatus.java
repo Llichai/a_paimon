@@ -23,7 +23,10 @@ import org.apache.paimon.annotation.Public;
 import javax.annotation.Nullable;
 
 /**
- * Interface that represents the client side information for a file independent of the file system.
+ * 表示文件系统独立的客户端文件信息的接口。
+ *
+ * <p>该接口提供了获取文件元数据的标准方法,包括文件大小、路径、修改时间等信息。
+ * 所有文件系统实现都应提供 FileStatus 的实现。
  *
  * @since 0.4.0
  */
@@ -31,48 +34,48 @@ import javax.annotation.Nullable;
 public interface FileStatus {
 
     /**
-     * Return the length of this file.
+     * 返回此文件的长度。
      *
-     * @return the length of this file
+     * @return 文件长度(字节)
      */
     long getLen();
 
     /**
-     * Checks if this object represents a directory.
+     * 检查此对象是否表示目录。
      *
-     * @return <code>true</code> if this is a directory, <code>false</code> otherwise
+     * @return 如果是目录返回 <code>true</code>,否则返回 <code>false</code>
      */
     boolean isDir();
 
     /**
-     * Returns the corresponding Path to the FileStatus.
+     * 返回与 FileStatus 对应的路径。
      *
-     * @return the corresponding Path to the FileStatus
+     * @return 与 FileStatus 对应的路径
      */
     Path getPath();
 
     /**
-     * Get the last modification time of the file.
+     * 获取文件的最后修改时间。
      *
-     * @return A long value representing the time the file was last modified, measured in
-     *     milliseconds since the epoch (UTC January 1, 1970).
+     * @return 表示文件最后修改时间的长整型值,
+     *         以自纪元(UTC 1970年1月1日)以来的毫秒数表示
      */
     long getModificationTime();
 
     /**
-     * Get the last access time of the file.
+     * 获取文件的最后访问时间。
      *
-     * @return A long value representing the time the file was last accessed, measured in
-     *     milliseconds since the epoch (UTC January 1, 1970).
+     * @return 表示文件最后访问时间的长整型值,
+     *         以自纪元(UTC 1970年1月1日)以来的毫秒数表示
      */
     default long getAccessTime() {
         return 0;
     }
 
     /**
-     * Returns the owner of this file.
+     * 返回此文件的所有者。
      *
-     * @return the owner of this file
+     * @return 文件所有者,可能为 null
      */
     @Nullable
     default String getOwner() {

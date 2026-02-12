@@ -25,19 +25,31 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/** Utilities for {@link java.util.concurrent.Executor Executors}. */
+/**
+ * {@link java.util.concurrent.Executor Executor} 工具类。
+ *
+ * <p>提供执行器服务的优雅关闭和非阻塞关闭功能。
+ */
 public class ExecutorUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExecutorUtils.class);
 
     /**
-     * Gracefully shutdown the given {@link ExecutorService}. The call waits the given timeout that
-     * all ExecutorServices terminate. If the ExecutorServices do not terminate in this time, they
-     * will be shut down hard.
+     * 优雅地关闭给定的执行器服务。
      *
-     * @param timeout to wait for the termination of all ExecutorServices
-     * @param unit of the timeout
-     * @param executorServices to shut down
+     * <p>该方法等待给定的超时时间,让所有执行器服务终止。
+     * 如果执行器服务在此时间内未终止,将强制关闭它们。
+     *
+     * <p>关闭过程:
+     * <ol>
+     *   <li>调用 shutdown() 停止接受新任务</li>
+     *   <li>等待指定时间让正在执行的任务完成</li>
+     *   <li>如果超时,调用 shutdownNow() 强制终止</li>
+     * </ol>
+     *
+     * @param timeout 等待所有执行器服务终止的超时时间
+     * @param unit 超时时间的单位
+     * @param executorServices 要关闭的执行器服务
      */
     public static void gracefulShutdown(
             long timeout, TimeUnit unit, ExecutorService... executorServices) {
@@ -79,16 +91,17 @@ public class ExecutorUtils {
     }
 
     /**
-     * Shuts the given {@link ExecutorService} down in a non-blocking fashion. The shut down will be
-     * executed by a thread from the common fork-join pool.
+     * 以非阻塞方式关闭给定的执行器服务。
      *
-     * <p>The executor services will be shut down gracefully for the given timeout period.
-     * Afterwards {@link ExecutorService#shutdownNow()} will be called.
+     * <p>关闭操作将由公共 fork-join 池中的线程执行。
      *
-     * @param timeout before {@link ExecutorService#shutdownNow()} is called
-     * @param unit time unit of the timeout
-     * @param executorServices to shut down
-     * @return Future which is completed once the {@link ExecutorService} are shut down
+     * <p>执行器服务将在给定的超时时间内优雅关闭。
+     * 超时后将调用 {@link ExecutorService#shutdownNow()}。
+     *
+     * @param timeout 调用 {@link ExecutorService#shutdownNow()} 之前的超时时间
+     * @param unit 超时时间的单位
+     * @param executorServices 要关闭的执行器服务
+     * @return 当执行器服务关闭完成时完成的 Future
      */
     public static CompletableFuture<Void> nonBlockingShutdown(
             long timeout, TimeUnit unit, ExecutorService... executorServices) {

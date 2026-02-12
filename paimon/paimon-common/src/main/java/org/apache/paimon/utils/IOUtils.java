@@ -32,12 +32,37 @@ import java.nio.charset.StandardCharsets;
 
 import static java.util.Arrays.asList;
 
-/** An utility class for I/O related functionality. */
+/**
+ * I/O 工具类。
+ *
+ * <p>提供 I/O 相关的实用方法，包括字节复制、流读取、流关闭等操作。
+ *
+ * <p>主要功能：
+ * <ul>
+ *   <li>字节复制操作 - 在流之间复制数据
+ *   <li>完整读取操作 - 确保读取指定长度的数据
+ *   <li>UTF-8 读取 - 读取 UTF-8 编码的文本
+ *   <li>安静关闭 - 不抛出异常的资源关闭
+ *   <li>批量关闭 - 关闭多个资源并收集异常
+ * </ul>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>文件复制 - 复制文件内容
+ *   <li>流处理 - 处理输入输出流
+ *   <li>资源清理 - 安全地关闭资源
+ *   <li>异常处理 - 统一处理关闭时的异常
+ * </ul>
+ *
+ * @see InputStream
+ * @see OutputStream
+ * @see AutoCloseable
+ */
 public final class IOUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(IOUtils.class);
 
-    /** The block size for byte operations in byte. */
+    /** 字节操作的块大小（字节）。 */
     public static final int BLOCKSIZE = 4096;
 
     // ------------------------------------------------------------------------
@@ -45,14 +70,15 @@ public final class IOUtils {
     // ------------------------------------------------------------------------
 
     /**
-     * Copies from one stream to another.
+     * 从一个流复制到另一个流。
      *
-     * @param in InputStream to read from
-     * @param out OutputStream to write to
-     * @param buffSize the size of the buffer
-     * @param close whether or not close the InputStream and OutputStream at the end. The streams
-     *     are closed in the finally clause.
-     * @throws IOException thrown if an error occurred while writing to the output stream
+     * <p>使用指定大小的缓冲区在输入流和输出流之间复制数据。
+     *
+     * @param in 要读取的 InputStream
+     * @param out 要写入的 OutputStream
+     * @param buffSize 缓冲区大小
+     * @param close 是否在最后关闭 InputStream 和 OutputStream。流在 finally 子句中关闭
+     * @throws IOException 如果在写入输出流时发生错误
      */
     public static void copyBytes(
             final InputStream in, final OutputStream out, final int buffSize, final boolean close)
@@ -79,12 +105,13 @@ public final class IOUtils {
     }
 
     /**
-     * Copies from one stream to another. <strong>closes the input and output streams at the
-     * end</strong>.
+     * 从一个流复制到另一个流。<strong>在最后关闭输入和输出流</strong>。
      *
-     * @param in InputStream to read from
-     * @param out OutputStream to write to
-     * @throws IOException thrown if an I/O error occurs while copying
+     * <p>使用默认块大小 {@link #BLOCKSIZE} 进行复制。
+     *
+     * @param in 要读取的 InputStream
+     * @param out 要写入的 OutputStream
+     * @throws IOException 如果在复制时发生 I/O 错误
      */
     public static void copyBytes(final InputStream in, final OutputStream out) throws IOException {
         copyBytes(in, out, BLOCKSIZE, true);
@@ -94,13 +121,32 @@ public final class IOUtils {
     //  Stream input skipping
     // ------------------------------------------------------------------------
 
-    /** Reads all into a bytes. */
+    /**
+     * 将输入流完整读取到字节数组。
+     *
+     * @param in 输入流
+     * @param close 是否关闭输入流
+     * @return 读取的字节数组
+     * @throws IOException 如果发生 I/O 错误
+     */
     public static byte[] readFully(InputStream in, boolean close) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         copyBytes(in, output, BLOCKSIZE, close);
         return output.toByteArray();
     }
 
+    /**
+     * 从输入流读取最多 len 个字节到字节数组。
+     *
+     * <p>循环读取直到达到 len 或到达流末尾。
+     *
+     * @param in 输入流
+     * @param b 目标字节数组
+     * @param off 数组中的起始偏移量
+     * @param len 要读取的最大字节数
+     * @return 实际读取的字节数
+     * @throws IOException 如果发生 I/O 错误
+     */
     public static int readNBytes(InputStream in, byte[] b, int off, int len) throws IOException {
         int n = 0;
         while (n < len) {
@@ -114,26 +160,24 @@ public final class IOUtils {
     }
 
     /**
-     * Reads len bytes in a loop.
+     * 循环读取指定长度的字节。
      *
-     * @param in The InputStream to read from
-     * @param buf The buffer to fill
-     * @throws IOException if it could not read requested number of bytes for any reason (including
-     *     EOF)
+     * @param in 要读取的 InputStream
+     * @param buf 要填充的缓冲区
+     * @throws IOException 如果由于任何原因（包括 EOF）无法读取请求的字节数
      */
     public static void readFully(final InputStream in, final byte[] buf) throws IOException {
         readFully(in, buf, 0, buf.length);
     }
 
     /**
-     * Reads len bytes in a loop.
+     * 循环读取指定长度的字节。
      *
-     * @param in The InputStream to read from
-     * @param buf The buffer to fill
-     * @param off offset from the buffer
-     * @param len the length of bytes to read
-     * @throws IOException if it could not read requested number of bytes for any reason (including
-     *     EOF)
+     * @param in 要读取的 InputStream
+     * @param buf 要填充的缓冲区
+     * @param off 缓冲区的起始偏移量
+     * @param len 要读取的字节长度
+     * @throws IOException 如果由于任何原因（包括 EOF）无法读取请求的字节数
      */
     public static void readFully(final InputStream in, final byte[] buf, int off, final int len)
             throws IOException {
@@ -148,6 +192,13 @@ public final class IOUtils {
         }
     }
 
+    /**
+     * 完整读取 UTF-8 编码的输入流。
+     *
+     * @param in 输入流
+     * @return UTF-8 编码的字符串
+     * @throws IOException 如果发生 I/O 错误
+     */
     public static String readUTF8Fully(final InputStream in) throws IOException {
         BufferedReader reader =
                 new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
@@ -163,29 +214,31 @@ public final class IOUtils {
     //  Silent I/O cleanup / closing
     // ------------------------------------------------------------------------
 
-    /** @see #closeAll(Iterable) */
+    /** 关闭所有资源。@see #closeAll(Iterable) */
     public static void closeAll(AutoCloseable... closeables) throws Exception {
         closeAll(asList(closeables));
     }
 
     /**
-     * Closes all {@link AutoCloseable} objects in the parameter, suppressing exceptions. Exception
-     * will be emitted after calling close() on every object.
+     * 关闭参数中的所有 {@link AutoCloseable} 对象，抑制异常。
      *
-     * @param closeables iterable with closeables to close.
-     * @throws Exception collected exceptions that occurred during closing
+     * <p>在调用每个对象的 close() 后才抛出异常。
+     *
+     * @param closeables 要关闭的可关闭对象的迭代器
+     * @throws Exception 关闭期间收集的异常
      */
     public static void closeAll(Iterable<? extends AutoCloseable> closeables) throws Exception {
         closeAll(closeables, Exception.class);
     }
 
     /**
-     * Closes all {@link AutoCloseable} objects in the parameter, suppressing exceptions. Exception
-     * will be emitted after calling close() on every object.
+     * 关闭参数中的所有 {@link AutoCloseable} 对象，抑制异常。
      *
-     * @param closeables iterable with closeables to close.
-     * @param suppressedException class of exceptions which should be suppressed during the closing.
-     * @throws Exception collected exceptions that occurred during closing
+     * <p>在调用每个对象的 close() 后才抛出异常。
+     *
+     * @param closeables 要关闭的可关闭对象的迭代器
+     * @param suppressedException 在关闭期间应该抑制的异常类
+     * @throws Exception 关闭期间收集的异常
      */
     public static <T extends Throwable> void closeAll(
             Iterable<? extends AutoCloseable> closeables, Class<T> suppressedException)
@@ -216,18 +269,18 @@ public final class IOUtils {
     }
 
     /**
-     * Closes all {@link AutoCloseable} objects in the parameter quietly.
+     * 静默关闭参数中的所有 {@link AutoCloseable} 对象。
      *
-     * <p><b>Important:</b> This method is expected to never throw an exception.
+     * <p><b>重要：</b>此方法预期永远不会抛出异常。
      */
     public static void closeAllQuietly(Iterable<? extends AutoCloseable> closeables) {
         closeables.forEach(IOUtils::closeQuietly);
     }
 
     /**
-     * Closes the given AutoCloseable.
+     * 关闭给定的 AutoCloseable。
      *
-     * <p><b>Important:</b> This method is expected to never throw an exception.
+     * <p><b>重要：</b>此方法预期永远不会抛出异常。
      */
     public static void closeQuietly(AutoCloseable closeable) {
         try {

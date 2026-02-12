@@ -24,7 +24,10 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * {@code SeekableInputStream} provides seek methods.
+ * 提供查找(seek)方法的可查找输入流。
+ *
+ * <p>该类扩展了 {@link InputStream},增加了随机访问能力,
+ * 允许在流中的任意位置进行读取操作。这对于读取大文件的特定部分非常有用。
  *
  * @since 0.4.0
  */
@@ -32,42 +35,53 @@ import java.io.InputStream;
 public abstract class SeekableInputStream extends InputStream {
 
     /**
-     * Seek to the given offset from the start of the file. The next read() will be from that
-     * location. Can't seek past the end of the stream.
+     * 从文件开始处查找到给定的偏移量。
      *
-     * @param desired the desired offset
-     * @throws IOException Thrown if an error occurred while seeking inside the input stream.
+     * <p>下一次 read() 将从该位置开始。不能查找超过流的末尾。
+     *
+     * @param desired 期望的偏移量
+     * @throws IOException 如果在输入流中查找时发生错误
      */
     public abstract void seek(long desired) throws IOException;
 
     /**
-     * Gets the current position in the input stream.
+     * 获取输入流中的当前位置。
      *
-     * @return current position in the input stream
-     * @throws IOException Thrown if an I/O error occurred in the underlying stream implementation
-     *     while accessing the stream's position.
+     * @return 输入流中的当前位置
+     * @throws IOException 如果在访问流位置时底层流实现发生 I/O 错误
      */
     public abstract long getPos() throws IOException;
 
     /**
-     * Reads up to <code>len</code> bytes of data from the input stream into an array of bytes. An
-     * attempt is made to read as many as <code>len</code> bytes, but a smaller number may be read.
-     * The number of bytes actually read is returned as an integer.
+     * 从输入流读取最多 <code>len</code> 字节的数据到字节数组中。
+     *
+     * <p>尝试读取多达 <code>len</code> 字节,但可能读取更少的字节。
+     * 实际读取的字节数作为整数返回。
+     *
+     * @param b 数据缓冲区
+     * @param off 数组中开始写入数据的偏移量
+     * @param len 要读取的最大字节数
+     * @return 实际读取的字节数
+     * @throws IOException 如果读取失败
      */
     public abstract int read(byte[] b, int off, int len) throws IOException;
 
     /**
-     * Closes this input stream and releases any system resources associated with the stream.
+     * 关闭此输入流并释放与该流关联的所有系统资源。
      *
-     * <p>The <code>close</code> method of <code>InputStream</code> does nothing.
+     * <p><code>InputStream</code> 的 <code>close</code> 方法什么也不做。
      *
-     * @exception IOException if an I/O error occurs.
+     * @exception IOException 如果发生 I/O 错误
      */
     public abstract void close() throws IOException;
 
     /**
-     * Wrap a normal {@link InputStream} to a {@link SeekableInputStream}. The returned {@link
-     * SeekableInputStream} does not support seek operations.
+     * 将普通的 {@link InputStream} 包装为 {@link SeekableInputStream}。
+     *
+     * <p>返回的 {@link SeekableInputStream} 不支持查找操作。
+     *
+     * @param inputStream 要包装的输入流
+     * @return 包装后的可查找输入流(实际上不支持 seek)
      */
     public static SeekableInputStream wrap(InputStream inputStream) {
         final InputStream in = inputStream;

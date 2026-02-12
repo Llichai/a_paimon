@@ -20,16 +20,23 @@ package org.apache.paimon.globalindex;
 
 import javax.annotation.Nullable;
 
-/** Parallel Index writer for global index with relative row id (from 0 to rowCnt - 1). */
+/**
+ * 并行全局索引写入器,使用相对行 ID(从 0 到 rowCnt - 1)。
+ *
+ * <p>该接口用于在并行写入场景下构建全局索引。与 {@link GlobalIndexSingletonWriter} 不同,
+ * 该接口要求提供相对行 ID,即相对于当前索引范围起始位置的偏移量。
+ *
+ * <p>这种设计允许多个写入器并行工作在不同的行 ID 范围上,最后合并索引结果。
+ */
 public interface GlobalIndexParallelWriter extends GlobalIndexWriter {
 
     /**
-     * Write the indexed key and its related localRowId to the index File. The input row id is
-     * "local" which means it is calculated by the original row id minus the start row id of current
-     * index range.
+     * 将索引键及其关联的本地行 ID 写入索引文件。
      *
-     * @param key nullable index key
-     * @param relativeRowId local row id calculated by {@code rowId - rangeStart}.
+     * <p>输入的行 ID 是"本地"的,即通过原始行 ID 减去当前索引范围的起始行 ID 计算得出。
+     *
+     * @param key 可为 null 的索引键
+     * @param relativeRowId 本地行 ID,通过 {@code rowId - rangeStart} 计算得出
      */
     void write(@Nullable Object key, long relativeRowId);
 }

@@ -38,48 +38,112 @@ import java.util.List;
 import static org.apache.paimon.utils.DefaultValueUtils.convertDefaultValue;
 
 /**
- * An implementation of {@link InternalRow} which provides a default value for the underlying {@link
- * InternalRow}.
+ * 提供默认值支持的 {@link InternalRow} 实现。
+ *
+ * <p>该类包装底层的 {@link InternalRow},当底层行的字段值为 null 时,返回预定义的默认值。
+ *
+ * <p>使用场景:
+ *
+ * <ul>
+ *   <li>Schema 演化: 新增字段时,为旧数据提供默认值
+ *   <li>数据补全: 处理缺失数据,使用字段的默认值填充
+ *   <li>向后兼容: 在不修改存储数据的情况下添加新字段
+ * </ul>
+ *
+ * <p>设计模式: 装饰器模式,在读取字段时注入默认值逻辑
+ *
+ * <p>工作原理:
+ *
+ * <ol>
+ *   <li>如果底层行的字段不为 null,返回底层行的值
+ *   <li>如果底层行的字段为 null,返回默认值行中的对应值
+ *   <li>只有当两者都为 null 时,才返回 null
+ * </ol>
+ *
+ * <p>示例:
+ *
+ * <pre>{@code
+ * // Schema: name VARCHAR, age INT DEFAULT 18
+ * // 存储的旧数据: ["Alice", null]
+ * // 通过 DefaultValueRow 读取: ["Alice", 18]  // age 使用默认值 18
+ * }</pre>
  */
 public class DefaultValueRow implements InternalRow {
 
+    /** 底层的行数据 */
     private InternalRow row;
 
+    /** 默认值行,存储每个字段的默认值 */
     private final InternalRow defaultValueRow;
 
+    /**
+     * 构造函数。
+     *
+     * @param defaultValueRow 默认值行
+     */
     private DefaultValueRow(InternalRow defaultValueRow) {
         this.defaultValueRow = defaultValueRow;
     }
 
+    /**
+     * 替换底层的行数据。
+     *
+     * @param row 新的底层行数据
+     * @return this,支持链式调用
+     */
     public DefaultValueRow replaceRow(InternalRow row) {
         this.row = row;
         return this;
     }
 
+    /**
+     * 获取默认值行。
+     *
+     * @return 默认值行
+     */
     public InternalRow defaultValueRow() {
         return defaultValueRow;
     }
 
+    /** {@inheritDoc} */
     @Override
     public int getFieldCount() {
         return row.getFieldCount();
     }
 
+    /** {@inheritDoc} */
     @Override
     public RowKind getRowKind() {
         return row.getRowKind();
     }
 
+    /** {@inheritDoc} */
     @Override
     public void setRowKind(RowKind kind) {
         row.setRowKind(kind);
     }
 
+    /**
+     * 检查字段是否为 null。
+     *
+     * <p>只有当底层行和默认值行的字段都为 null 时,才返回 true。
+     *
+     * @param pos 字段位置
+     * @return 如果字段为 null 返回 true
+     */
     @Override
     public boolean isNullAt(int pos) {
         return row.isNullAt(pos) && defaultValueRow.isNullAt(pos);
     }
 
+    /**
+     * 获取 boolean 字段值。
+     *
+     * <p>如果底层行的字段不为 null,返回底层行的值;否则返回默认值。
+     *
+     * @param pos 字段位置
+     * @return boolean 值
+     */
     @Override
     public boolean getBoolean(int pos) {
         if (!row.isNullAt(pos)) {
@@ -88,6 +152,9 @@ public class DefaultValueRow implements InternalRow {
         return defaultValueRow.getBoolean(pos);
     }
 
+    // 其他 get 方法使用相同的模式:优先返回底层行的值,否则返回默认值
+
+    /** 获取 byte 字段值 */
     @Override
     public byte getByte(int pos) {
         if (!row.isNullAt(pos)) {
@@ -208,10 +275,33 @@ public class DefaultValueRow implements InternalRow {
         return defaultValueRow.getBlob(pos);
     }
 
+    /**
+     * 创建 DefaultValueRow 实例。
+     *
+     * @param defaultValueRow 默认值行
+     * @return DefaultValueRow 实例
+     */
     public static DefaultValueRow from(InternalRow defaultValueRow) {
         return new DefaultValueRow(defaultValueRow);
     }
 
+    /**
+     * 根据行类型创建 DefaultValueRow。
+     *
+     * <p>该方法遍历行类型的所有字段,提取每个字段的默认值,构建默认值行。
+     *
+     * <p>实现逻辑:
+     *
+     * <ol>
+     *   <li>创建一个GenericRow 存储默认值
+     *   <li>遍历所有字段,如果字段定义了默认值,解析并存储
+     *   <li>如果没有任何字段定义默认值,返回 null
+     *   <li>否则返回包含默认值的 DefaultValueRow
+     * </ol>
+     *
+     * @param rowType 行类型,包含字段定义和默认值
+     * @return DefaultValueRow 实例,如果没有任何默认值则返回 null
+     */
     @Nullable
     public static DefaultValueRow create(RowType rowType) {
         List<DataField> fields = rowType.getFields();

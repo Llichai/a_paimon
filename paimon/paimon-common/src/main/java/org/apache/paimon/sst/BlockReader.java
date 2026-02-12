@@ -25,11 +25,26 @@ import java.util.Comparator;
 
 import static org.apache.paimon.sst.BlockAlignedType.ALIGNED;
 
-/** Reader for a block. */
+/**
+ * 块读取器。
+ *
+ * <p>用于读取和解析 SST 文件中的数据块,支持对齐和非对齐两种存储格式。
+ *
+ * <p>子类:
+ * <ul>
+ *   <li>{@link AlignedBlockReader} - 对齐块读取器,所有记录大小相同
+ *   <li>{@link UnalignedBlockReader} - 非对齐块读取器,记录大小不同,使用索引定位
+ * </ul>
+ */
 public abstract class BlockReader {
 
+    /** 块数据 */
     private final MemorySlice block;
+
+    /** 记录数量 */
     private final int recordCount;
+
+    /** 键比较器 */
     private final Comparator<MemorySlice> comparator;
 
     private BlockReader(MemorySlice block, int recordCount, Comparator<MemorySlice> comparator) {
@@ -38,25 +53,41 @@ public abstract class BlockReader {
         this.comparator = comparator;
     }
 
+    /** 返回块输入流。 */
     public MemorySliceInput blockInput() {
         return block.toInput();
     }
 
+    /** 返回记录数量。 */
     public int recordCount() {
         return recordCount;
     }
 
+    /** 返回键比较器。 */
     public Comparator<MemorySlice> comparator() {
         return comparator;
     }
 
+    /** 返回块迭代器。 */
     public BlockIterator iterator() {
         return new BlockIterator(this);
     }
 
-    /** Seek to slice position from record position. */
+    /**
+     * 根据记录位置定位到切片位置。
+     *
+     * @param recordPosition 记录位置(从0开始)
+     * @return 切片位置(字节偏移量)
+     */
     public abstract int seekTo(int recordPosition);
 
+    /**
+     * 创建块读取器。
+     *
+     * @param block 块数据
+     * @param comparator 键比较器
+     * @return 块读取器实例
+     */
     public static BlockReader create(MemorySlice block, Comparator<MemorySlice> comparator) {
         BlockAlignedType alignedType =
                 BlockAlignedType.fromByte(block.readByte(block.length() - 1));
@@ -72,8 +103,10 @@ public abstract class BlockReader {
         }
     }
 
+    /** 对齐块读取器,所有记录大小相同。 */
     private static class AlignedBlockReader extends BlockReader {
 
+        /** 记录大小 */
         private final int recordSize;
 
         public AlignedBlockReader(
@@ -88,8 +121,10 @@ public abstract class BlockReader {
         }
     }
 
+    /** 非对齐块读取器,记录大小不同,使用索引定位。 */
     private static class UnalignedBlockReader extends BlockReader {
 
+        /** 位置索引 */
         private final MemorySlice index;
 
         public UnalignedBlockReader(

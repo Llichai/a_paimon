@@ -26,13 +26,32 @@ import java.io.OutputStream;
 
 import static org.apache.paimon.compression.CompressorUtils.HEADER_LENGTH;
 
-/** A {@link BlockCompressor} for zstd. */
+/**
+ * Zstd 块压缩器。
+ *
+ * <p>使用 Zstandard 算法压缩数据块。Zstd 提供高压缩率和可配置的压缩级别。
+ *
+ * <p>实现细节:
+ * <ul>
+ *   <li>使用 zstd-jni 库的双参数构造函数避免冲突</li>
+ *   <li>支持自定义压缩级别</li>
+ *   <li>使用单线程压缩(workers=0)以保证性能可预测</li>
+ *   <li>通过自定义 OutputStream 避免额外的数据复制</li>
+ * </ul>
+ */
 public class ZstdBlockCompressor implements BlockCompressor {
 
+    /** 最大块大小,用于计算压缩后的最大可能大小 */
     private static final int MAX_BLOCK_SIZE = 128 * 1024;
 
+    /** 压缩级别 */
     private final int level;
 
+    /**
+     * 创建 Zstd 块压缩器。
+     *
+     * @param level 压缩级别,范围1-22。推荐值为1-3
+     */
     public ZstdBlockCompressor(int level) {
         this.level = level;
     }
@@ -42,6 +61,14 @@ public class ZstdBlockCompressor implements BlockCompressor {
         return HEADER_LENGTH + zstdMaxCompressedLength(srcSize);
     }
 
+    /**
+     * 计算 Zstd 压缩后的最大可能长度。
+     *
+     * <p>参考 io.airlift.compress.zstd.ZstdCompressor 的实现。
+     *
+     * @param uncompressedSize 未压缩数据的大小
+     * @return 压缩后的最大可能大小
+     */
     private int zstdMaxCompressedLength(int uncompressedSize) {
         // refer to io.airlift.compress.zstd.ZstdCompressor
         int result = uncompressedSize + (uncompressedSize >>> 8);
@@ -55,11 +82,11 @@ public class ZstdBlockCompressor implements BlockCompressor {
     public int compress(byte[] src, int srcOff, int srcLen, byte[] dst, int dstOff)
             throws BufferCompressionException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream(dst, dstOff);
-        // Using two-argument constructors to avoid zstd-jni collisions
+        // 使用双参数构造函数避免 zstd-jni 冲突
         try (ZstdOutputStream zstdStream =
                 new ZstdOutputStream(stream, RecyclingBufferPool.INSTANCE)) {
             zstdStream.setLevel(level);
-            zstdStream.setWorkers(0);
+            zstdStream.setWorkers(0); // 使用单线程压缩
             zstdStream.write(src, srcOff, srcLen);
         } catch (IOException e) {
             throw new BufferCompressionException(e);
@@ -67,11 +94,24 @@ public class ZstdBlockCompressor implements BlockCompressor {
         return stream.position() - dstOff;
     }
 
+    /**
+     * 自定义字节数组输出流。
+     *
+     * <p>直接写入到提供的字节数组,避免额外的缓冲区复制。
+     */
     private static class ByteArrayOutputStream extends OutputStream {
 
+        /** 目标字节数组 */
         private final byte[] buf;
+        /** 当前写入位置 */
         private int position;
 
+        /**
+         * 创建字节数组输出流。
+         *
+         * @param buf 目标字节数组
+         * @param position 起始写入位置
+         */
         public ByteArrayOutputStream(byte[] buf, int position) {
             this.buf = buf;
             this.position = position;
@@ -102,6 +142,11 @@ public class ZstdBlockCompressor implements BlockCompressor {
             position += len;
         }
 
+        /**
+         * 获取当前写入位置。
+         *
+         * @return 当前位置
+         */
         int position() {
             return position;
         }

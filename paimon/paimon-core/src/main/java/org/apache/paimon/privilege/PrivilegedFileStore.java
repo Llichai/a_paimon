@@ -58,13 +58,88 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.List;
 
-/** {@link FileStore} with privilege checks. */
+/**
+ * 带权限检查的 {@link FileStore} 实现。
+ *
+ * <p>这是一个装饰器模式的实现,在原始FileStore的基础上添加权限检查功能。
+ * 所有涉及数据访问的操作都会在执行前进行权限验证。
+ *
+ * <h2>权限检查策略</h2>
+ * <ul>
+ *   <li><b>读操作</b> - 需要SELECT权限
+ *     <ul>
+ *       <li>newScan() - 创建扫描器</li>
+ *       <li>newRead() - 创建读取器</li>
+ *       <li>newServiceManager() - 创建服务管理器</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>写操作</b> - 需要INSERT权限
+ *     <ul>
+ *       <li>newWrite() - 创建写入器</li>
+ *       <li>newCommit() - 创建提交器</li>
+ *       <li>newSnapshotDeletion() - 删除快照</li>
+ *       <li>newChangelogDeletion() - 删除变更日志</li>
+ *       <li>newTagManager() - 管理标签</li>
+ *       <li>newTagDeletion() - 删除标签</li>
+ *       <li>newPartitionExpire() - 分区过期</li>
+ *       <li>newTagAutoManager() - 自动标签管理</li>
+ *       <li>mergeSchema() - 合并Schema</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>读写操作</b> - 需要SELECT或INSERT权限之一
+ *     <ul>
+ *       <li>snapshotManager() - 访问快照管理器</li>
+ *       <li>changelogManager() - 访问变更日志管理器</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>无需权限</b> - 元数据查询
+ *     <ul>
+ *       <li>pathFactory() - 路径工厂</li>
+ *       <li>partitionType() - 分区类型</li>
+ *       <li>partitionComputer() - 分区计算器</li>
+ *       <li>options() - 配置选项</li>
+ *       <li>bucketMode() - 分桶模式</li>
+ *       <li>各种工厂方法</li>
+ *     </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 获取带权限检查的FileStore
+ * FileStore<?> fileStore = privilegedTable.store();
+ *
+ * // 读取数据 - 需要SELECT权限
+ * FileStoreScan scan = fileStore.newScan();
+ * SplitRead<?> read = fileStore.newRead();
+ *
+ * // 写入数据 - 需要INSERT权限
+ * FileStoreWrite<?> write = fileStore.newWrite("user");
+ * FileStoreCommit commit = fileStore.newCommit("user", table);
+ * }</pre>
+ *
+ * <h2>异常处理</h2>
+ * <ul>
+ *   <li>{@link NoPrivilegeException} - 用户没有执行操作所需的权限</li>
+ * </ul>
+ *
+ * @param <T> 记录类型
+ * @see PrivilegedFileStoreTable
+ * @see PrivilegeChecker
+ */
 public class PrivilegedFileStore<T> implements FileStore<T> {
 
     private final FileStore<T> wrapped;
     private final PrivilegeChecker privilegeChecker;
     private final Identifier identifier;
 
+    /**
+     * 构造带权限检查的FileStore。
+     *
+     * @param wrapped 被包装的原始FileStore
+     * @param privilegeChecker 权限检查器
+     * @param identifier 表标识符
+     */
     public PrivilegedFileStore(
             FileStore<T> wrapped, PrivilegeChecker privilegeChecker, Identifier identifier) {
         this.wrapped = wrapped;

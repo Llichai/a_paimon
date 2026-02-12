@@ -23,11 +23,26 @@ import io.airlift.compress.Compressor;
 import static org.apache.paimon.compression.CompressorUtils.HEADER_LENGTH;
 import static org.apache.paimon.compression.CompressorUtils.writeIntLE;
 
-/** Implementation of {@link BlockCompressor} for airlift compressors. */
+/**
+ * Airlift 压缩器的 {@link BlockCompressor} 实现。
+ *
+ * <p>该类将 Airlift 压缩器适配到 Paimon 的块压缩接口,负责:
+ * <ul>
+ *   <li>添加压缩块头部信息(压缩长度和原始长度)</li>
+ *   <li>调用 Airlift 压缩器执行实际压缩</li>
+ *   <li>处理压缩异常</li>
+ * </ul>
+ */
 public class AirBlockCompressor implements BlockCompressor {
 
+    /** Airlift 内部压缩器 */
     private final Compressor internalCompressor;
 
+    /**
+     * 创建 Airlift 块压缩器。
+     *
+     * @param internalCompressor Airlift 压缩器实例
+     */
     public AirBlockCompressor(Compressor internalCompressor) {
         this.internalCompressor = internalCompressor;
     }

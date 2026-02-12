@@ -28,14 +28,51 @@ import java.io.OutputStream;
 import java.util.Collections;
 import java.util.List;
 
-/** A {@link GlobalIndexReader} wrapper for {@link FileIndexWriter}. */
+/**
+ * {@link FileIndexWriter} 到 {@link GlobalIndexSingletonWriter} 的包装器。
+ *
+ * <p>该类将文件级索引写入器适配为全局索引写入器接口,负责:
+ * <ul>
+ *   <li>将写入请求委托给底层文件索引写入器
+ *   <li>跟踪写入的记录数量
+ *   <li>序列化索引数据并写入文件系统
+ *   <li>生成写入结果的元数据
+ * </ul>
+ *
+ * <p>工作流程:
+ * <ol>
+ *   <li>调用 {@link #write(Object)} 写入索引键,内部计数器递增
+ *   <li>调用 {@link #finish()} 完成写入:
+ *       <ul>
+ *         <li>生成唯一的索引文件名
+ *         <li>序列化索引数据到输出流
+ *         <li>返回包含文件名、行数和元数据的结果条目
+ *       </ul>
+ * </ol>
+ *
+ * <p>注意:如果没有写入任何数据(count == 0),finish() 将返回空列表。
+ */
 public class FileIndexWriterWrapper implements GlobalIndexSingletonWriter {
 
+    /** 全局索引文件写入器,用于生成文件名和输出流 */
     private final GlobalIndexFileWriter fileWriter;
+
+    /** 被包装的文件索引写入器 */
     private final FileIndexWriter writer;
+
+    /** 索引类型标识符,用作文件名前缀 */
     private final String indexType;
+
+    /** 写入的记录计数 */
     private long count = 0;
 
+    /**
+     * 构造文件索引写入器包装器。
+     *
+     * @param fileWriter 全局索引文件写入器
+     * @param writer 被包装的文件索引写入器
+     * @param indexType 索引类型标识符
+     */
     public FileIndexWriterWrapper(
             GlobalIndexFileWriter fileWriter, FileIndexWriter writer, String indexType) {
         this.fileWriter = fileWriter;
@@ -43,12 +80,34 @@ public class FileIndexWriterWrapper implements GlobalIndexSingletonWriter {
         this.indexType = indexType;
     }
 
+    /**
+     * 写入索引键。
+     *
+     * <p>每次调用都会递增内部计数器。
+     *
+     * @param key 索引键
+     */
     @Override
     public void write(Object key) {
         count++;
         writer.write(key);
     }
 
+    /**
+     * 完成写入并返回结果条目列表。
+     *
+     * <p>如果有数据写入(count > 0),则:
+     * <ol>
+     *   <li>生成新的索引文件名
+     *   <li>序列化索引数据并写入文件
+     *   <li>返回包含文件名、行数的结果条目
+     * </ol>
+     *
+     * <p>如果没有数据写入,返回空列表。
+     *
+     * @return 结果条目列表
+     * @throws RuntimeException 如果写入失败
+     */
     @Override
     public List<ResultEntry> finish() {
         if (count > 0) {

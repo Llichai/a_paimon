@@ -40,7 +40,82 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/** {@link DataTypeFamily#CHARACTER_STRING} to {@link DataTypeRoot#MAP} cast rule. */
+/**
+ * {@link DataTypeFamily#CHARACTER_STRING} 到 {@link DataTypeRoot#MAP} 的类型转换规则。
+ *
+ * <p>功能说明: 将字符串解析为 Map
+ *
+ * <p>支持的字符串格式:
+ *
+ * <ul>
+ *   <li>箭头格式: "{key1 -> value1, key2 -> value2}"
+ *   <li>SQL 函数格式: "MAP(key1, value1, key2, value2)" - 交替的键值对
+ *   <li>空 Map: "{}" 或 "MAP()"
+ *   <li>NULL: "NULL"(不区分大小写)
+ * </ul>
+ *
+ * <p>解析语义:
+ *
+ * <ul>
+ *   <li>箭头格式: 使用 " -> " 分隔键和值,使用逗号分隔键值对
+ *   <li>函数格式: 偶数个参数,奇数位置为键,偶数位置为值
+ *   <li>键值转换: 键和值分别转换为目标类型
+ *   <li>NULL 处理: 字符串 "null" 解析为 null 键或值
+ *   <li>嵌套支持: 支持嵌套 Map,如 "{k1 -> {k2 -> v2}}"
+ *   <li>引号处理: 双引号内的特殊字符不作为分隔符
+ *   <li>括号平衡: 嵌套括号内的逗号和箭头不作为分隔符
+ * </ul>
+ *
+ * <p>转换示例:
+ *
+ * <pre>
+ * // 箭头格式
+ * STRING '{1 -> a, 2 -> b}' -> MAP[1 -> 'a', 2 -> 'b']
+ * STRING '{key1 -> 100, key2 -> 200}' -> MAP['key1' -> 100, 'key2' -> 200]
+ * STRING '{1 -> null, null -> 3}' -> MAP[1 -> null, null -> 3]
+ * STRING '{}' -> MAP[]
+ *
+ * // SQL 函数格式
+ * STRING 'MAP(key1, 100, key2, 200)' -> MAP['key1' -> 100, 'key2' -> 200]
+ * STRING 'MAP()' -> MAP[]
+ *
+ * // 嵌套 Map
+ * STRING '{outer -> {inner -> value}}' -> MAP['outer' -> MAP['inner' -> 'value']]
+ *
+ * // NULL Map
+ * STRING 'NULL' -> NULL
+ * </pre>
+ *
+ * <p>解析算法:
+ *
+ * <ol>
+ *   <li>使用正则表达式区分箭头格式和函数格式
+ *   <li>对于箭头格式:
+ *       <ol>
+ *         <li>提取花括号内的内容
+ *         <li>使用栈跟踪嵌套括号,在非嵌套位置分割逗号
+ *         <li>对每个条目使用箭头分隔键值
+ *       </ol>
+ *   <li>对于函数格式:
+ *       <ol>
+ *         <li>提取括号内的内容
+ *         <li>分割逗号得到参数列表
+ *         <li>验证参数数量为偶数
+ *         <li>交替作为键和值
+ *       </ol>
+ * </ol>
+ *
+ * <p>异常情况:
+ *
+ * <ul>
+ *   <li>格式错误: 不符合支持格式时抛出异常
+ *   <li>函数参数错误: MAP 函数参数为奇数时抛出异常
+ *   <li>类型不匹配: 键或值无法转换为目标类型时抛出异常
+ *   <li>箭头缺失: 箭头格式中缺少 " -> " 时抛出异常
+ * </ul>
+ *
+ * <p>SQL 标准兼容性: 符合 SQL:2016 标准中字符串到 Map 的显式转换规则
+ */
 class StringToMapCastRule extends AbstractCastRule<BinaryString, InternalMap> {
 
     static final StringToMapCastRule INSTANCE = new StringToMapCastRule();

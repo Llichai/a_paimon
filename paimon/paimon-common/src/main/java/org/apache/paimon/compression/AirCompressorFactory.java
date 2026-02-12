@@ -21,13 +21,34 @@ package org.apache.paimon.compression;
 import io.airlift.compress.Compressor;
 import io.airlift.compress.Decompressor;
 
-/** Implementation of {@link BlockCompressionFactory} for airlift compressors. */
+/**
+ * Airlift 压缩器的 {@link BlockCompressionFactory} 实现。
+ *
+ * <p>Airlift 是一个提供多种压缩算法实现的库。该工厂类将 Airlift 的压缩器和解压缩器
+ * 适配到 Paimon 的块压缩接口。
+ *
+ * <p>支持的 Airlift 压缩算法包括:
+ * <ul>
+ *   <li>LZO - 平衡压缩率和速度的压缩算法</li>
+ *   <li>其他 Airlift 支持的压缩算法</li>
+ * </ul>
+ */
 public class AirCompressorFactory implements BlockCompressionFactory {
 
+    /** 压缩类型 */
     private final BlockCompressionType type;
+    /** Airlift 内部压缩器 */
     private final Compressor internalCompressor;
+    /** Airlift 内部解压缩器 */
     private final Decompressor internalDecompressor;
 
+    /**
+     * 创建 Airlift 压缩工厂。
+     *
+     * @param type 块压缩类型
+     * @param internalCompressor Airlift 压缩器实例
+     * @param internalDecompressor Airlift 解压缩器实例
+     */
     public AirCompressorFactory(
             BlockCompressionType type,
             Compressor internalCompressor,

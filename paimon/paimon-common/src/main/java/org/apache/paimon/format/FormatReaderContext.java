@@ -25,18 +25,42 @@ import org.apache.paimon.utils.RoaringBitmap32;
 
 import javax.annotation.Nullable;
 
-/** the context for creating RecordReader {@link RecordReader}. */
+/**
+ * 创建记录读取器 {@link RecordReader} 的上下文实现类。
+ *
+ * <p>该类实现了 {@link FormatReaderFactory.Context} 接口，
+ * 封装了创建读取器所需的文件信息和配置。
+ */
 public class FormatReaderContext implements FormatReaderFactory.Context {
 
+    /** 文件 I/O 操作对象 */
     private final FileIO fileIO;
+    /** 文件路径 */
     private final Path file;
+    /** 文件大小 */
     private final long fileSize;
+    /** 行选择位图，用于指定要读取的行 */
     @Nullable private final RoaringBitmap32 selection;
 
+    /**
+     * 构造函数，不指定行选择。
+     *
+     * @param fileIO 文件 I/O 操作对象
+     * @param file 文件路径
+     * @param fileSize 文件大小
+     */
     public FormatReaderContext(FileIO fileIO, Path file, long fileSize) {
         this(fileIO, file, fileSize, null);
     }
 
+    /**
+     * 完整的构造函数。
+     *
+     * @param fileIO 文件 I/O 操作对象
+     * @param file 文件路径
+     * @param fileSize 文件大小
+     * @param selection 行选择位图，可为 null 表示读取所有行
+     */
     public FormatReaderContext(
             FileIO fileIO, Path file, long fileSize, @Nullable RoaringBitmap32 selection) {
         this.fileIO = fileIO;

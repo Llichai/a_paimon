@@ -22,17 +22,35 @@ import org.apache.paimon.data.columnar.writable.WritableLongVector;
 
 import java.util.Arrays;
 
-/** This class represents a nullable long column vector. */
+/**
+ * 堆长整数列向量实现类。
+ *
+ * <p>这个类表示一个可空的长整数列向量，用于在列式存储中高效地存储和访问长整数类型的数据（BIGINT）。
+ * 它使用 64 位 long 数组作为底层存储，支持字典编码和批量二进制设置操作。
+ *
+ * <h2>性能特点</h2>
+ * <ul>
+ *   <li><b>内存效率</b>: 每个长整数值占用8字节</li>
+ *   <li><b>字典压缩</b>: 对于重复值多的数据，支持字典编码</li>
+ *   <li><b>批量操作</b>: 支持从二进制数据批量设置，利用 UNSAFE 优化</li>
+ * </ul>
+ *
+ * @see AbstractHeapVector 堆向量的基类
+ * @see WritableLongVector 可写长整数向量接口
+ */
 public class HeapLongVector extends AbstractHeapVector implements WritableLongVector {
 
     private static final long serialVersionUID = 8534925169458006397L;
 
+    /** 存储长整数值的数组。 */
     public long[] vector;
 
     /**
-     * Don't use this except for testing purposes.
+     * 构造一个堆长整数列向量。
      *
-     * @param len the number of rows
+     * <p>注意: 除了测试目的外，不要直接使用此构造函数。
+     *
+     * @param len 向量的容量
      */
     public HeapLongVector(int len) {
         super(len);

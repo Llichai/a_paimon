@@ -22,11 +22,31 @@ import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.DataTypeFamily;
 import org.apache.paimon.utils.BinaryStringUtils;
 
-/** {@link DataTypeFamily#BINARY_STRING} to {@link DataTypeFamily#BINARY_STRING} cast rule. */
+/**
+ * 二进制类型到二进制类型的转换规则。
+ *
+ * <p>处理 {@link DataTypeFamily#BINARY_STRING} 类型族内部的转换,主要用于不同长度的 BINARY/VARBINARY 之间的转换。
+ *
+ * <p>转换策略:
+ *
+ * <ul>
+ *   <li>如果目标类型长度更短,会进行截断
+ *   <li>如果目标类型长度更长,保持原值(不填充)
+ * </ul>
+ *
+ * <p>示例:
+ *
+ * <pre>{@code
+ * // BINARY(10) → BINARY(5) (截断)
+ * // VARBINARY(5) → VARBINARY(10) (保持原值)
+ * }</pre>
+ */
 class BinaryToBinaryCastRule extends AbstractCastRule<byte[], byte[]> {
 
+    /** 单例实例 */
     static final BinaryToBinaryCastRule INSTANCE = new BinaryToBinaryCastRule();
 
+    /** 私有构造函数。 */
     private BinaryToBinaryCastRule() {
         super(
                 CastRulePredicate.builder()
@@ -35,6 +55,13 @@ class BinaryToBinaryCastRule extends AbstractCastRule<byte[], byte[]> {
                         .build());
     }
 
+    /**
+     * 创建二进制到二进制的转换执行器。
+     *
+     * @param inputType 输入数据类型
+     * @param targetType 目标数据类型
+     * @return 转换执行器
+     */
     @Override
     public CastExecutor<byte[], byte[]> create(DataType inputType, DataType targetType) {
         return value -> BinaryStringUtils.toBinaryString(value, targetType);

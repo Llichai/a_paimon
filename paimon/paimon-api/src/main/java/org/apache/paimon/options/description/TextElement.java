@@ -25,46 +25,46 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
-/** Represents a text block in the {@link Description}. */
+/** 表示 {@link Description} 中的文本块。 */
 public class TextElement implements BlockElement, InlineElement {
     private final String format;
     private final List<InlineElement> elements;
     private final EnumSet<TextStyle> textStyles = EnumSet.noneOf(TextStyle.class);
 
     /**
-     * Creates a block of text with placeholders ("%s") that will be replaced with proper string
-     * representation of given {@link InlineElement}. For example:
+     * 创建一个文本块,其中包含将被替换为给定 {@link InlineElement} 的正确字符串表示的占位符("%s")。
+     * 例如:
      *
-     * <p>{@code text("This is a text with a link %s", link("https://somepage", "to here"))}
+     * <p>{@code text("这是包含链接的文本 %s", link("https://somepage", "到这里"))}
      *
-     * @param format text with placeholders for elements
-     * @param elements elements to be put in the text
-     * @return block of text
+     * @param format 包含元素占位符的文本
+     * @param elements 要放在文本中的元素
+     * @return 文本块
      */
     public static TextElement text(String format, InlineElement... elements) {
         return new TextElement(format, Arrays.asList(elements));
     }
 
     /**
-     * Creates a simple block of text.
+     * 创建简单的文本块。
      *
-     * @param text a simple block of text
-     * @return block of text
+     * @param text 简单的文本块
+     * @return 文本块
      */
     public static TextElement text(String text) {
         return new TextElement(text, Collections.emptyList());
     }
 
-    /** Wraps a list of {@link InlineElement}s into a single {@link TextElement}. */
+    /** 将 {@link InlineElement} 列表包装成单个 {@link TextElement}。 */
     public static InlineElement wrap(InlineElement... elements) {
         return text(StringUtils.repeat("%s", elements.length), elements);
     }
 
     /**
-     * Creates a block of text formatted as code.
+     * 创建格式化为代码的文本块。
      *
-     * @param text a block of text that will be formatted as code
-     * @return block of text formatted as code
+     * @param text 将格式化为代码的文本块
+     * @return 格式化为代码的文本块
      */
     public static TextElement code(String text) {
         TextElement element = text(text);

@@ -100,12 +100,17 @@ public interface PrivilegeManager {
      */
     void objectRenamed(String oldName, String newName);
 
-    /** Notify the privilege system that the object with {@code identifier} is dropped. */
+    /**
+     * 通知权限系统对象已被删除。
+     *
+     * @param identifier 对象标识符
+     */
     void objectDropped(String identifier);
 
     /**
-     * Get {@link PrivilegeChecker} of this privilege system to check if a user has specific
-     * privileges on an object.
+     * 获取此权限系统的 {@link PrivilegeChecker},用于检查用户是否对对象拥有特定权限。
+     *
+     * @return 权限检查器实例
      */
     PrivilegeChecker getPrivilegeChecker();
 }

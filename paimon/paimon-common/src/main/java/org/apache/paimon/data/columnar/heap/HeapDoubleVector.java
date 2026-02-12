@@ -25,20 +25,56 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
- * This class represents a nullable double precision floating point column vector. This class will
- * be used for operations on all floating point double types and as such will use a 64-bit double
- * value to hold the biggest possible value.
+ * 堆双精度浮点列向量实现类。
+ *
+ * <p>这个类表示一个可空的双精度浮点列向量，用于在列式存储中高效地存储和访问双精度浮点数（DOUBLE）。
+ * 它使用 64 位 double 数组作为底层存储，支持字典编码和批量二进制设置操作。
+ *
+ * <h2>内存布局</h2>
+ * <pre>
+ * HeapDoubleVector 结构:
+ * ┌─────────────────────┐
+ * │ Null Bitmap (可选)  │  每个 bit 表示一个值是否为 null
+ * ├─────────────────────┤
+ * │ Double Array        │  64位浮点数数组
+ * │ [1.5, 2.7, -3.14...]│
+ * └─────────────────────┘
+ * </pre>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * HeapDoubleVector vector = new HeapDoubleVector(1000);
+ * vector.setDouble(0, 3.14159);
+ * vector.appendDouble(2.71828);
+ * vector.fill(0.0);
+ * double value = vector.getDouble(0);
+ * vector.reset();
+ * }</pre>
+ *
+ * <h2>性能特点</h2>
+ * <ul>
+ *   <li><b>内存效率</b>: 每个双精度浮点值占用8字节</li>
+ *   <li><b>字典压缩</b>: 对于重复值多的数据，支持字典编码</li>
+ *   <li><b>批量操作</b>: 支持从二进制数据批量设置，利用 UNSAFE 优化</li>
+ *   <li><b>访问速度</b>: O(1) 时间复杂度的随机访问</li>
+ * </ul>
+ *
+ * @see AbstractHeapVector 堆向量的基类
+ * @see WritableDoubleVector 可写双精度浮点向量接口
  */
 public class HeapDoubleVector extends AbstractHeapVector implements WritableDoubleVector {
 
     private static final long serialVersionUID = 6193940154117411328L;
 
+    /** 存储双精度浮点值的数组。 */
     public double[] vector;
 
     /**
-     * Don't use this except for testing purposes.
+     * 构造一个堆双精度浮点列向量。
      *
-     * @param len the number of rows
+     * <p>注意: 除了测试目的外，不要直接使用此构造函数。
+     *
+     * @param len 向量的容量
      */
     public HeapDoubleVector(int len) {
         super(len);

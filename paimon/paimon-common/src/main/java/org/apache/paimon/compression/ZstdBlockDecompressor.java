@@ -24,7 +24,19 @@ import com.github.luben.zstd.ZstdInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
-/** A {@link BlockDecompressor} for zstd. */
+/**
+ * Zstd 块解压缩器。
+ *
+ * <p>使用 Zstandard 算法解压缩数据块。
+ *
+ * <p>实现细节:
+ * <ul>
+ *   <li>使用 zstd-jni 库进行解压缩</li>
+ *   <li>循环读取解压缩数据直到完成</li>
+ *   <li>验证目标缓冲区大小是否足够</li>
+ *   <li>检查解压缩是否完整</li>
+ * </ul>
+ */
 public class ZstdBlockDecompressor implements BlockDecompressor {
 
     @Override

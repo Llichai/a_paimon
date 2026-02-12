@@ -24,7 +24,12 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * {@code PositionOutputStream} provides position methods.
+ * 支持位置的输出流。
+ *
+ * <p>{@code PositionOutputStream} 扩展了 {@link OutputStream},提供了获取当前写入位置的能力。
+ * 这对于需要跟踪写入进度、实现检查点或进行故障恢复的场景非常重要。
+ *
+ * <p>该类是 Paimon 文件写入的基础抽象,所有输出流实现都应继承此类。
  *
  * @since 0.4.0
  */
@@ -32,67 +37,71 @@ import java.io.OutputStream;
 public abstract class PositionOutputStream extends OutputStream {
 
     /**
-     * Gets the position of the stream (non-negative), defined as the number of bytes from the
-     * beginning of the file to the current writing position. The position corresponds to the
-     * zero-based index of the next byte that will be written.
+     * 获取流的当前位置(非负数),定义为从文件开始到当前写入位置的字节数。
      *
-     * <p>This method must report accurately report the current position of the stream. Various
-     * components of the high-availability and recovery logic rely on the accurate
+     * <p>该位置对应于将要写入的下一个字节的从零开始的索引。例如,如果已写入10个字节,
+     * 则此方法应返回10,表示下一个字节将写入索引10的位置。
      *
-     * @return The current position in the stream, defined as the number of bytes from the beginning
-     *     of the file to the current writing position.
-     * @throws IOException Thrown if an I/O error occurs while obtaining the position from the
-     *     stream implementation.
+     * <p>此方法必须准确报告流的当前位置。高可用性和恢复逻辑的各种组件依赖于准确的位置信息
+     * 来实现检查点和故障恢复。
+     *
+     * @return 流中的当前位置,定义为从文件开始到当前写入位置的字节数
+     * @throws IOException 如果从流实现获取位置时发生 I/O 错误
      */
     public abstract long getPos() throws IOException;
 
     /**
-     * Writes <code>b.length</code> bytes from the specified byte array to this output stream. The
-     * general contract for <code>write(b)</code> is that it should have exactly the same effect as
-     * the call <code>write(b, 0, b.length)</code>.
+     * 从指定的字节数组写入 <code>b.length</code> 个字节到此输出流。
+     *
+     * <p><code>write(b)</code> 的一般约定是它应该与调用 <code>write(b, 0, b.length)</code> 具有完全相同的效果。
+     *
+     * @param b 要写入的数据
+     * @throws IOException 如果发生 I/O 错误
      */
     public abstract void write(byte[] b) throws IOException;
 
     /**
-     * Writes <code>len</code> bytes from the specified byte array starting at offset <code>off
-     * </code> to this output stream. The general contract for <code>write(b, off, len)</code> is
-     * that some of the bytes in the array <code>b</code> are written to the output stream in order;
-     * element <code>b[off]</code> is the first byte written and <code>b[off+len-1]</code> is the
-     * last byte written by this operation.
+     * 从指定的字节数组中从偏移量 <code>off</code> 开始写入 <code>len</code> 个字节到此输出流。
+     *
+     * <p><code>write(b, off, len)</code> 的一般约定是:数组 <code>b</code> 中的某些字节按顺序写入输出流;
+     * 元素 <code>b[off]</code> 是第一个写入的字节,<code>b[off+len-1]</code> 是此操作写入的最后一个字节。
+     *
+     * @param b 数据源
+     * @param off 数据中的起始偏移量
+     * @param len 要写入的字节数
+     * @throws IOException 如果发生 I/O 错误
      */
     public abstract void write(byte[] b, int off, int len) throws IOException;
 
     /**
-     * Flushes the stream, writing any data currently buffered in stream implementation to the
-     * proper output stream. After this method has been called, the stream implementation must not
-     * hold onto any buffered data any more.
+     * 刷新流,将当前缓冲在流实现中的任何数据写入适当的输出流。
      *
-     * <p>Implementation note: This overrides the method defined in {@link OutputStream} as abstract
-     * to force implementations of the {@code PositionOutputStream} to implement this method
-     * directly.
+     * <p>调用此方法后,流实现不得再持有任何缓冲数据。这确保了数据的可见性,
+     * 即使在发生故障时也能保证已刷新的数据不会丢失。
      *
-     * @throws IOException Thrown if an I/O error occurs while flushing the stream.
+     * <p>实现说明:这覆盖了 {@link OutputStream} 中定义的抽象方法,
+     * 以强制 {@code PositionOutputStream} 的实现直接实现此方法。
+     *
+     * @throws IOException 如果刷新流时发生 I/O 错误
      */
     public abstract void flush() throws IOException;
 
     /**
-     * Closes the output stream. After this method returns, the implementation must guarantee that
-     * all data written to the stream is persistent/visible.
+     * 关闭输出流。
      *
-     * <p>The above implies that the method must block until persistence can be guaranteed. For
-     * example for distributed replicated file systems, the method must block until the replication
-     * quorum has been reached. If the calling thread is interrupted in the process, it must fail
-     * with an {@code IOException} to indicate that persistence cannot be guaranteed.
+     * <p>此方法返回后,实现必须保证所有写入流的数据都是持久/可见的。
+     * 这意味着该方法必须阻塞,直到可以保证持久性。
      *
-     * <p>If this method throws an exception, the data in the stream cannot be assumed to be
-     * persistent.
+     * <p>例如,对于分布式复制文件系统,该方法必须阻塞,直到达到复制法定人数。
+     * 如果调用线程在此过程中被中断,它必须失败并抛出 {@code IOException},
+     * 以指示无法保证持久性。
      *
-     * <p>Implementation note: This overrides the method defined in {@link OutputStream} as abstract
-     * to force implementations of the {@code PositionOutputStream} to implement this method
-     * directly.
+     * <p>如果此方法抛出异常,则无法假设流中的数据是持久的。
      *
-     * @throws IOException Thrown, if an error occurred while closing the stream or guaranteeing
-     *     that the data is persistent.
+     * <p>实现说明:这覆盖了 {@link OutputStream} 中定义的抽象方法,
+     * 以强制 {@code PositionOutputStream} 的实现直接实现此方法。
+     *
+     * @throws IOException 如果关闭流或保证数据持久时发生错误
      */
     public abstract void close() throws IOException;
 }

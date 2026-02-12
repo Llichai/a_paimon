@@ -35,7 +35,35 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Schema change to table.
+ * Schema 变更操作。
+ *
+ * <p>定义了对表 Schema 进行修改的各种操作类型:
+ * <ul>
+ *   <li><b>选项操作</b>: {@link SetOption}, {@link RemoveOption}
+ *   <li><b>注释操作</b>: {@link UpdateComment}
+ *   <li><b>列操作</b>: {@link AddColumn}, {@link RenameColumn}, {@link DropColumn}
+ *   <li><b>列属性操作</b>: {@link UpdateColumnType}, {@link UpdateColumnNullability},
+ *       {@link UpdateColumnComment}, {@link UpdateColumnDefaultValue}
+ *   <li><b>列位置操作</b>: {@link UpdateColumnPosition}, {@link Move}
+ * </ul>
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * // 添加新列
+ * SchemaChange addCol = SchemaChange.addColumn("new_col", DataTypes.STRING());
+ *
+ * // 修改列类型
+ * SchemaChange updateType = SchemaChange.updateColumnType("col1", DataTypes.BIGINT());
+ *
+ * // 重命名列
+ * SchemaChange rename = SchemaChange.renameColumn("old_name", "new_name");
+ *
+ * // 删除列
+ * SchemaChange drop = SchemaChange.dropColumn("col_to_drop");
+ *
+ * // 设置表选项
+ * SchemaChange setOpt = SchemaChange.setOption("bucket", "8");
+ * }</pre>
  *
  * @since 0.4.0
  */
@@ -81,90 +109,236 @@ import java.util.Objects;
 })
 public interface SchemaChange extends Serializable {
 
+    /**
+     * 创建设置表选项的变更。
+     *
+     * @param key 选项键
+     * @param value 选项值
+     * @return SetOption 变更实例
+     */
     static SchemaChange setOption(String key, String value) {
         return new SetOption(key, value);
     }
 
+    /**
+     * 创建移除表选项的变更。
+     *
+     * @param key 选项键
+     * @return RemoveOption 变更实例
+     */
     static SchemaChange removeOption(String key) {
         return new RemoveOption(key);
     }
 
+    /**
+     * 创建更新表注释的变更。
+     *
+     * @param comment 新注释（null 表示移除注释）
+     * @return UpdateComment 变更实例
+     */
     static SchemaChange updateComment(@Nullable String comment) {
         return new UpdateComment(comment);
     }
 
+    /**
+     * 创建添加列的变更（不带注释和位置）。
+     *
+     * @param fieldName 字段名
+     * @param dataType 数据类型
+     * @return AddColumn 变更实例
+     */
     static SchemaChange addColumn(String fieldName, DataType dataType) {
         return addColumn(fieldName, dataType, null, null);
     }
 
+    /**
+     * 创建添加列的变更（带注释）。
+     *
+     * @param fieldName 字段名
+     * @param dataType 数据类型
+     * @param comment 列注释
+     * @return AddColumn 变更实例
+     */
     static SchemaChange addColumn(String fieldName, DataType dataType, String comment) {
         return new AddColumn(new String[] {fieldName}, dataType, comment, null);
     }
 
+    /**
+     * 创建添加列的变更（带注释和位置）。
+     *
+     * @param fieldName 字段名
+     * @param dataType 数据类型
+     * @param comment 列注释
+     * @param move 列位置
+     * @return AddColumn 变更实例
+     */
     static SchemaChange addColumn(String fieldName, DataType dataType, String comment, Move move) {
         return new AddColumn(new String[] {fieldName}, dataType, comment, move);
     }
 
+    /**
+     * 创建添加嵌套列的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @param dataType 数据类型
+     * @param comment 列注释
+     * @param move 列位置
+     * @return AddColumn 变更实例
+     */
     static SchemaChange addColumn(
             String[] fieldNames, DataType dataType, String comment, Move move) {
         return new AddColumn(fieldNames, dataType, comment, move);
     }
 
+    /**
+     * 创建重命名列的变更。
+     *
+     * @param fieldName 原字段名
+     * @param newName 新字段名
+     * @return RenameColumn 变更实例
+     */
     static SchemaChange renameColumn(String fieldName, String newName) {
         return new RenameColumn(new String[] {fieldName}, newName);
     }
 
+    /**
+     * 创建重命名嵌套列的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @param newName 新字段名
+     * @return RenameColumn 变更实例
+     */
     static SchemaChange renameColumn(String[] fieldNames, String newName) {
         return new RenameColumn(fieldNames, newName);
     }
 
+    /**
+     * 创建删除列的变更。
+     *
+     * @param fieldName 字段名
+     * @return DropColumn 变更实例
+     */
     static SchemaChange dropColumn(String fieldName) {
         return new DropColumn(new String[] {fieldName});
     }
 
+    /**
+     * 创建删除嵌套列的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @return DropColumn 变更实例
+     */
     static SchemaChange dropColumn(String[] fieldNames) {
         return new DropColumn(fieldNames);
     }
 
+    /**
+     * 创建更新列类型的变更（不保留可空性）。
+     *
+     * @param fieldName 字段名
+     * @param newDataType 新数据类型
+     * @return UpdateColumnType 变更实例
+     */
     static SchemaChange updateColumnType(String fieldName, DataType newDataType) {
         return new UpdateColumnType(new String[] {fieldName}, newDataType, false);
     }
 
+    /**
+     * 创建更新列类型的变更。
+     *
+     * @param fieldName 字段名
+     * @param newDataType 新数据类型
+     * @param keepNullability 是否保留原可空性
+     * @return UpdateColumnType 变更实例
+     */
     static SchemaChange updateColumnType(
             String fieldName, DataType newDataType, boolean keepNullability) {
         return new UpdateColumnType(new String[] {fieldName}, newDataType, keepNullability);
     }
 
+    /**
+     * 创建更新嵌套列类型的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @param newDataType 新数据类型
+     * @param keepNullability 是否保留原可空性
+     * @return UpdateColumnType 变更实例
+     */
     static SchemaChange updateColumnType(
             String[] fieldNames, DataType newDataType, boolean keepNullability) {
         return new UpdateColumnType(fieldNames, newDataType, keepNullability);
     }
 
+    /**
+     * 创建更新列可空性的变更。
+     *
+     * @param fieldName 字段名
+     * @param newNullability 新的可空性
+     * @return UpdateColumnNullability 变更实例
+     */
     static SchemaChange updateColumnNullability(String fieldName, boolean newNullability) {
         return new UpdateColumnNullability(new String[] {fieldName}, newNullability);
     }
 
+    /**
+     * 创建更新嵌套列可空性的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @param newNullability 新的可空性
+     * @return UpdateColumnNullability 变更实例
+     */
     static SchemaChange updateColumnNullability(String[] fieldNames, boolean newNullability) {
         return new UpdateColumnNullability(fieldNames, newNullability);
     }
 
+    /**
+     * 创建更新列注释的变更。
+     *
+     * @param fieldName 字段名
+     * @param comment 新注释
+     * @return UpdateColumnComment 变更实例
+     */
     static SchemaChange updateColumnComment(String fieldName, String comment) {
         return new UpdateColumnComment(new String[] {fieldName}, comment);
     }
 
+    /**
+     * 创建更新嵌套列注释的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @param comment 新注释
+     * @return UpdateColumnComment 变更实例
+     */
     static SchemaChange updateColumnComment(String[] fieldNames, String comment) {
         return new UpdateColumnComment(fieldNames, comment);
     }
 
+    /**
+     * 创建更新列默认值的变更。
+     *
+     * @param fieldNames 嵌套字段路径
+     * @param defaultValue 新默认值
+     * @return UpdateColumnDefaultValue 变更实例
+     */
     static SchemaChange updateColumnDefaultValue(String[] fieldNames, String defaultValue) {
         return new UpdateColumnDefaultValue(fieldNames, defaultValue);
     }
 
+    /**
+     * 创建更新列位置的变更。
+     *
+     * @param move 移动操作
+     * @return UpdateColumnPosition 变更实例
+     */
     static SchemaChange updateColumnPosition(Move move) {
         return new UpdateColumnPosition(move);
     }
 
-    /** A SchemaChange to set a table option. */
+    /**
+     * 设置表选项的 Schema 变更。
+     *
+     * <p>用于添加或更新表的配置选项。
+     */
     final class SetOption implements SchemaChange {
 
         private static final long serialVersionUID = 1L;
@@ -172,9 +346,11 @@ public interface SchemaChange extends Serializable {
         private static final String FIELD_KEY = "key";
         private static final String FIELD_VALUE = "value";
 
+        /** 选项键。 */
         @JsonProperty(FIELD_KEY)
         private final String key;
 
+        /** 选项值。 */
         @JsonProperty(FIELD_VALUE)
         private final String value;
 
@@ -213,7 +389,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to remove a table option. */
+    /**
+     * 移除表选项的 Schema 变更。
+     *
+     * <p>用于删除表的配置选项。
+     */
     final class RemoveOption implements SchemaChange {
 
         private static final long serialVersionUID = 1L;
@@ -250,7 +430,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to Update table comment. */
+    /**
+     * 更新表注释的 Schema 变更。
+     *
+     * <p>用于修改或移除表的注释（comment 为 null 时表示移除注释）。
+     */
     final class UpdateComment implements SchemaChange {
 
         private static final long serialVersionUID = 1L;
@@ -288,7 +472,16 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to add a field. */
+    /**
+     * 添加列的 Schema 变更。
+     *
+     * <p>用于在表中添加新列，支持:
+     * <ul>
+     *   <li>指定列的数据类型和注释
+     *   <li>指定列在表中的位置（通过 Move 对象）
+     *   <li>支持嵌套字段（通过 fieldNames 数组）
+     * </ul>
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     final class AddColumn implements SchemaChange {
 
@@ -369,7 +562,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to rename a field. */
+    /**
+     * 重命名列的 Schema 变更。
+     *
+     * <p>用于修改列的名称，支持嵌套字段的重命名。
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     final class RenameColumn implements SchemaChange {
 
@@ -423,7 +620,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to drop a field. */
+    /**
+     * 删除列的 Schema 变更。
+     *
+     * <p>用于从表中删除列，支持嵌套字段的删除。
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     final class DropColumn implements SchemaChange {
 
@@ -462,7 +663,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to update the field type. */
+    /**
+     * 更新列类型的 Schema 变更。
+     *
+     * <p>用于修改列的数据类型。可选择是否保留原有的可空性设置。
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     final class UpdateColumnType implements SchemaChange {
 
@@ -471,12 +676,15 @@ public interface SchemaChange extends Serializable {
         private static final String FIELD_NEW_DATA_TYPE = "newDataType";
         private static final String FIELD_KEEP_NULLABILITY = "keepNullability";
 
+        /** 字段名路径（支持嵌套字段）。 */
         @JsonProperty(FIELD_FILED_NAMES)
         private final String[] fieldNames;
 
+        /** 新的数据类型。 */
         @JsonProperty(FIELD_NEW_DATA_TYPE)
         private final DataType newDataType;
-        // If true, do not change the target field nullability
+
+        /** 是否保留原有的可空性设置（true 表示不改变可空性）。 */
         @JsonProperty(FIELD_KEEP_NULLABILITY)
         private final boolean keepNullability;
 
@@ -526,7 +734,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to update the field position. */
+    /**
+     * 更新列位置的 Schema 变更。
+     *
+     * <p>用于调整列在表中的位置。
+     */
     final class UpdateColumnPosition implements SchemaChange {
 
         private static final long serialVersionUID = 1L;
@@ -563,29 +775,85 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** Represents a requested column move in a struct. */
+    /**
+     * 表示在结构体中请求的列移动操作。
+     *
+     * <p>支持四种移动类型:
+     * <ul>
+     *   <li>FIRST: 移动到首位
+     *   <li>AFTER: 移动到指定列之后
+     *   <li>BEFORE: 移动到指定列之前
+     *   <li>LAST: 移动到末尾
+     * </ul>
+     *
+     * <p>使用示例:
+     * <pre>{@code
+     * // 移动到首位
+     * Move move1 = Move.first("col1");
+     *
+     * // 移动到 col2 之后
+     * Move move2 = Move.after("col1", "col2");
+     *
+     * // 移动到 col3 之前
+     * Move move3 = Move.before("col1", "col3");
+     *
+     * // 移动到末尾
+     * Move move4 = Move.last("col1");
+     * }</pre>
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     class Move implements Serializable {
 
+        /** 移动类型枚举。 */
         public enum MoveType {
+            /** 移动到首位。 */
             FIRST,
+            /** 移动到指定列之后。 */
             AFTER,
+            /** 移动到指定列之前。 */
             BEFORE,
+            /** 移动到末尾。 */
             LAST
         }
 
+        /**
+         * 创建移动到首位的操作。
+         *
+         * @param fieldName 要移动的字段名
+         * @return Move 实例
+         */
         public static Move first(String fieldName) {
             return new Move(fieldName, null, MoveType.FIRST);
         }
 
+        /**
+         * 创建移动到指定列之后的操作。
+         *
+         * @param fieldName 要移动的字段名
+         * @param referenceFieldName 参考字段名
+         * @return Move 实例
+         */
         public static Move after(String fieldName, String referenceFieldName) {
             return new Move(fieldName, referenceFieldName, MoveType.AFTER);
         }
 
+        /**
+         * 创建移动到指定列之前的操作。
+         *
+         * @param fieldName 要移动的字段名
+         * @param referenceFieldName 参考字段名
+         * @return Move 实例
+         */
         public static Move before(String fieldName, String referenceFieldName) {
             return new Move(fieldName, referenceFieldName, MoveType.BEFORE);
         }
 
+        /**
+         * 创建移动到末尾的操作。
+         *
+         * @param fieldName 要移动的字段名
+         * @return Move 实例
+         */
         public static Move last(String fieldName) {
             return new Move(fieldName, null, MoveType.LAST);
         }
@@ -650,7 +918,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to update the (nested) field nullability. */
+    /**
+     * 更新列可空性的 Schema 变更。
+     *
+     * <p>用于修改列是否允许 null 值，支持嵌套字段。
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     final class UpdateColumnNullability implements SchemaChange {
 
@@ -704,7 +976,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to update the (nested) field comment. */
+    /**
+     * 更新列注释的 Schema 变更。
+     *
+     * <p>用于修改列的注释信息，支持嵌套字段。
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     final class UpdateColumnComment implements SchemaChange {
 
@@ -758,7 +1034,11 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** A SchemaChange to update the default value. */
+    /**
+     * 更新列默认值的 Schema 变更。
+     *
+     * <p>用于修改列的默认值。
+     */
     final class UpdateColumnDefaultValue implements SchemaChange {
 
         private static final long serialVersionUID = 1L;
@@ -810,19 +1090,46 @@ public interface SchemaChange extends Serializable {
         }
     }
 
-    /** Actions for schema changes： identify for schema change. */
+    /**
+     * Schema 变更操作类型标识。
+     *
+     * <p>用于 JSON 序列化/反序列化时区分不同的 Schema 变更类型。
+     */
     class Actions {
+        /** 操作类型字段名。 */
         public static final String FIELD_ACTION = "action";
+
+        /** 设置选项操作。 */
         public static final String SET_OPTION_ACTION = "setOption";
+
+        /** 移除选项操作。 */
         public static final String REMOVE_OPTION_ACTION = "removeOption";
+
+        /** 更新注释操作。 */
         public static final String UPDATE_COMMENT_ACTION = "updateComment";
+
+        /** 添加列操作。 */
         public static final String ADD_COLUMN_ACTION = "addColumn";
+
+        /** 重命名列操作。 */
         public static final String RENAME_COLUMN_ACTION = "renameColumn";
+
+        /** 删除列操作。 */
         public static final String DROP_COLUMN_ACTION = "dropColumn";
+
+        /** 更新列类型操作。 */
         public static final String UPDATE_COLUMN_TYPE_ACTION = "updateColumnType";
+
+        /** 更新列可空性操作。 */
         public static final String UPDATE_COLUMN_NULLABILITY_ACTION = "updateColumnNullability";
+
+        /** 更新列注释操作。 */
         public static final String UPDATE_COLUMN_COMMENT_ACTION = "updateColumnComment";
+
+        /** 更新列默认值操作。 */
         public static final String UPDATE_COLUMN_DEFAULT_VALUE_ACTION = "updateColumnDefaultValue";
+
+        /** 更新列位置操作。 */
         public static final String UPDATE_COLUMN_POSITION_ACTION = "updateColumnPosition";
 
         private Actions() {}

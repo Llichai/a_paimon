@@ -49,18 +49,221 @@ import static org.apache.paimon.data.variant.GenericVariantUtil.Type.ARRAY;
 import static org.apache.paimon.data.variant.GenericVariantUtil.Type.OBJECT;
 import static org.apache.paimon.data.variant.GenericVariantUtil.malformedVariant;
 
-/** Utils for paimon shredding. */
+/**
+ * Paimon专用的Variant切片工具类。
+ *
+ * <p>该类提供Paimon特定的Variant切片(Shredding)实现,包括切片Schema构建、数据转换、
+ * 字段提取和批量处理等功能。与通用的{@link ShreddingUtils}不同,该类专门适配Paimon的
+ * 数据类型系统和列式向量存储。
+ *
+ * <h3>核心功能:</h3>
+ * <ul>
+ *   <li><b>切片Schema构建</b> - 从Paimon DataType生成完整的VariantSchema
+ *   <li><b>类型转换</b> - Paimon类型与Variant标量类型之间的双向转换
+ *   <li><b>数据切片和重建</b> - 切片Variant为列式存储,重建列式数据为Variant
+ *   <li><b>字段提取</b> - 根据路径从切片数据中提取指定字段
+ *   <li><b>批量处理</b> - 批量切片和重建,适配列式向量
+ * </ul>
+ *
+ * <h3>切片Schema结构:</h3>
+ * <p>Paimon的切片Schema包含三个核心字段:
+ * <pre>
+ * 顶层结构:
+ * ┌────────────┬─────────────┬──────────────┐
+ * │ metadata   │ value       │ typed_value  │
+ * ├────────────┼─────────────┼──────────────┤
+ * │ BYTES      │ BYTES       │ T (根据类型) │
+ * │ (非null)   │ (可为null)  │ (可为null)   │
+ * └────────────┴─────────────┴──────────────┘
+ *
+ * metadata: Variant元数据字典(字符串、时区等)
+ * value: 未切片的Variant二进制数据
+ * typed_value: 切片后的结构化数据
+ *
+ * 对于不同类型的typed_value:
+ * - 标量: 直接存储值 (INT, STRING, DECIMAL等)
+ * - 数组: ARRAY<ROW<metadata: null, value: BYTES, typed_value: T>>
+ * - 对象: ROW<field1: ROW<...>, field2: ROW<...>, ...>
+ *   每个字段又是三元组(metadata为null, value, typed_value)
+ * </pre>
+ *
+ * <h3>Schema构建示例:</h3>
+ * <pre>{@code
+ * // 输入: 简单的对象Schema
+ * DataType inputType = RowType.of(
+ *     new DataField(0, "name", DataTypes.STRING()),
+ *     new DataField(1, "age", DataTypes.INT())
+ * );
+ *
+ * // 输出: 完整的切片Schema
+ * RowType shreddingSchema = PaimonShreddingUtils.variantShreddingSchema(inputType);
+ * // 结构:
+ * // ROW<
+ * //   metadata: BYTES NOT NULL,
+ * //   value: BYTES,
+ * //   typed_value: ROW<
+ * //     name: ROW<value: BYTES, typed_value: STRING> NOT NULL,
+ * //     age:  ROW<value: BYTES, typed_value: INT> NOT NULL
+ * //   >
+ * // >
+ * }</pre>
+ *
+ * <h3>切片和重建流程:</h3>
+ * <pre>
+ * 切片 (Variant → 列式存储):
+ * 1. 解析Variant值的类型
+ * 2. 根据VariantSchema匹配字段
+ * 3. 类型匹配的字段写入typed_value
+ * 4. 不匹配的字段写入value
+ * 5. 递归处理嵌套结构
+ *
+ * 重建 (列式存储 → Variant):
+ * 1. 从typed_value读取结构化数据
+ * 2. 从value读取未切片数据
+ * 3. 合并为完整的Variant二进制格式
+ * 4. 递归处理嵌套结构
+ * </pre>
+ *
+ * <h3>字段提取功能:</h3>
+ * <p>支持从切片后的Variant中提取特定字段,形成Variant Struct:
+ * <pre>{@code
+ * // 原始切片数据包含完整的Variant
+ * // 提取路径: ["user", "name"] 和 ["user", "age"]
+ * FieldToExtract[] fields = PaimonShreddingUtils.getFieldsToExtract(
+ *     variantStructType,  // 目标Struct类型
+ *     variantSchema       // 切片Schema
+ * );
+ *
+ * // 执行提取
+ * InternalRow result = PaimonShreddingUtils.assembleVariantStruct(
+ *     shreddedRow,
+ *     variantSchema,
+ *     fields
+ * );
+ * // 结果: ROW<name: "Alice", age: 30>
+ * }</pre>
+ *
+ * <h3>批量处理:</h3>
+ * <p>提供批量切片和重建方法,适配列式向量存储:
+ * <pre>{@code
+ * // 批量重建Variant
+ * CastedRowColumnVector input = ...;  // 切片后的列向量
+ * WritableColumnVector output = ...;  // 输出Variant列向量
+ * PaimonShreddingUtils.assembleVariantBatch(
+ *     input,
+ *     output,
+ *     variantSchema
+ * );
+ *
+ * // 批量提取Variant Struct
+ * PaimonShreddingUtils.assembleVariantStructBatch(
+ *     input,
+ *     output,
+ *     variantSchema,
+ *     fields,
+ *     readType
+ * );
+ * }</pre>
+ *
+ * <h3>路径提取算法:</h3>
+ * <pre>
+ * 路径格式: "$.user.name" 或 "$.items[0]"
+ *
+ * 提取步骤:
+ * 1. 解析路径为VariantPathSegment数组
+ * 2. 在VariantSchema中搜索路径:
+ *    - 对象路径: 在objectSchemaMap中查找字段
+ *    - 数组路径: 使用arraySchema和索引
+ * 3. 构建SchemaPathSegment数组(包含typedIdx等)
+ * 4. 创建BaseVariantReader读取目标类型
+ * 5. 执行提取:
+ *    - typed_value中存在: 从typed_value读取
+ *    - typed_value中不存在: 从value读取
+ *    - 都不存在: 返回null
+ * </pre>
+ *
+ * <h3>类型映射:</h3>
+ * <pre>
+ * Paimon Type → Variant Scalar:
+ * - STRING → StringType
+ * - TINYINT → IntegralType(BYTE)
+ * - SMALLINT → IntegralType(SHORT)
+ * - INT → IntegralType(INT)
+ * - BIGINT → IntegralType(LONG)
+ * - FLOAT → FloatType
+ * - DOUBLE → DoubleType
+ * - BOOLEAN → BooleanType
+ * - BYTES → BinaryType
+ * - DECIMAL(p,s) → DecimalType(p,s)
+ * - DATE → DateType
+ *
+ * Variant Scalar → Paimon Type:
+ * 反向映射,用于从切片数据读取
+ * </pre>
+ *
+ * <h3>数据完整性保证:</h3>
+ * <ul>
+ *   <li>切片数据必须包含有效的metadata
+ *   <li>对象字段必须非null(缺失字段用null typed_value和value表示)
+ *   <li>数组元素必须非null
+ *   <li>typed_value和value至少有一个非null
+ *   <li>路径提取时验证数据类型匹配
+ * </ul>
+ *
+ * <h3>性能优化:</h3>
+ * <ul>
+ *   <li><b>批量处理</b> - 批量切片和重建减少函数调用开销
+ *   <li><b>列式存储适配</b> - 直接操作列向量,减少行列转换
+ *   <li><b>增量构建</b> - 使用GenericVariantBuilder增量构建Variant
+ *   <li><b>Schema缓存</b> - objectSchemaMap缓存字段查找
+ *   <li><b>类型转换缓存</b> - CastExecutor缓存类型转换器
+ * </ul>
+ *
+ * <h3>线程安全:</h3>
+ * 该类的方法都是静态的且无状态,是线程安全的。但传入的参数(InternalRow、VariantSchema等)
+ * 的线程安全性由调用方保证。
+ *
+ * @see VariantSchema
+ * @see ShreddingUtils
+ * @see VariantShreddingWriter
+ * @see BaseVariantReader
+ */
 public class PaimonShreddingUtils {
 
+    /** metadata字段名称。 */
     public static final String METADATA_FIELD_NAME = Variant.METADATA;
+
+    /** value字段名称 (未切片的Variant二进制数据)。 */
     public static final String VARIANT_VALUE_FIELD_NAME = Variant.VALUE;
+
+    /** typed_value字段名称 (切片后的结构化数据)。 */
     public static final String TYPED_VALUE_FIELD_NAME = "typed_value";
 
-    /** Paimon shredded row. */
+    /**
+     * Paimon切片数据行实现。
+     *
+     * <p>该类将Paimon的DataGetters接口适配为{@link ShreddingUtils.ShreddedRow}接口,
+     * 使得通用的切片工具可以读取Paimon的行数据。
+     *
+     * <p>支持的数据源:
+     * <ul>
+     *   <li>InternalRow - Paimon内部行格式
+     *   <li>InternalArray - Paimon内部数组格式
+     * </ul>
+     *
+     * @see ShreddingUtils.ShreddedRow
+     * @see DataGetters
+     */
     static class PaimonShreddedRow implements ShreddingUtils.ShreddedRow {
 
+        /** 底层的Paimon数据获取器 (InternalRow或InternalArray)。 */
         private final DataGetters row;
 
+        /**
+         * 创建Paimon切片数据行。
+         *
+         * @param row Paimon数据获取器
+         */
         public PaimonShreddedRow(DataGetters row) {
             this.row = row;
         }
@@ -142,26 +345,54 @@ public class PaimonShreddingUtils {
         }
     }
 
-    /** The search result of a `VariantPathSegment` in a `VariantSchema`. */
+    /**
+     * VariantPathSegment在VariantSchema中的搜索结果。
+     *
+     * <p>该类封装了在VariantSchema中搜索提取路径段的结果,包括:
+     * <ul>
+     *   <li>原始路径段 (对象字段名或数组索引)
+     *   <li>路径段类型 (对象提取或数组提取)
+     *   <li>typed_value索引 (如果路径在Schema中存在)
+     *   <li>提取索引 (对象字段索引或数组元素索引)
+     * </ul>
+     *
+     * <p>如果路径不存在于Schema中,typedIdx将为负数,表示需要从value中提取。
+     */
     public static class SchemaPathSegment {
 
+        /** 原始路径段 (ObjectExtraction或ArrayExtraction)。 */
         private final VariantPathSegment rawPath;
 
-        // Whether this path segment is an object or array extraction.
+        /** 是否为对象字段提取 (true)或数组元素提取 (false)。 */
         private final boolean isObject;
-        // `schema.typedIdx`, if the path exists in the schema (for object extraction, the schema
-        // should contain an object `typed_value` containing the requested field; similar for array
-        // extraction). Negative otherwise.
+
+        /**
+         * schema.typedIdx的值,如果路径在Schema中存在。
+         *
+         * <p>对于对象提取,Schema应包含typed_value对象且该对象包含请求的字段;
+         * 对于数组提取类似。如果路径不存在则为负数。
+         */
         private final int typedIdx;
 
-        // For object extraction, it is the index of the desired field in `schema.objectSchema`. If
-        // the
-        // requested field doesn't exist, both `extractionIdx/typedIdx` are set to negative.
-        // For array extraction, it is the array index. The information is already stored in
-        // `rawPath`,
-        // but accessing a raw int should be more efficient than `rawPath`, which is an `Either`.
+        /**
+         * 提取索引。
+         *
+         * <p>对于对象提取: schema.objectSchema中目标字段的索引,
+         * 如果字段不存在则extractionIdx和typedIdx都为负数。
+         *
+         * <p>对于数组提取: 数组索引。该信息已存储在rawPath中,
+         * 但访问原始int应比访问Either更高效。
+         */
         private final int extractionIdx;
 
+        /**
+         * 创建SchemaPathSegment。
+         *
+         * @param rawPath 原始路径段
+         * @param isObject 是否为对象提取
+         * @param typedIdx typed_value的字段索引,不存在时为负数
+         * @param extractionIdx 对象字段索引或数组元素索引
+         */
         public SchemaPathSegment(
                 VariantPathSegment rawPath, boolean isObject, int typedIdx, int extractionIdx) {
             this.rawPath = rawPath;
@@ -170,58 +401,105 @@ public class PaimonShreddingUtils {
             this.extractionIdx = extractionIdx;
         }
 
+        /** 获取原始路径段。 */
         public VariantPathSegment rawPath() {
             return rawPath;
         }
 
+        /** 是否为对象字段提取。 */
         public boolean isObject() {
             return isObject;
         }
 
+        /** 获取typed_value的字段索引。 */
         public int typedIdx() {
             return typedIdx;
         }
 
+        /** 获取提取索引。 */
         public int extractionIdx() {
             return extractionIdx;
         }
     }
 
     /**
-     * Represent a single field in a variant struct, that is a single requested field that the scan
-     * should produce by extracting from the variant column.
+     * Variant结构体中要提取的单个字段。
+     *
+     * <p>表示扫描应从Variant列中提取并生成的单个请求字段。包含:
+     * <ul>
+     *   <li>从根到字段的完整路径
+     *   <li>用于读取和转换该字段的reader
+     * </ul>
      */
     public static class FieldToExtract {
 
+        /** 从Variant根到目标字段的路径。 */
         private final SchemaPathSegment[] path;
+
+        /** 用于读取该字段的reader。 */
         private final BaseVariantReader reader;
 
+        /**
+         * 创建FieldToExtract。
+         *
+         * @param path 字段路径
+         * @param reader 字段reader
+         */
         public FieldToExtract(SchemaPathSegment[] path, BaseVariantReader reader) {
             this.path = path;
             this.reader = reader;
         }
 
+        /** 获取字段路径。 */
         public SchemaPathSegment[] path() {
             return path;
         }
 
+        /** 获取字段reader。 */
         public BaseVariantReader reader() {
             return reader;
         }
     }
 
+    /**
+     * 从Paimon DataType生成Variant切片Schema。
+     *
+     * <p>该方法为顶层调用,会自动添加metadata字段。
+     *
+     * @param dataType Paimon数据类型
+     * @return 完整的切片Schema (包含metadata字段)
+     */
     public static RowType variantShreddingSchema(DataType dataType) {
         return VariantMetadataUtils.addVariantMetadata(
                 variantShreddingSchema(dataType, true, false));
     }
 
     /**
-     * Given an expected schema of a Variant value, returns a suitable schema for shredding, by
-     * inserting appropriate intermediate value/typed_value fields at each level. For example, to
-     * represent the JSON {"a": 1, "b": "hello"}, the schema struct&lt;a: int, b: string&gt; could
-     * be passed into this function, and it would return the shredding schema: struct&lt; metadata:
-     * binary, value: binary, typed_value: struct&lt; a: struct&lt;typed_value: int, value:
-     * binary&gt;, b: struct&lt;typed_value: string, value: binary&gt;&gt;&gt;
+     * 从预期的Variant值Schema生成合适的切片Schema。
+     *
+     * <p>通过在每个层级插入适当的value/typed_value字段来创建切片Schema。
+     *
+     * <h4>示例:</h4>
+     * <pre>
+     * 输入Schema: struct&lt;a: int, b: string&gt;
+     * (表示JSON: {"a": 1, "b": "hello"})
+     *
+     * 输出切片Schema:
+     * struct&lt;
+     *   metadata: binary,
+     *   value: binary,
+     *   typed_value: struct&lt;
+     *     a: struct&lt;typed_value: int, value: binary&gt;,
+     *     b: struct&lt;typed_value: string, value: binary&gt;
+     *   &gt;
+     * &gt;
+     * </pre>
+     *
+     * @param dataType 数据类型
+     * @param isTopLevel 是否为顶层 (顶层添加metadata字段)
+     * @param isObjectField 是否为对象字段 (对象字段的value可为null)
+     * @return 切片Schema
+     * @throws RuntimeException 如果dataType不是有效的切片类型
      */
     private static RowType variantShreddingSchema(
             DataType dataType, boolean isTopLevel, boolean isObjectField) {
@@ -288,10 +566,35 @@ public class PaimonShreddingUtils {
         return builder.build();
     }
 
+    /**
+     * 从Paimon RowType构建VariantSchema。
+     *
+     * <p>该方法解析Paimon的切片Schema结构,构建对应的VariantSchema对象。
+     *
+     * @param rowType Paimon切片Schema (包含metadata/value/typed_value字段)
+     * @return VariantSchema对象
+     * @throws RuntimeException 如果Schema格式无效
+     */
     public static VariantSchema buildVariantSchema(RowType rowType) {
         return buildVariantSchema(rowType, true);
     }
 
+    /**
+     * 从Paimon RowType构建VariantSchema的递归实现。
+     *
+     * <p>解析规则:
+     * <ul>
+     *   <li>必须包含typed_value或value字段(至少一个)
+     *   <li>顶层必须包含metadata字段
+     *   <li>不能有重复字段名
+     *   <li>typed_value可以是: 标量类型、ROW (对象)、ARRAY (数组)
+     * </ul>
+     *
+     * @param rowType Paimon RowType
+     * @param topLevel 是否为顶层
+     * @return VariantSchema对象
+     * @throws RuntimeException 如果Schema格式无效
+     */
     private static VariantSchema buildVariantSchema(RowType rowType, boolean topLevel) {
         int typedIdx = -1;
         int variantIdx = -1;

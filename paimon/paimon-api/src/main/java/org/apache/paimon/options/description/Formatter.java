@@ -21,8 +21,9 @@ package org.apache.paimon.options.description;
 import java.util.EnumSet;
 
 /**
- * Allows providing multiple formatters for the description. E.g. Html formatter, Markdown formatter
- * etc.
+ * 允许为描述提供多个格式化器的抽象类。例如 HTML 格式化器、Markdown 格式化器等。
+ *
+ * <p>该类提供了将 {@link Description} 对象格式化为字符串的能力,支持不同的输出格式。
  */
 public abstract class Formatter {
 

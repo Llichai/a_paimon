@@ -36,9 +36,68 @@ import org.apache.paimon.types.VariantType;
 import java.math.BigDecimal;
 import java.util.HashMap;
 
-/** Utils for variant get. */
+/**
+ * Variant 值提取和类型转换工具类。
+ *
+ * <p>提供将 Variant 值转换为 Paimon 数据类型的功能，支持多种类型转换策略：
+ * <ul>
+ *   <li>基本类型转换：BOOLEAN, LONG, STRING, DOUBLE, DECIMAL 等
+ *   <li>复杂类型转换：ROW, ARRAY, MAP
+ *   <li>特殊类型处理：UUID, DATE, TIMESTAMP
+ *   <li>错误处理：根据配置决定是抛出异常还是返回 null
+ * </ul>
+ *
+ * <p><b>类型映射规则：</b>
+ * <pre>
+ * Variant 类型    → Paimon 类型
+ * ─────────────────────────────
+ * NULL           → null
+ * BOOLEAN        → BOOLEAN
+ * LONG           → BIGINT
+ * STRING         → STRING
+ * DOUBLE         → DOUBLE
+ * DECIMAL        → DECIMAL
+ * DATE           → DATE
+ * TIMESTAMP      → TIMESTAMP_LTZ
+ * TIMESTAMP_NTZ  → TIMESTAMP
+ * FLOAT          → FLOAT
+ * UUID           → STRING
+ * OBJECT         → ROW / MAP&lt;STRING, *&gt;
+ * ARRAY          → ARRAY&lt;*&gt;
+ * </pre>
+ *
+ * <p><b>使用示例：</b>
+ * <pre>{@code
+ * GenericVariant variant = GenericVariant.fromJson("{\"age\":30}");
+ * VariantCastArgs args = VariantCastArgs.defaultArgs();
+ *
+ * // 提取并转换为整数
+ * Integer age = (Integer) VariantGet.cast(variant, DataTypes.INT(), args);
+ * }</pre>
+ *
+ * @since 1.0
+ */
 public class VariantGet {
 
+    /**
+     * 将 Variant 值转换为指定的 Paimon 数据类型。
+     *
+     * <p><b>转换策略：</b>
+     * <ol>
+     *   <li>Variant 类型处理：直接复制并构造新的 Variant
+     *   <li>NULL 类型处理：返回 null
+     *   <li>UUID 类型处理：只能转换为 STRING
+     *   <li>ROW 类型处理：从 OBJECT 提取字段并递归转换
+     *   <li>MAP 类型处理：从 OBJECT 提取键值对并转换
+     *   <li>ARRAY 类型处理：从 ARRAY 提取元素并递归转换
+     *   <li>基本类型处理：使用 CastExecutor 进行类型转换
+     * </ol>
+     *
+     * @param v Variant 值
+     * @param dataType 目标 Paimon 数据类型
+     * @param castArgs 转换参数（包含错误处理策略和时区信息）
+     * @return 转换后的值，失败时根据 castArgs.failOnError() 决定抛出异常或返回 null
+     */
     public static Object cast(GenericVariant v, DataType dataType, VariantCastArgs castArgs) {
         if (dataType instanceof VariantType) {
             GenericVariantBuilder builder = new GenericVariantBuilder(false);
@@ -173,6 +232,21 @@ public class VariantGet {
         }
     }
 
+    /**
+     * 处理无效的类型转换。
+     *
+     * <p>根据 castArgs.failOnError() 的配置：
+     * <ul>
+     *   <li>true: 抛出 RuntimeException，包含详细的错误信息
+     *   <li>false: 返回 null
+     * </ul>
+     *
+     * @param v Variant 值
+     * @param dataType 目标数据类型
+     * @param castArgs 转换参数
+     * @return null（如果 failOnError 为 false）
+     * @throws RuntimeException 如果 failOnError 为 true
+     */
     public static Object invalidCast(Variant v, DataType dataType, VariantCastArgs castArgs) {
         if (castArgs.failOnError()) {
             throw new RuntimeException(

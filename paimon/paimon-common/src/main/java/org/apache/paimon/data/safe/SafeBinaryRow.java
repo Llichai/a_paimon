@@ -37,14 +37,56 @@ import static org.apache.paimon.memory.MemorySegmentUtils.BIT_BYTE_INDEX_MASK;
 import static org.apache.paimon.memory.MemorySegmentUtils.byteIndex;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** A {@link BinaryRow} which is safe avoid core dump. */
+/**
+ * 安全的二进制行实现，避免核心转储问题。
+ *
+ * <p>这是 {@link BinaryRow} 的安全版本，使用纯 Java 字节数组操作而不是直接内存访问，
+ * 从而避免在某些环境下可能出现的核心转储（core dump）问题。
+ *
+ * <p><b>设计特点：</b>
+ * <ul>
+ *   <li>使用 byte[] 数组代替 MemorySegment 进行数据存储
+ *   <li>所有数据访问都经过边界检查，更加安全
+ *   <li>适用于需要高稳定性但可以接受轻微性能损失的场景
+ *   <li>与 BinaryRow 保持相同的二进制格式，方便互操作
+ * </ul>
+ *
+ * <p><b>内存布局：</b>
+ * <pre>
+ * [RowKind (1 byte)] [Null Bits] [Field Values (fixed 8 bytes per field)] [Variable Length Data]
+ * </pre>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>在沙箱环境中运行，禁止直接内存访问
+ *   <li>需要跨越 JNI 边界传递数据
+ *   <li>调试和测试阶段，需要更好的错误诊断
+ * </ul>
+ *
+ * @see BinaryRow
+ * @since 1.0
+ */
 public final class SafeBinaryRow implements InternalRow {
 
+    /** 字段数量（列数）。 */
     private final int arity;
+
+    /** null 位数组占用的字节数。 */
     private final int nullBitsSizeInBytes;
+
+    /** 底层字节数组，存储完整的行数据。 */
     private final byte[] bytes;
+
+    /** 当前行数据在 bytes 数组中的起始偏移量。 */
     private final int offset;
 
+    /**
+     * 构造安全二进制行。
+     *
+     * @param arity 字段数量
+     * @param bytes 字节数组
+     * @param offset 数据起始偏移量
+     */
     public SafeBinaryRow(int arity, byte[] bytes, int offset) {
         checkArgument(arity >= 0);
         this.arity = arity;
@@ -53,6 +95,14 @@ public final class SafeBinaryRow implements InternalRow {
         this.offset = offset;
     }
 
+    /**
+     * 获取指定字段的偏移量。
+     *
+     * <p>每个字段占用固定 8 字节空间。
+     *
+     * @param pos 字段位置
+     * @return 字段在 bytes 数组中的偏移量
+     */
     private int getFieldOffset(int pos) {
         return offset + nullBitsSizeInBytes + pos * 8;
     }

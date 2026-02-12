@@ -66,7 +66,46 @@ import org.apache.paimon.types.VariantType;
 import java.io.Serializable;
 import java.util.List;
 
-/** Covert row based data to columnar data. */
+/**
+ * 行转列转换器,将行式数据转换为列式数据。
+ *
+ * <p>此类负责将 {@link InternalRow} 的数据逐行填充到 {@link WritableColumnVector} 中,
+ * 是从行式存储到列式存储的关键转换组件。
+ *
+ * <h2>转换过程</h2>
+ * <pre>
+ * 输入(行式):        输出(列式):
+ * Row0: [v00, v01]    Col0: [v00, v10, v20]
+ * Row1: [v10, v11] -> Col1: [v01, v11, v21]
+ * Row2: [v20, v21]
+ * </pre>
+ *
+ * <h2>设计模式</h2>
+ * <ul>
+ *   <li><b>访问者模式:</b> 使用 DataTypeVisitor 处理不同类型
+ *   <li><b>策略模式:</b> 为每种数据类型定义独立的转换策略
+ * </ul>
+ *
+ * <h2>支持的类型</h2>
+ * <ul>
+ *   <li>基本类型: BOOLEAN, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE
+ *   <li>字符串类型: CHAR, VARCHAR
+ *   <li>二进制类型: BINARY, VARBINARY
+ *   <li>数值类型: DECIMAL
+ *   <li>时间类型: DATE, TIME, TIMESTAMP
+ *   <li>复杂类型: ARRAY, MAP, ROW
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li>将内存中的行数据转换为列式格式写入文件
+ *   <li>批量数据导入的格式转换
+ *   <li>从行式存储迁移到列式存储
+ * </ul>
+ *
+ * @see InternalRow 内部行接口
+ * @see WritableColumnVector 可写列向量接口
+ */
 public class RowToColumnConverter {
 
     private final TypeConverter[] converters;

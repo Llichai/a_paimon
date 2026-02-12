@@ -38,12 +38,55 @@ import static org.apache.paimon.CoreOptions.FILE_FORMAT;
 import static org.apache.paimon.schema.TableSchema.PAIMON_07_VERSION;
 import static org.apache.paimon.schema.TableSchema.PAIMON_08_VERSION;
 
-/** A {@link JsonSerializer} for {@link TableSchema}. */
+/**
+ * {@link TableSchema} 的 JSON 序列化器和反序列化器。
+ *
+ * <p>负责将 TableSchema 对象与 JSON 格式之间相互转换，支持:
+ * <ul>
+ *   <li>序列化: 将 TableSchema 对象转换为 JSON 格式
+ *   <li>反序列化: 从 JSON 格式解析 TableSchema 对象
+ *   <li>版本兼容性处理（支持 Paimon 0.7, 0.8 及更高版本）
+ * </ul>
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * // 序列化
+ * SchemaSerializer serializer = SchemaSerializer.INSTANCE;
+ * StringWriter writer = new StringWriter();
+ * JsonGenerator generator = ...;
+ * serializer.serialize(tableSchema, generator);
+ *
+ * // 反序列化
+ * JsonNode node = ...;
+ * TableSchema schema = serializer.deserialize(node);
+ * }</pre>
+ */
 public class SchemaSerializer
         implements JsonSerializer<TableSchema>, JsonDeserializer<TableSchema> {
 
+    /** 单例实例。 */
     public static final SchemaSerializer INSTANCE = new SchemaSerializer();
 
+    /**
+     * 序列化 TableSchema 为 JSON。
+     *
+     * <p>将 TableSchema 的所有字段序列化为 JSON 格式，包括:
+     * <ul>
+     *   <li>version: Schema 版本号
+     *   <li>id: Schema ID
+     *   <li>fields: 字段列表
+     *   <li>highestFieldId: 最大字段 ID
+     *   <li>partitionKeys: 分区键列表
+     *   <li>primaryKeys: 主键列表
+     *   <li>options: 表选项
+     *   <li>comment: 表注释（可选）
+     *   <li>timeMillis: 创建时间戳
+     * </ul>
+     *
+     * @param tableSchema 要序列化的 TableSchema
+     * @param generator JSON 生成器
+     * @throws IOException 如果序列化失败
+     */
     @Override
     public void serialize(TableSchema tableSchema, JsonGenerator generator) throws IOException {
         generator.writeStartObject();
@@ -87,6 +130,18 @@ public class SchemaSerializer
         generator.writeEndObject();
     }
 
+    /**
+     * 从 JSON 反序列化 TableSchema。
+     *
+     * <p>解析 JSON 节点并构造 TableSchema 对象。支持向后兼容:
+     * <ul>
+     *   <li>Paimon 0.7 版本: 默认 bucket 为 1
+     *   <li>Paimon 0.8 版本: 默认文件格式为 orc
+     * </ul>
+     *
+     * @param node JSON 节点
+     * @return 反序列化的 TableSchema
+     */
     @Override
     public TableSchema deserialize(JsonNode node) {
         JsonNode versionNode = node.get("version");

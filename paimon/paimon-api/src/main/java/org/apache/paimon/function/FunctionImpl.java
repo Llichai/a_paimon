@@ -29,7 +29,51 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Function implementation. */
+/**
+ * 函数接口的默认实现类。
+ *
+ * <p>该类提供了 {@link Function} 接口的完整实现,封装了函数的所有元数据和定义信息。
+ *
+ * <h2>主要功能</h2>
+ * <ul>
+ *   <li>存储函数的标识信息(identifier、name、fullName)
+ *   <li>管理函数的参数定义(inputParams、returnParams)
+ *   <li>跟踪函数的确定性属性(deterministic)
+ *   <li>维护函数的多个定义(definitions)
+ *   <li>保存函数的注释和配置选项(comment、options)
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 创建完整的函数实现
+ * Identifier id = Identifier.create("mydb", "myfunction");
+ * List<DataField> inputs = Arrays.asList(
+ *     new DataField(0, "x", DataTypes.INT()),
+ *     new DataField(1, "y", DataTypes.INT())
+ * );
+ * List<DataField> outputs = Arrays.asList(
+ *     new DataField(0, "result", DataTypes.INT())
+ * );
+ * Map<String, FunctionDefinition> defs = new HashMap<>();
+ * defs.put("sql", FunctionDefinition.sql("x + y"));
+ *
+ * Function func = new FunctionImpl(
+ *     id,
+ *     inputs,
+ *     outputs,
+ *     true,  // deterministic
+ *     defs,
+ *     "Addition function",  // comment
+ *     Collections.emptyMap()  // options
+ * );
+ *
+ * // 或者创建简化版本
+ * Function simpleFunc = new FunctionImpl(id, defs);
+ * }</pre>
+ *
+ * @see Function
+ * @see FunctionDefinition
+ */
 public class FunctionImpl implements Function {
 
     private final Identifier identifier;

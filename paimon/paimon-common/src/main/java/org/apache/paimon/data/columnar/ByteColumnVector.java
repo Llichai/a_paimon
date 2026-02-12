@@ -18,7 +18,29 @@
 
 package org.apache.paimon.data.columnar;
 
-/** Byte column vector. */
+/**
+ * 字节型列向量接口,用于访问字节型列数据。
+ *
+ * <p>此接口扩展了 {@link ColumnVector} 基础接口,提供 byte 类型的类型化访问方法。
+ * 主要用于存储 TINYINT 等 SQL 类型的列数据。
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li>存储和访问 TINYINT 类型的列数据
+ *   <li>存储小范围整数或标志位
+ *   <li>向量化执行中的批量字节运算
+ * </ul>
+ *
+ * @see ColumnVector 列向量基础接口
+ * @see org.apache.paimon.data.columnar.heap.HeapByteVector 堆内存实现
+ * @see org.apache.paimon.data.columnar.writable.WritableByteVector 可写实现
+ */
 public interface ByteColumnVector extends ColumnVector {
+    /**
+     * 获取指定位置的字节值。
+     *
+     * @param i 行索引(从0开始)
+     * @return 字节值
+     */
     byte getByte(int i);
 }

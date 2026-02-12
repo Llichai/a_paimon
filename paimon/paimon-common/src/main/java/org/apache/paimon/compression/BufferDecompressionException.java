@@ -19,8 +19,18 @@
 package org.apache.paimon.compression;
 
 /**
- * A {@code BufferDecompressionException} is thrown when the target data cannot be decompressed,
- * such as data corruption, insufficient target buffer space for decompression, etc.
+ * 缓冲区解压缩异常。
+ *
+ * <p>当目标数据无法被解压缩时抛出 {@code BufferDecompressionException},
+ * 例如数据损坏、目标缓冲区空间不足无法存储解压缩结果等情况。
+ *
+ * <p>常见场景:
+ * <ul>
+ *   <li>压缩数据已损坏或格式错误</li>
+ *   <li>目标缓冲区太小,无法容纳解压缩后的数据</li>
+ *   <li>解压缩算法内部错误</li>
+ *   <li>压缩数据不完整</li>
+ * </ul>
  */
 public class BufferDecompressionException extends RuntimeException {
 

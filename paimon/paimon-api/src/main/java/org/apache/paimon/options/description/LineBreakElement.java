@@ -18,10 +18,10 @@
 
 package org.apache.paimon.options.description;
 
-/** Represents a line break in the {@link Description}. */
+/** 表示 {@link Description} 中的换行符。 */
 public class LineBreakElement implements InlineElement, BlockElement {
 
-    /** Creates a line break in the description. */
+    /** 创建一个描述中的换行符。 */
     public static LineBreakElement linebreak() {
         return new LineBreakElement();
     }

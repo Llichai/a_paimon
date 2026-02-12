@@ -46,7 +46,28 @@ import static org.rocksdb.CompactionStyle.UNIVERSAL;
 import static org.rocksdb.CompressionType.LZ4_COMPRESSION;
 import static org.rocksdb.InfoLogLevel.INFO_LEVEL;
 
-/** Options for rocksdb. Copied from flink {@code RocksDBConfigurableOptions}. */
+/**
+ * RocksDB 配置选项类.
+ *
+ * <p>该类提供了 RocksDB 的各种可配置选项,包括 Lookup 相关选项和底层 RocksDB 引擎选项。
+ * 大部分选项来自 Flink 的 RocksDBConfigurableOptions,经过适配用于 Paimon。
+ *
+ * <h2>配置分类:</h2>
+ * <ul>
+ *   <li><b>Lookup 选项</b>: cache-rows, continuous.discovery-interval 等
+ *   <li><b>DBOptions</b>: 线程数、打开文件数、日志配置等
+ *   <li><b>ColumnFamilyOptions</b>: 压缩、合并、写缓冲、Block Cache 等
+ * </ul>
+ *
+ * <h2>性能调优建议:</h2>
+ * <ul>
+ *   <li><b>写入优化</b>: 增大 writeBufferSize, maxWriteBufferNumber
+ *   <li><b>读取优化</b>: 增大 blockCacheSize, 启用 Bloom Filter
+ *   <li><b>空间优化</b>: 调整压缩类型, 合并策略
+ * </ul>
+ *
+ * @see RocksDBStateFactory RocksDB 状态工厂
+ */
 public class RocksDBOptions {
 
     public static final ConfigOption<Long> LOOKUP_CACHE_ROWS =

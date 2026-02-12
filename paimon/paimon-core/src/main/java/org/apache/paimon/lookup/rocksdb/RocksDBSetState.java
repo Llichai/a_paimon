@@ -33,7 +33,38 @@ import java.util.List;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Rocksdb state for key -> Set values. */
+/**
+ * 基于 RocksDB 的集合状态实现.
+ *
+ * <p>RocksDBSetState 使用复合键(键 + 值)存储集合中的每个元素,
+ * 通过前缀扫描实现集合查询操作。
+ *
+ * <h2>存储机制:</h2>
+ * <ul>
+ *   <li><b>复合键设计</b>: 将 (key, value) 组合为 RocksDB 的键,值为空字节数组
+ *   <li><b>前缀扫描</b>: 查询时使用键前缀扫描所有匹配的值
+ *   <li><b>自然排序</b>: RocksDB 的键是有序的,天然支持排序查询
+ *   <li><b>缓存策略</b>: 缓存查询结果(字节数组列表),添加/删除时失效缓存
+ * </ul>
+ *
+ * <h2>性能特点:</h2>
+ * <ul>
+ *   <li><b>添加/删除延迟</b>: 微秒级(单次 put/delete 操作)
+ *   <li><b>查询延迟</b>: 毫秒级(需要前缀扫描)
+ *   <li><b>缓存失效</b>: 每次修改都会使缓存失效
+ * </ul>
+ *
+ * <h2>使用约束:</h2>
+ * <ul>
+ *   <li>查询性能随集合大小线性增长(O(n))
+ *   <li>建议单个键对应的值数量不超过 1000 个
+ * </ul>
+ *
+ * @param <K> 键的类型
+ * @param <V> 值的类型
+ * @see RocksDBState RocksDB 状态基类
+ * @see SetState 集合状态接口
+ */
 public class RocksDBSetState<K, V> extends RocksDBState<K, V, List<byte[]>>
         implements SetState<K, V> {
 

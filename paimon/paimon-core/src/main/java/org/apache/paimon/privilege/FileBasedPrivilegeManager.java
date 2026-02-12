@@ -58,24 +58,114 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 基于文件的权限管理器。
+ * 基于文件的权限管理器实现。
  *
- * <p>基于用户表和权限表实现权限管理。这些系统表的目录创建在warehouse根目录下
- * (table-root/user.sys 和 table-root/privilege.sys)。
- *
- * <p>用户表(user.sys)存储所有用户信息,Schema如下:
+ * <p>基于用户表和权限表实现权限管理。这些系统表的目录创建在warehouse根目录下:
  * <ul>
- *   <li>user (string): 用户名(主键)</li>
- *   <li>sha256 (bytes): 密码的SHA256哈希值</li>
+ *   <li>table-root/user.sys - 用户表</li>
+ *   <li>table-root/privilege.sys - 权限表</li>
  * </ul>
  *
- * <p>权限表(privilege.sys)存储每个用户拥有的权限,Schema如下:
+ * <h2>用户表 (user.sys)</h2>
+ * <p>存储所有用户信息,Schema如下:
  * <ul>
- *   <li>name (string): 用户或角色名(主键)</li>
- *   <li>entity_type (string): 用户或角色(主键)</li>
- *   <li>identifier (string): 对象标识符(主键)</li>
- *   <li>privilege (string): 权限名称(主键),参见 {@link PrivilegeType}</li>
+ *   <li><b>user</b> (string): 用户名(主键)</li>
+ *   <li><b>sha256</b> (bytes): 密码的SHA256哈希值</li>
  * </ul>
+ *
+ * <h2>权限表 (privilege.sys)</h2>
+ * <p>存储每个用户/角色拥有的权限,Schema如下:
+ * <ul>
+ *   <li><b>name</b> (string): 用户或角色名(主键)</li>
+ *   <li><b>entity_type</b> (string): 实体类型,USER或ROLE(主键)</li>
+ *   <li><b>identifier</b> (string): 对象标识符(主键)</li>
+ *   <li><b>privilege</b> (string): 权限类型(主键),参见 {@link PrivilegeType}</li>
+ * </ul>
+ *
+ * <h2>权限继承模型</h2>
+ * <p>权限系统采用层次化的继承模型:
+ * <pre>
+ * Catalog (空字符串 "")
+ *   └── Database (database_name)
+ *         └── Table (database_name.table_name)
+ * </pre>
+ * <p>如果用户在标识符A上有某个权限,则他在标识符B上也有该权限(其中A是B的前缀)。
+ * 例如:
+ * <ul>
+ *   <li>在Catalog级别的权限 → 适用于所有数据库和表</li>
+ *   <li>在数据库级别的权限 → 适用于该数据库下的所有表</li>
+ *   <li>在表级别的权限 → 仅适用于该表</li>
+ * </ul>
+ *
+ * <h2>密码安全</h2>
+ * <ul>
+ *   <li>密码使用SHA-256哈希算法加密存储</li>
+ *   <li>不存储明文密码,无法反向解密</li>
+ *   <li>每次验证时对输入密码进行哈希后与存储的哈希值比较</li>
+ * </ul>
+ *
+ * <h2>系统表配置</h2>
+ * <ul>
+ *   <li>文件格式: Avro (用户表) / 默认格式 (权限表)</li>
+ *   <li>分桶数: 1 (单桶,简化管理)</li>
+ *   <li>主键表: 支持更新和删除操作</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 初始化权限系统
+ * FileBasedPrivilegeManager manager = new FileBasedPrivilegeManager(
+ *     warehouse, fileIO, "admin", "admin_password"
+ * );
+ *
+ * if (!manager.privilegeEnabled()) {
+ *     // 首次初始化,设置root密码
+ *     manager.initializePrivilege("root_password");
+ * }
+ *
+ * // 创建用户
+ * manager.createUser("alice", "alice_password");
+ *
+ * // 授予Catalog级别的权限
+ * manager.grant("alice", "", PrivilegeType.CREATE_DATABASE);
+ *
+ * // 授予数据库级别的权限
+ * manager.grant("alice", "my_db", PrivilegeType.CREATE_TABLE);
+ *
+ * // 授予表级别的权限
+ * manager.grant("alice", "my_db.my_table", PrivilegeType.SELECT);
+ * manager.grant("alice", "my_db.my_table", PrivilegeType.INSERT);
+ *
+ * // 撤销权限(会同时撤销子对象上的权限)
+ * int count = manager.revoke("alice", "my_db", PrivilegeType.SELECT);
+ *
+ * // 处理对象重命名
+ * manager.objectRenamed("old_db.old_table", "new_db.new_table");
+ *
+ * // 处理对象删除
+ * manager.objectDropped("my_db");
+ *
+ * // 获取权限检查器
+ * PrivilegeChecker checker = manager.getPrivilegeChecker();
+ * }</pre>
+ *
+ * <h2>线程安全</h2>
+ * <p>该实现依赖Paimon表的原子性保证:
+ * <ul>
+ *   <li>用户表和权限表都是主键表,支持并发更新</li>
+ *   <li>通过表的事务机制保证操作的原子性</li>
+ *   <li>多个客户端可以安全地并发操作</li>
+ * </ul>
+ *
+ * <h2>特殊用户</h2>
+ * <ul>
+ *   <li><b>root</b> - 超级管理员,拥有所有权限,不能被删除或修改权限</li>
+ *   <li><b>anonymous</b> - 匿名用户,当未提供认证信息时使用,不能被删除</li>
+ * </ul>
+ *
+ * @see PrivilegeManager
+ * @see PrivilegeChecker
+ * @see PrivilegedCatalog
  */
 public class FileBasedPrivilegeManager implements PrivilegeManager {
 
@@ -104,6 +194,14 @@ public class FileBasedPrivilegeManager implements PrivilegeManager {
     private Table userTable;
     private Table privilegeTable;
 
+    /**
+     * 构造基于文件的权限管理器。
+     *
+     * @param warehouse 仓库根目录
+     * @param fileIO 文件I/O接口
+     * @param user 当前用户名
+     * @param password 当前用户密码
+     */
     public FileBasedPrivilegeManager(
             String warehouse, FileIO fileIO, String user, String password) {
         this.warehouse = warehouse;

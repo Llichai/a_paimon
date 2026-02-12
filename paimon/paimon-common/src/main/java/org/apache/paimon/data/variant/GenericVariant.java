@@ -60,37 +60,112 @@ import static org.apache.paimon.data.variant.GenericVariantUtil.variantConstruct
  * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
  * additional information regarding copyright ownership. */
 
-/** An internal data structure implementing {@link Variant}. */
+/**
+ * Variant 接口的通用实现类。
+ *
+ * <p>这是 Paimon 内部使用的 Variant 数据结构实现，提供了完整的 Variant 功能。
+ *
+ * <p><b>核心设计：</b>
+ * <ul>
+ *   <li>使用字节数组存储值和元数据，实现紧凑的内存表示
+ *   <li>支持部分读取优化：通过 pos 和 valueSize 避免频繁的数组拷贝
+ *   <li>支持从 JSON 解析和转换为 JSON
+ *   <li>提供高效的路径访问和类型转换功能
+ * </ul>
+ *
+ * <p><b>内存优化：</b>
+ * <ul>
+ *   <li>variant 值不总是使用整个 value 字节数组
+ *   <li>而是从 pos 索引开始，跨越 valueSize(value, pos) 大小
+ *   <li>这种设计避免了在读取数组/对象元素中的子 variant 时频繁复制 value 二进制数据
+ * </ul>
+ *
+ * <p><b>使用示例：</b>
+ * <pre>{@code
+ * // 从 JSON 创建 Variant
+ * GenericVariant variant = GenericVariant.fromJson("{\"name\":\"Alice\",\"age\":30}");
+ *
+ * // 访问字段
+ * GenericVariant nameField = variant.getFieldByKey("name");
+ * String name = nameField.getString();  // "Alice"
+ *
+ * // 转换为 JSON
+ * String json = variant.toJson();
+ * }</pre>
+ *
+ * @see Variant
+ * @since 1.0
+ */
 public final class GenericVariant implements Variant, Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** 值的二进制表示。 */
     private final byte[] value;
+
+    /** 元数据的二进制表示。 */
     private final byte[] metadata;
-    // The variant value doesn't use the whole `value` binary, but starts from its `pos` index and
-    // spans a size of `valueSize(value, pos)`. This design avoids frequent copies of the value
-    // binary when reading a sub-variant in the array/object element.
+
+    /**
+     * 当前 variant 值在 value 数组中的起始位置。
+     *
+     * <p>设计说明：
+     * <ul>
+     *   <li>variant 值不使用整个 value 二进制，而是从 pos 索引开始
+     *   <li>实际占用大小为 valueSize(value, pos)
+     *   <li>这种设计避免了读取数组/对象元素中的子 variant 时频繁复制 value 二进制
+     * </ul>
+     */
     private final int pos;
 
+    /**
+     * 创建 GenericVariant 实例。
+     *
+     * <p>从位置 0 开始使用 value 数组。
+     *
+     * @param value 值的二进制表示
+     * @param metadata 元数据的二进制表示
+     */
     public GenericVariant(byte[] value, byte[] metadata) {
         this(value, metadata, 0);
     }
 
+    /**
+     * 创建 GenericVariant 实例，指定起始位置。
+     *
+     * <p><b>验证规则：</b>
+     * <ul>
+     *   <li>元数据必须至少有 1 字节，且版本号必须为 VERSION (当前为 1)
+     *   <li>元数据和值的大小都不能超过 SIZE_LIMIT (16 MiB)
+     * </ul>
+     *
+     * @param value 值的二进制表示
+     * @param metadata 元数据的二进制表示
+     * @param pos 值在 value 数组中的起始位置
+     * @throws RuntimeException 如果 variant 格式错误或超过大小限制
+     */
     private GenericVariant(byte[] value, byte[] metadata, int pos) {
         this.value = value;
         this.metadata = metadata;
         this.pos = pos;
-        // There is currently only one allowed version.
+        // 当前只允许一个版本
         if (metadata.length < 1 || (metadata[0] & VERSION_MASK) != VERSION) {
             throw malformedVariant();
         }
-        // Don't attempt to use a Variant larger than 16 MiB. We'll never produce one, and it risks
-        // memory instability.
+        // 不尝试使用大于 16 MiB 的 Variant。我们永远不会生成这么大的 variant，
+        // 这样做可能导致内存不稳定。
         if (metadata.length > SIZE_LIMIT || value.length > SIZE_LIMIT) {
             throw variantConstructorSizeLimit();
         }
     }
 
+    /**
+     * 返回 variant 的值字节数组。
+     *
+     * <p>如果 pos 不为 0，则从 value 数组中复制相应的子数组。
+     *
+     * @return 值的二进制表示
+     */
     @Override
     public byte[] value() {
         if (pos == 0) {
@@ -101,15 +176,32 @@ public final class GenericVariant implements Variant, Serializable {
         return Arrays.copyOfRange(value, pos, pos + size);
     }
 
+    /**
+     * 返回原始的 value 数组引用。
+     *
+     * <p>内部使用，不复制数组。
+     *
+     * @return 原始 value 数组
+     */
     public byte[] rawValue() {
         return value;
     }
 
+    /**
+     * 返回元数据字节数组。
+     *
+     * @return 元数据的二进制表示
+     */
     @Override
     public byte[] metadata() {
         return metadata;
     }
 
+    /**
+     * 返回当前值在 value 数组中的起始位置。
+     *
+     * @return 起始位置
+     */
     public int pos() {
         return pos;
     }
@@ -130,6 +222,15 @@ public final class GenericVariant implements Variant, Serializable {
         return Objects.hash(Arrays.hashCode(value), Arrays.hashCode(metadata), pos);
     }
 
+    /**
+     * 从 JSON 字符串创建 GenericVariant。
+     *
+     * <p>使用默认配置解析 JSON，不允许重复键。
+     *
+     * @param json JSON 字符串
+     * @return GenericVariant 实例
+     * @throws RuntimeException 如果 JSON 解析失败
+     */
     public static GenericVariant fromJson(String json) {
         try {
             return GenericVariantBuilder.parseJson(json, false);
@@ -138,8 +239,15 @@ public final class GenericVariant implements Variant, Serializable {
         }
     }
 
-    // Stringify the variant in JSON format.
-    // Throw `MALFORMED_VARIANT` if the variant is malformed.
+    /**
+     * 将 variant 转换为 JSON 字符串。
+     *
+     * <p>使用指定的时区格式化时间类型。
+     *
+     * @param zoneId 时区 ID
+     * @return JSON 格式的字符串
+     * @throws RuntimeException 如果 variant 格式错误
+     */
     @Override
     public String toJson(ZoneId zoneId) {
         StringBuilder sb = new StringBuilder();
@@ -147,103 +255,234 @@ public final class GenericVariant implements Variant, Serializable {
         return sb.toString();
     }
 
+    /**
+     * 返回 variant 的 JSON 字符串表示。
+     *
+     * @return JSON 格式的字符串
+     */
     @Override
     public String toString() {
         return toJson();
     }
 
+    /**
+     * 根据路径提取值并转换为指定类型。
+     *
+     * <p><b>路径解析过程：</b>
+     * <ol>
+     *   <li>解析路径字符串为路径段列表
+     *   <li>逐级访问对象字段或数组元素
+     *   <li>如果任一步骤失败，返回 null
+     *   <li>最后使用 VariantGet.cast 转换为目标类型
+     * </ol>
+     *
+     * @param path 提取路径，以 $ 开头
+     * @param dataType 目标数据类型
+     * @param castArgs 类型转换参数
+     * @return 转换后的值，如果路径不存在或转换失败则返回 null
+     */
     public Object variantGet(String path, DataType dataType, VariantCastArgs castArgs) {
         GenericVariant v = this;
         VariantPathSegment[] parsedPath = VariantPathSegment.parse(path);
+        // 逐级遍历路径
         for (VariantPathSegment pathSegment : parsedPath) {
             if (pathSegment instanceof ObjectExtraction && v.getType() == Type.OBJECT) {
+                // 对象字段访问
                 v = v.getFieldByKey(((ObjectExtraction) pathSegment).getKey());
             } else if (pathSegment instanceof ArrayExtraction && v.getType() == Type.ARRAY) {
+                // 数组索引访问
                 v = v.getElementAtIndex(((ArrayExtraction) pathSegment).getIndex());
             } else {
+                // 类型不匹配，返回 null
                 return null;
             }
         }
+        // 将提取的值转换为目标类型
         return VariantGet.cast(v, dataType, castArgs);
     }
 
+    /**
+     * 返回 variant 占用的字节大小。
+     *
+     * <p>包括元数据和值的总大小。
+     *
+     * @return 字节大小
+     */
     @Override
     public long sizeInBytes() {
         return metadata.length + value.length;
     }
 
+    /**
+     * 创建 variant 的深拷贝。
+     *
+     * <p>复制 value 和 metadata 数组。
+     *
+     * @return variant 的副本
+     */
     @Override
     public Variant copy() {
         return new GenericVariant(
                 Arrays.copyOf(value, value.length), Arrays.copyOf(metadata, metadata.length), pos);
     }
 
-    // Get a boolean value from the variant.
+    /**
+     * 获取布尔值。
+     *
+     * <p>只有当 variant 类型为 BOOLEAN 时才能调用。
+     *
+     * @return 布尔值
+     * @throws IllegalStateException 如果类型不是 BOOLEAN
+     */
     public boolean getBoolean() {
         return GenericVariantUtil.getBoolean(value, pos);
     }
 
-    // Get a long value from the variant.
+    /**
+     * 获取长整型值。
+     *
+     * <p>适用于以下类型：
+     * <ul>
+     *   <li>LONG: 整数值
+     *   <li>DATE: 自 Unix epoch 以来的天数
+     *   <li>TIMESTAMP/TIMESTAMP_NTZ: 自 Unix epoch 以来的微秒数
+     * </ul>
+     *
+     * @return 长整型值
+     * @throws IllegalStateException 如果类型不适用
+     */
     public long getLong() {
         return GenericVariantUtil.getLong(value, pos);
     }
 
-    // Get a double value from the variant.
+    /**
+     * 获取双精度浮点数值。
+     *
+     * <p>只有当 variant 类型为 DOUBLE 时才能调用。
+     *
+     * @return 双精度浮点数值
+     * @throws IllegalStateException 如果类型不是 DOUBLE
+     */
     public double getDouble() {
         return GenericVariantUtil.getDouble(value, pos);
     }
 
-    // Get a decimal value from the variant.
+    /**
+     * 获取十进制数值。
+     *
+     * <p>只有当 variant 类型为 DECIMAL 时才能调用。
+     *
+     * @return BigDecimal 值
+     * @throws IllegalStateException 如果类型不是 DECIMAL
+     */
     public BigDecimal getDecimal() {
         return GenericVariantUtil.getDecimal(value, pos);
     }
 
-    // Get a float value from the variant.
+    /**
+     * 获取单精度浮点数值。
+     *
+     * <p>只有当 variant 类型为 FLOAT 时才能调用。
+     *
+     * @return 单精度浮点数值
+     * @throws IllegalStateException 如果类型不是 FLOAT
+     */
     public float getFloat() {
         return GenericVariantUtil.getFloat(value, pos);
     }
 
-    // Get a binary value from the variant.
+    /**
+     * 获取二进制数据。
+     *
+     * <p>只有当 variant 类型为 BINARY 时才能调用。
+     *
+     * @return 字节数组
+     * @throws IllegalStateException 如果类型不是 BINARY
+     */
     public byte[] getBinary() {
         return GenericVariantUtil.getBinary(value, pos);
     }
 
-    // Get a string value from the variant.
+    /**
+     * 获取字符串值。
+     *
+     * <p>只有当 variant 类型为 STRING 时才能调用。
+     *
+     * @return 字符串值
+     * @throws IllegalStateException 如果类型不是 STRING
+     */
     public String getString() {
         return GenericVariantUtil.getString(value, pos);
     }
 
-    // Get the type info bits from a variant value.
+    /**
+     * 获取类型信息位。
+     *
+     * <p>从 variant 值的头字节中提取类型信息。
+     *
+     * @return 类型信息（6 位值）
+     */
     public int getTypeInfo() {
         return GenericVariantUtil.getTypeInfo(value, pos);
     }
 
-    // Get the value type of the variant.
+    /**
+     * 获取 variant 的值类型。
+     *
+     * <p>返回的类型是高级类型（如 LONG），而不是底层的类型信息（如 INT1/INT2/INT4/INT8）。
+     *
+     * @return Variant 的类型枚举值
+     */
     public Type getType() {
         return GenericVariantUtil.getType(value, pos);
     }
 
-    // Get a UUID value from the variant.
+    /**
+     * 获取 UUID 值。
+     *
+     * <p>只有当 variant 类型为 UUID 时才能调用。
+     *
+     * @return UUID 值
+     * @throws IllegalStateException 如果类型不是 UUID
+     */
     public UUID getUuid() {
         return GenericVariantUtil.getUuid(value, pos);
     }
 
-    // Get the number of object fields in the variant.
-    // It is only legal to call it when `getType()` is `Type.OBJECT`.
+    /**
+     * 获取对象中的字段数量。
+     *
+     * <p>只有当 getType() 返回 Type.OBJECT 时才能合法调用。
+     *
+     * @return 对象字段数量
+     * @throws IllegalStateException 如果类型不是 OBJECT
+     */
     public int objectSize() {
         return handleObject(
                 value, pos, (size, idSize, offsetSize, idStart, offsetStart, dataStart) -> size);
     }
 
-    // Find the field value whose key is equal to `key`. Return null if the key is not found.
-    // It is only legal to call it when `getType()` is `Type.OBJECT`.
+    /**
+     * 根据键名查找对象字段的值。
+     *
+     * <p><b>查找算法：</b>
+     * <ul>
+     *   <li>当字段数量 < BINARY_SEARCH_THRESHOLD 时使用线性搜索
+     *   <li>否则使用二分搜索（因为字段按键名排序）
+     * </ul>
+     *
+     * <p>只有当 getType() 返回 Type.OBJECT 时才能合法调用。
+     *
+     * @param key 字段键名
+     * @return 字段的 Variant 值，如果未找到则返回 null
+     * @throws IllegalStateException 如果类型不是 OBJECT
+     */
     public GenericVariant getFieldByKey(String key) {
         return handleObject(
                 value,
                 pos,
                 (size, idSize, offsetSize, idStart, offsetStart, dataStart) -> {
-                    // Use linear search for a short list. Switch to binary search when the length
-                    // reaches `BINARY_SEARCH_THRESHOLD`.
+                    // 对于短列表使用线性搜索。当长度达到 BINARY_SEARCH_THRESHOLD 时切换到二分搜索
                     if (size < BINARY_SEARCH_THRESHOLD) {
                         for (int i = 0; i < size; ++i) {
                             int id = readUnsigned(value, idStart + idSize * i, idSize);
@@ -255,12 +494,12 @@ public final class GenericVariant implements Variant, Serializable {
                             }
                         }
                     } else {
+                        // 二分搜索
                         int low = 0;
                         int high = size - 1;
                         while (low <= high) {
-                            // Use unsigned right shift to compute the middle of `low` and `high`.
-                            // This is not only a performance optimization, because it can properly
-                            // handle the case where `low + high` overflows int.
+                            // 使用无符号右移计算 low 和 high 的中点
+                            // 这不仅是性能优化，还能正确处理 low + high 溢出 int 的情况
                             int mid = (low + high) >>> 1;
                             int id = readUnsigned(value, idStart + idSize * mid, idSize);
                             int cmp = getMetadataKey(metadata, id).compareTo(key);
@@ -280,20 +519,38 @@ public final class GenericVariant implements Variant, Serializable {
                 });
     }
 
-    /** Variant object field. */
+    /**
+     * Variant 对象字段，包含键和值。
+     *
+     * <p>用于 getFieldAtIndex 方法的返回值。
+     */
     public static final class ObjectField {
+        /** 字段键名。 */
         public final String key;
+        /** 字段的 Variant 值。 */
         public final GenericVariant value;
 
+        /**
+         * 构造对象字段。
+         *
+         * @param key 字段键名
+         * @param value 字段值
+         */
         public ObjectField(String key, GenericVariant value) {
             this.key = key;
             this.value = value;
         }
     }
 
-    // Get the object field at the `index` slot. Return null if `index` is out of the bound of
-    // `[0, objectSize())`.
-    // It is only legal to call it when `getType()` is `Type.OBJECT`.
+    /**
+     * 获取指定索引位置的对象字段。
+     *
+     * <p>只有当 getType() 返回 Type.OBJECT 时才能合法调用。
+     *
+     * @param index 字段索引，范围 [0, objectSize())
+     * @return 对象字段，如果索引越界则返回 null
+     * @throws IllegalStateException 如果类型不是 OBJECT
+     */
     public ObjectField getFieldAtIndex(int index) {
         return handleObject(
                 value,
@@ -310,9 +567,15 @@ public final class GenericVariant implements Variant, Serializable {
                 });
     }
 
-    // Get the dictionary ID for the object field at the `index` slot. Throws malformedVariant if
-    // `index` is out of the bound of `[0, objectSize())`.
-    // It is only legal to call it when `getType()` is `Type.OBJECT`.
+    /**
+     * 获取指定索引位置的对象字段的字典 ID。
+     *
+     * <p>只有当 getType() 返回 Type.OBJECT 时才能合法调用。
+     *
+     * @param index 字段索引，范围 [0, objectSize())
+     * @return 字典 ID
+     * @throws RuntimeException 如果索引越界或类型不是 OBJECT
+     */
     public int getDictionaryIdAtIndex(int index) {
         return handleObject(
                 value,
@@ -325,15 +588,27 @@ public final class GenericVariant implements Variant, Serializable {
                 });
     }
 
-    // Get the number of array elements in the variant.
-    // It is only legal to call it when `getType()` is `Type.ARRAY`.
+    /**
+     * 获取数组中的元素数量。
+     *
+     * <p>只有当 getType() 返回 Type.ARRAY 时才能合法调用。
+     *
+     * @return 数组元素数量
+     * @throws IllegalStateException 如果类型不是 ARRAY
+     */
     public int arraySize() {
         return handleArray(value, pos, (size, offsetSize, offsetStart, dataStart) -> size);
     }
 
-    // Get the array element at the `index` slot. Return null if `index` is out of the bound of
-    // `[0, arraySize())`.
-    // It is only legal to call it when `getType()` is `Type.ARRAY`.
+    /**
+     * 获取指定索引位置的数组元素。
+     *
+     * <p>只有当 getType() 返回 Type.ARRAY 时才能合法调用。
+     *
+     * @param index 元素索引，范围 [0, arraySize())
+     * @return 数组元素，如果索引越界则返回 null
+     * @throws IllegalStateException 如果类型不是 ARRAY
+     */
     public GenericVariant getElementAtIndex(int index) {
         return handleArray(
                 value,

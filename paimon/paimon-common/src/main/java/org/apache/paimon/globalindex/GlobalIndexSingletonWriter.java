@@ -20,7 +20,20 @@ package org.apache.paimon.globalindex;
 
 import javax.annotation.Nullable;
 
-/** Index writer for global index. */
+/**
+ * 全局索引的单例写入器。
+ *
+ * <p>该接口用于在单线程场景下构建全局索引。与 {@link GlobalIndexParallelWriter} 不同,
+ * 该接口不需要提供行 ID,由实现类内部管理行 ID 的生成和追踪。
+ *
+ * <p>适用于不需要显式指定行 ID 的索引类型,例如某些向量索引。
+ */
 public interface GlobalIndexSingletonWriter extends GlobalIndexWriter {
+
+    /**
+     * 写入索引键到索引文件。
+     *
+     * @param key 可为 null 的索引键
+     */
     void write(@Nullable Object key);
 }

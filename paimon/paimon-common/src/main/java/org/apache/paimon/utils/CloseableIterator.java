@@ -34,29 +34,69 @@ import java.util.function.Consumer;
 import static java.util.Arrays.asList;
 
 /**
- * This interface represents an {@link Iterator} that is also {@link AutoCloseable}. A typical
- * use-case for this interface are iterators that are based on native-resources such as files,
- * network, or database connections. Clients must call {@link #close()} after using the iterator.
+ * 可关闭的迭代器接口。
  *
- * @param <T> the type of iterated elements.
+ * <p>该接口表示一个同时实现 {@link Iterator} 和 {@link AutoCloseable} 的迭代器。
+ * 典型的使用场景是基于本地资源(如文件、网络或数据库连接)的迭代器。
+ * 客户端在使用完迭代器后必须调用 {@link #close()} 方法。
+ *
+ * <p>提供多种工厂方法:
+ * <ul>
+ *   <li>{@link #adapterForIterator} - 将普通迭代器适配为可关闭迭代器
+ *   <li>{@link #fromList} - 从列表创建可关闭迭代器
+ *   <li>{@link #flatten} - 展平多个迭代器
+ *   <li>{@link #empty} - 返回空迭代器
+ *   <li>{@link #ofElements} - 从元素数组创建迭代器
+ *   <li>{@link #ofElement} - 从单个元素创建迭代器
+ * </ul>
+ *
+ * @param <T> 迭代元素的类型
  * @since 0.4.0
  */
 @Public
 public interface CloseableIterator<T> extends Iterator<T>, AutoCloseable {
 
+    /** 空的可关闭迭代器实例 */
     CloseableIterator<?> EMPTY_INSTANCE =
             CloseableIterator.adapterForIterator(Collections.emptyIterator());
 
+    /**
+     * 将普通迭代器适配为可关闭迭代器。
+     *
+     * <p>关闭时不执行任何操作。
+     *
+     * @param iterator 原始迭代器
+     * @param <T> 元素类型
+     * @return 可关闭迭代器
+     */
     @Nonnull
     static <T> CloseableIterator<T> adapterForIterator(@Nonnull Iterator<T> iterator) {
         return adapterForIterator(iterator, () -> {});
     }
 
+    /**
+     * 将普通迭代器适配为可关闭迭代器。
+     *
+     * @param iterator 原始迭代器
+     * @param close 关闭时执行的回调
+     * @param <T> 元素类型
+     * @return 可关闭迭代器
+     */
     static <T> CloseableIterator<T> adapterForIterator(
             @Nonnull Iterator<T> iterator, AutoCloseable close) {
         return new IteratorAdapter<>(iterator, close);
     }
 
+    /**
+     * 从列表创建可关闭迭代器。
+     *
+     * <p>关闭时会对所有未消费的元素执行 closeNotConsumed 回调。
+     *
+     * @param list 元素列表
+     * @param closeNotConsumed 对未消费元素执行的关闭回调
+     * @param <T> 元素类型
+     * @return 可关闭迭代器
+     */
     static <T> CloseableIterator<T> fromList(List<T> list, Consumer<T> closeNotConsumed) {
         return new CloseableIterator<T>() {
             private final Deque<T> stack = new ArrayDeque<>(list);
@@ -88,6 +128,15 @@ public interface CloseableIterator<T> extends Iterator<T>, AutoCloseable {
         };
     }
 
+    /**
+     * 将多个可关闭迭代器展平为一个。
+     *
+     * <p>按顺序遍历所有迭代器,关闭时会关闭所有传入的迭代器。
+     *
+     * @param iterators 多个可关闭迭代器
+     * @param <T> 元素类型
+     * @return 展平后的迭代器
+     */
     static <T> CloseableIterator<T> flatten(CloseableIterator<T>... iterators) {
         return new CloseableIterator<T>() {
             private final Queue<CloseableIterator<T>> queue =
@@ -119,15 +168,41 @@ public interface CloseableIterator<T> extends Iterator<T>, AutoCloseable {
         };
     }
 
+    /**
+     * 返回空的可关闭迭代器。
+     *
+     * @param <T> 元素类型
+     * @return 空迭代器
+     */
     @SuppressWarnings("unchecked")
     static <T> CloseableIterator<T> empty() {
         return (CloseableIterator<T>) EMPTY_INSTANCE;
     }
 
+    /**
+     * 从元素数组创建可关闭迭代器。
+     *
+     * <p>关闭时会对所有未消费的元素执行 closeNotConsumed 回调。
+     *
+     * @param closeNotConsumed 对未消费元素执行的关闭回调
+     * @param elements 元素数组
+     * @param <T> 元素类型
+     * @return 可关闭迭代器
+     */
     static <T> CloseableIterator<T> ofElements(Consumer<T> closeNotConsumed, T... elements) {
         return fromList(asList(elements), closeNotConsumed);
     }
 
+    /**
+     * 从单个元素创建可关闭迭代器。
+     *
+     * <p>如果元素未被消费,关闭时会执行 closeIfNotConsumed 回调。
+     *
+     * @param element 元素
+     * @param closeIfNotConsumed 如果未消费则执行的关闭回调
+     * @param <E> 元素类型
+     * @return 可关闭迭代器
+     */
     static <E> CloseableIterator<E> ofElement(E element, Consumer<E> closeIfNotConsumed) {
         return new CloseableIterator<E>() {
             private boolean hasNext = true;
@@ -153,13 +228,18 @@ public interface CloseableIterator<T> extends Iterator<T>, AutoCloseable {
     }
 
     /**
-     * Adapter from {@link Iterator} to {@link CloseableIterator}. Does nothing on {@link #close()}.
+     * 迭代器适配器,将 {@link Iterator} 适配为 {@link CloseableIterator}。
      *
-     * @param <E> the type of iterated elements.
+     * <p>关闭时执行指定的关闭回调。
+     *
+     * @param <E> 迭代元素的类型
      */
     final class IteratorAdapter<E> implements CloseableIterator<E> {
 
+        /** 被委托的迭代器 */
         @Nonnull private final Iterator<E> delegate;
+
+        /** 关闭时执行的回调 */
         private final AutoCloseable close;
 
         IteratorAdapter(@Nonnull Iterator<E> delegate, AutoCloseable close) {

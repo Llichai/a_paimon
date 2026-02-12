@@ -19,8 +19,17 @@
 package org.apache.paimon.compression;
 
 /**
- * A {@code BufferCompressionException} is thrown when the target data cannot be compressed, such as
- * insufficient target buffer space for compression, etc.
+ * 缓冲区压缩异常。
+ *
+ * <p>当目标数据无法被压缩时抛出 {@code BufferCompressionException},
+ * 例如目标缓冲区空间不足无法存储压缩结果等情况。
+ *
+ * <p>常见场景:
+ * <ul>
+ *   <li>目标缓冲区太小,无法容纳压缩后的数据</li>
+ *   <li>压缩算法内部错误</li>
+ *   <li>输入数据格式不符合压缩要求</li>
+ * </ul>
  */
 public class BufferCompressionException extends RuntimeException {
 

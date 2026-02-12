@@ -27,7 +27,32 @@ import java.util.Optional;
 
 import static org.apache.paimon.predicate.CompareUtils.compareLiteral;
 
-/** A {@link LeafFunction} to eval not in. */
+/**
+ * NotIn 集合排除判断谓词函数。
+ *
+ * <p>这是一个 {@link LeafFunction},用于评估字段值是否不在指定的值集合中,等价于 SQL 中的 NOT IN 操作。
+ *
+ * <h2>主要功能</h2>
+ * <ul>
+ *   <li>集合排除测试: 检查字段值是否不在给定的字面量列表中
+ *   <li>NULL 处理: field 为 NULL 时返回 false(遵循 SQL 三值逻辑)
+ *   <li>NULL 字面量: 包含 NULL 字面量时返回 false
+ *   <li>统计过滤: 基于 min/max 统计信息进行过滤优化
+ *   <li>支持取反: 可以转换回 {@link In}
+ * </ul>
+ *
+ * <h2>SQL 三值逻辑</h2>
+ * <p>NOT IN 操作的 NULL 处理遵循 SQL 标准:
+ * <ul>
+ *   <li>{@code NULL NOT IN (1, 2, 3)} -> false
+ *   <li>{@code 1 NOT IN (1, 2, 3)} -> false (在列表中)
+ *   <li>{@code 4 NOT IN (1, 2, 3)} -> true (不在列表中)
+ *   <li>{@code 4 NOT IN (1, NULL, 3)} -> false (存在 NULL 字面量)
+ *   <li>{@code 4 NOT IN (NULL)} -> false (存在 NULL 字面量)
+ * </ul>
+ *
+ * @see In NOT IN 的取反操作
+ */
 public class NotIn extends LeafFunction {
 
     private static final long serialVersionUID = 1L;

@@ -19,24 +19,35 @@
 package org.apache.paimon.compression;
 
 /**
- * A compressor which compresses a whole byte array each time. It will read from and write to byte
- * arrays given from the outside, reducing copy time.
+ * 块压缩器接口。
+ *
+ * <p>每次压缩整个字节数组的压缩器。它从外部提供的字节数组读取和写入数据,
+ * 减少了数据复制时间,提高了压缩性能。
+ *
+ * <p>该接口定义了块级别的压缩操作,实现类负责具体的压缩算法实现。
  */
 public interface BlockCompressor {
 
-    /** Get the max compressed size for a given original size. */
+    /**
+     * 获取给定原始大小的最大压缩后大小。
+     *
+     * <p>用于预先分配目标缓冲区,确保有足够的空间存储压缩后的数据。
+     *
+     * @param srcSize 原始数据大小
+     * @return 最大可能的压缩后大小
+     */
     int getMaxCompressedSize(int srcSize);
 
     /**
-     * Compress data read from src, and write the compressed data to dst.
+     * 压缩从 src 读取的数据,并将压缩后的数据写入 dst。
      *
-     * @param src Uncompressed data to read from
-     * @param srcOff The start offset of uncompressed data
-     * @param srcLen The length of data which want to be compressed
-     * @param dst The target to write compressed data
-     * @param dstOff The start offset to write the compressed data
-     * @return Length of compressed data
-     * @throws BufferCompressionException if exception thrown when compressing
+     * @param src 要压缩的未压缩数据
+     * @param srcOff 未压缩数据的起始偏移量
+     * @param srcLen 要压缩的数据长度
+     * @param dst 写入压缩数据的目标数组
+     * @param dstOff 写入压缩数据的起始偏移量
+     * @return 压缩后的数据长度
+     * @throws BufferCompressionException 如果压缩时抛出异常
      */
     int compress(byte[] src, int srcOff, int srcLen, byte[] dst, int dstOff)
             throws BufferCompressionException;

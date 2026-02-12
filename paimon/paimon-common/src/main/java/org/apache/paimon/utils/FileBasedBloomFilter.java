@@ -36,7 +36,19 @@ import java.io.IOException;
 import static org.apache.paimon.io.cache.CacheManager.REFRESH_COUNT;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Util to apply a built bloom filter . */
+/**
+ * 基于文件的布隆过滤器工具类。
+ *
+ * <p>提供布隆过滤器的文件存储和查询功能,支持缓存管理以提高性能。
+ *
+ * <p>主要特性:
+ * <ul>
+ *   <li>从文件中加载布隆过滤器数据
+ *   <li>使用缓存管理器缓存布隆过滤器数据
+ *   <li>支持哈希值测试以快速判断元素是否存在
+ *   <li>定期刷新 LRU 缓存以优化内存使用
+ * </ul>
+ */
 public class FileBasedBloomFilter implements Closeable {
 
     private final SeekableInputStream input;

@@ -21,22 +21,32 @@ package org.apache.paimon.utils;
 import org.apache.paimon.predicate.Predicate;
 
 /**
- * Represents a filter (boolean-valued function) of one argument. This class is for avoiding name
- * conflicting to {@link Predicate}.
+ * 表示单参数的过滤器(布尔值函数)。
+ *
+ * <p>该类用于避免与 {@link Predicate} 命名冲突。
+ *
+ * @param <T> 输入参数的类型
  */
 @FunctionalInterface
 public interface Filter<T> {
 
+    /** 始终返回 true 的过滤器 */
     Filter<?> ALWAYS_TRUE = t -> true;
 
     /**
-     * Evaluates this predicate on the given argument.
+     * 对给定参数执行断言。
      *
-     * @param t the input argument
-     * @return {@code true} if the input argument matches the predicate, otherwise {@code false}
+     * @param t 输入参数
+     * @return 如果输入参数匹配断言则返回 {@code true},否则返回 {@code false}
      */
     boolean test(T t);
 
+    /**
+     * 返回一个组合过滤器,表示此过滤器与另一个过滤器的逻辑与操作。
+     *
+     * @param other 另一个过滤器
+     * @return 组合后的过滤器
+     */
     default Filter<T> and(Filter<? super T> other) {
         if (other == null) {
             return this;
@@ -44,6 +54,12 @@ public interface Filter<T> {
         return t -> test(t) && other.test(t);
     }
 
+    /**
+     * 返回始终为 true 的过滤器。
+     *
+     * @param <T> 过滤器的类型参数
+     * @return 始终为 true 的过滤器
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     static <T> Filter<T> alwaysTrue() {
         return (Filter) ALWAYS_TRUE;

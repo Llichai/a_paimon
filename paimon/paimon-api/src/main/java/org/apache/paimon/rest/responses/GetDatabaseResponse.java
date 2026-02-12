@@ -27,7 +27,39 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.Map;
 
-/** Response for getting database. */
+/**
+ * 获取数据库响应对象。
+ *
+ * <p>该类表示获取数据库详细信息的响应,继承自 {@link AuditRESTResponse} 以包含审计信息。
+ *
+ * <p>响应字段说明:
+ * <ul>
+ *   <li>id - 数据库唯一标识符
+ *   <li>name - 数据库名称
+ *   <li>location - 数据库存储位置路径
+ *   <li>options - 数据库配置选项映射
+ *   <li>审计字段 - owner, createdAt, createdBy, updatedAt, updatedBy
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "id": "db_001",
+ *   "name": "my_database",
+ *   "location": "hdfs://namenode:8020/warehouse/my_database",
+ *   "options": {
+ *     "comment": "Production database"
+ *   },
+ *   "owner": "admin",
+ *   "createdAt": 1609459200000,
+ *   "createdBy": "user1",
+ *   "updatedAt": 1609545600000,
+ *   "updatedBy": "user2"
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetDatabaseResponse extends AuditRESTResponse implements RESTResponse {
 

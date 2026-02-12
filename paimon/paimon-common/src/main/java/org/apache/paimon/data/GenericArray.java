@@ -28,13 +28,33 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * An internal data structure representing data of {@link ArrayType}.
+ * {@link ArrayType} 的内部数据结构实现。
  *
- * <p>Note: All elements of this data structure must be internal data structures and must be of the
- * same type. See {@link InternalRow} for more information about internal data structures.
+ * <p>注意:此数据结构的所有元素必须是内部数据结构,且必须是相同类型。
+ * 关于内部数据结构的更多信息,请参阅 {@link InternalRow}。
  *
- * <p>{@link GenericArray} is a generic implementation of {@link InternalArray} which wraps regular
- * Java arrays.
+ * <p>{@link GenericArray} 是 {@link InternalArray} 的通用实现,封装了常规的 Java 数组。
+ * 支持两种类型的数组:
+ * <ul>
+ *   <li>对象数组(Object[]): 存储内部数据结构对象,支持空值</li>
+ *   <li>原始类型数组(如 int[], long[]): 存储原始类型值,不支持空值,性能更高</li>
+ * </ul>
+ *
+ * <p>数据结构特点:
+ * <ul>
+ *   <li>灵活性: 支持任意类型的数组元素</li>
+ *   <li>性能优化: 原始类型数组避免了装箱开销</li>
+ *   <li>空值支持: 对象数组支持 null 元素</li>
+ *   <li>简单实现: 直接基于 Java 数组,易于理解和使用</li>
+ * </ul>
+ *
+ * <p>使用场景:
+ * <ul>
+ *   <li>测试和原型开发</li>
+ *   <li>小数据集处理</li>
+ *   <li>需要直接操作 Java 数组的场景</li>
+ *   <li>不需要高性能序列化的场景</li>
+ * </ul>
  *
  * @since 0.4.0
  */
@@ -43,47 +63,94 @@ public final class GenericArray implements InternalArray, Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** 底层存储的数组对象,可能是 Object[] 或原始类型数组(如 int[], long[])。 */
     private final Object array;
+    /** 数组的大小(元素数量)。 */
     private final int size;
+    /** 标识是否为原始类型数组。 */
     private final boolean isPrimitiveArray;
 
     /**
-     * Creates an instance of {@link GenericArray} using the given Java array.
+     * 使用给定的 Java 对象数组创建 {@link GenericArray} 实例。
      *
-     * <p>Note: All elements of the array must be internal data structures.
+     * <p>注意:数组的所有元素必须是内部数据结构。
+     *
+     * @param array 对象数组
      */
     public GenericArray(Object[] array) {
         this(array, array.length, false);
     }
 
+    /**
+     * 使用 int 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray int 数组
+     */
     public GenericArray(int[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 使用 long 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray long 数组
+     */
     public GenericArray(long[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 使用 float 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray float 数组
+     */
     public GenericArray(float[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 使用 double 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray double 数组
+     */
     public GenericArray(double[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 使用 short 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray short 数组
+     */
     public GenericArray(short[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 使用 byte 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray byte 数组
+     */
     public GenericArray(byte[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 使用 boolean 原始类型数组创建 {@link GenericArray} 实例。
+     *
+     * @param primitiveArray boolean 数组
+     */
     public GenericArray(boolean[] primitiveArray) {
         this(primitiveArray, primitiveArray.length, true);
     }
 
+    /**
+     * 内部构造函数,用于创建 GenericArray 实例。
+     *
+     * @param array 数组对象
+     * @param size 数组大小
+     * @param isPrimitiveArray 是否为原始类型数组
+     */
     private GenericArray(Object array, int size, boolean isPrimitiveArray) {
         this.array = array;
         this.size = size;
@@ -91,20 +158,24 @@ public final class GenericArray implements InternalArray, Serializable {
     }
 
     /**
-     * Returns true if this is a primitive array.
+     * 判断是否为原始类型数组。
      *
-     * <p>A primitive array is an array whose elements are of primitive type.
+     * <p>原始类型数组是指元素为原始类型(如 int, long, boolean 等)的数组。
+     * 原始类型数组不支持 null 元素,但性能更高,无需装箱/拆箱。
+     *
+     * @return 如果是原始类型数组返回 true,否则返回 false
      */
     public boolean isPrimitiveArray() {
         return isPrimitiveArray;
     }
 
     /**
-     * Converts this {@link GenericArray} into an array of Java {@link Object}.
+     * 将此 {@link GenericArray} 转换为 Java {@link Object} 数组。
      *
-     * <p>The method will convert a primitive array into an object array. But it will not convert
-     * internal data structures into external data structures (e.g. {@link BinaryString} to {@link
-     * String}).
+     * <p>此方法会将原始类型数组转换为对象数组(进行装箱)。
+     * 但不会将内部数据结构转换为外部数据结构(例如不会将 {@link BinaryString} 转换为 {@link String})。
+     *
+     * @return 对象数组
      */
     public Object[] toObjectArray() {
         if (isPrimitiveArray) {
@@ -162,7 +233,7 @@ public final class GenericArray implements InternalArray, Serializable {
     }
 
     // ------------------------------------------------------------------------------------------
-    // Read-only accessor methods
+    // 只读访问方法
     // ------------------------------------------------------------------------------------------
 
     @Override
@@ -245,14 +316,27 @@ public final class GenericArray implements InternalArray, Serializable {
         return (InternalMap) getObject(pos);
     }
 
+    /**
+     * 获取指定位置的对象元素。
+     *
+     * <p>此方法仅用于对象数组,不应用于原始类型数组。
+     *
+     * @param pos 元素位置
+     * @return 元素对象
+     */
     private Object getObject(int pos) {
         return ((Object[]) array)[pos];
     }
 
     // ------------------------------------------------------------------------------------------
-    // Conversion Utilities
+    // 转换工具方法
     // ------------------------------------------------------------------------------------------
 
+    /**
+     * 检查对象数组中是否包含 null 元素。
+     *
+     * @return 如果包含 null 返回 true,否则返回 false
+     */
     private boolean anyNull() {
         for (Object element : (Object[]) array) {
             if (element == null) {
@@ -262,6 +346,14 @@ public final class GenericArray implements InternalArray, Serializable {
         return false;
     }
 
+    /**
+     * 检查数组中不包含 null 元素,如果包含则抛出异常。
+     *
+     * <p>在将对象数组转换为原始类型数组时需要调用此方法,
+     * 因为原始类型数组不支持 null 值。
+     *
+     * @throws RuntimeException 如果数组包含 null 元素
+     */
     private void checkNoNull() {
         if (anyNull()) {
             throw new RuntimeException("Primitive array must not contain a null value.");

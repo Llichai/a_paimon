@@ -25,11 +25,27 @@ import static org.apache.paimon.compression.CompressorUtils.HEADER_LENGTH;
 import static org.apache.paimon.compression.CompressorUtils.readIntLE;
 import static org.apache.paimon.compression.CompressorUtils.validateLength;
 
-/** Implementation of {@link BlockDecompressor} for airlift compressors. */
+/**
+ * Airlift 解压缩器的 {@link BlockDecompressor} 实现。
+ *
+ * <p>该类将 Airlift 解压缩器适配到 Paimon 的块解压缩接口,负责:
+ * <ul>
+ *   <li>读取并验证压缩块头部信息</li>
+ *   <li>检查缓冲区大小是否足够</li>
+ *   <li>调用 Airlift 解压缩器执行实际解压缩</li>
+ *   <li>验证解压缩结果的正确性</li>
+ * </ul>
+ */
 public class AirBlockDecompressor implements BlockDecompressor {
 
+    /** Airlift 内部解压缩器 */
     private final Decompressor internalDecompressor;
 
+    /**
+     * 创建 Airlift 块解压缩器。
+     *
+     * @param internalDecompressor Airlift 解压缩器实例
+     */
     public AirBlockDecompressor(Decompressor internalDecompressor) {
         this.internalDecompressor = internalDecompressor;
     }

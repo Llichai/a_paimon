@@ -25,19 +25,34 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
- * This class represents a nullable double precision floating point column vector. This class will
- * be used for operations on all floating point float types.
+ * 堆单精度浮点列向量实现类。
+ *
+ * <p>这个类表示一个可空的单精度浮点列向量，用于在列式存储中高效地存储和访问单精度浮点数（FLOAT）。
+ * 它使用 32 位 float 数组作为底层存储，支持字典编码和批量二进制设置操作。
+ *
+ * <h2>性能特点</h2>
+ * <ul>
+ *   <li><b>内存效率</b>: 每个单精度浮点值占用4字节，是 double 的一半</li>
+ *   <li><b>字典压缩</b>: 对于重复值多的数据，支持字典编码</li>
+ *   <li><b>批量操作</b>: 支持从二进制数据批量设置，利用 UNSAFE 优化</li>
+ * </ul>
+ *
+ * @see AbstractHeapVector 堆向量的基类
+ * @see WritableFloatVector 可写单精度浮点向量接口
  */
 public class HeapFloatVector extends AbstractHeapVector implements WritableFloatVector {
 
     private static final long serialVersionUID = 8928878923550041110L;
 
+    /** 存储单精度浮点值的数组。 */
     public float[] vector;
 
     /**
-     * Don't use this except for testing purposes.
+     * 构造一个堆单精度浮点列向量。
      *
-     * @param len the number of rows
+     * <p>注意: 除了测试目的外，不要直接使用此构造函数。
+     *
+     * @param len 向量的容量
      */
     public HeapFloatVector(int len) {
         super(len);

@@ -31,32 +31,81 @@ import java.util.Arrays;
 import static org.apache.paimon.data.BinarySection.MAX_FIX_PART_DATA_SIZE;
 
 /**
- * Use the special format to write data to a {@link MemorySegment} (its capacity grows
- * automatically).
+ * 抽象二进制写入器。
  *
- * <p>If write a format binary: 1. New a writer. 2. Write each field by writeXX or setNullAt.
- * (Variable length fields can not be written repeatedly.) 3. Invoke {@link #complete()}.
+ * <p>使用特殊格式将数据写入 {@link MemorySegment}（其容量可自动增长）。
+ * 该类是 BinaryRowWriter 和 BinaryArrayWriter 的基础类。
  *
- * <p>If want to reuse this writer, please invoke {@link #reset()} first.
+ * <p>写入二进制格式的流程：
+ * <ol>
+ *   <li>创建一个新的写入器
+ *   <li>通过 writeXX 或 setNullAt 写入每个字段（变长字段不能重复写入）
+ *   <li>调用 {@link #complete()} 完成写入
+ * </ol>
+ *
+ * <p>如果要重用此写入器，请先调用 {@link #reset()}。
+ *
+ * <p>设计要点：
+ * <ul>
+ *   <li>自动扩容：当内存不足时自动增长 MemorySegment 容量
+ *   <li>混合布局：小数据存储在固定长度部分，大数据存储在可变长度部分
+ *   <li>字节对齐：数据按 8 字节边界对齐，提高访问性能
+ *   <li>高效序列化：避免对象创建，直接操作内存
+ * </ul>
  */
 abstract class AbstractBinaryWriter implements BinaryWriter {
 
+    /** 当前使用的内存段 */
     protected MemorySegment segment;
 
+    /** 可变长度部分的写入游标 */
     protected int cursor;
 
-    /** Set offset and size to fix len part. */
+    /**
+     * 设置偏移量和大小到固定长度部分。
+     *
+     * @param pos 字段位置索引
+     * @param offset 数据在可变长度部分的偏移量
+     * @param size 数据大小
+     */
     protected abstract void setOffsetAndSize(int pos, int offset, long size);
 
-    /** Get field offset. */
+    /**
+     * 获取字段在固定长度部分的偏移量。
+     *
+     * @param pos 字段位置索引
+     * @return 字段偏移量
+     */
     protected abstract int getFieldOffset(int pos);
 
-    /** After grow, need point to new memory. */
+    /**
+     * 内存段增长后的回调。
+     *
+     * <p>当 segment 被替换为更大的内存段时，子类需要更新其引用。
+     */
     protected abstract void afterGrow();
 
+    /**
+     * 设置 NULL 位标记。
+     *
+     * @param ordinal 字段序号
+     */
     protected abstract void setNullBit(int ordinal);
 
-    /** See {@link MemorySegmentUtils#readBinaryString(MemorySegment[], int, int, long)}. */
+    /**
+     * 写入字符串。
+     *
+     * <p>根据字符串长度决定存储位置：
+     * <ul>
+     *   <li>≤7 字节：存储在固定长度部分
+     *   <li>>7 字节：存储在可变长度部分
+     * </ul>
+     *
+     * <p>详见 {@link MemorySegmentUtils#readBinaryString(MemorySegment[], int, int, long)}。
+     *
+     * @param pos 字段位置索引
+     * @param input 二进制字符串
+     */
     @Override
     public void writeString(int pos, BinaryString input) {
         if (input.getSegments() == null) {
@@ -75,6 +124,18 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 写入字节数组。
+     *
+     * <p>根据长度决定存储位置：
+     * <ul>
+     *   <li>≤7 字节：存储在固定长度部分
+     *   <li>>7 字节：存储在可变长度部分
+     * </ul>
+     *
+     * @param pos 字段位置索引
+     * @param bytes 字节数组
+     */
     private void writeBytes(int pos, byte[] bytes) {
         int len = bytes.length;
         if (len <= MAX_FIX_PART_DATA_SIZE) {
@@ -84,6 +145,15 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 写入数组。
+     *
+     * <p>将 InternalArray 序列化为 BinaryArray 后写入可变长度部分。
+     *
+     * @param pos 字段位置索引
+     * @param input 内部数组
+     * @param serializer 数组序列化器
+     */
     @Override
     public void writeArray(int pos, InternalArray input, InternalArraySerializer serializer) {
         BinaryArray binary = serializer.toBinaryArray(input);
@@ -91,6 +161,15 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
                 pos, binary.getSegments(), binary.getOffset(), binary.getSizeInBytes());
     }
 
+    /**
+     * 写入 Map。
+     *
+     * <p>将 InternalMap 序列化为 BinaryMap 后写入可变长度部分。
+     *
+     * @param pos 字段位置索引
+     * @param input 内部 Map
+     * @param serializer Map 序列化器
+     */
     @Override
     public void writeMap(int pos, InternalMap input, InternalMapSerializer serializer) {
         BinaryMap binary = serializer.toBinaryMap(input);
@@ -98,6 +177,15 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
                 pos, binary.getSegments(), binary.getOffset(), binary.getSizeInBytes());
     }
 
+    /**
+     * 写入行数据。
+     *
+     * <p>如果输入已经是 BinarySection，直接写入；否则先序列化为 BinaryRow。
+     *
+     * @param pos 字段位置索引
+     * @param input 内部行
+     * @param serializer 行序列化器
+     */
     @Override
     public void writeRow(int pos, InternalRow input, InternalRowSerializer serializer) {
         if (input instanceof BinarySection) {
@@ -111,6 +199,16 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 写入二进制数据。
+     *
+     * <p>根据长度决定存储位置。
+     *
+     * @param pos 字段位置索引
+     * @param bytes 字节数组
+     * @param offset 数组起始偏移量
+     * @param len 数据长度
+     */
     @Override
     public void writeBinary(int pos, byte[] bytes, int offset, int len) {
         if (len <= BinarySection.MAX_FIX_PART_DATA_SIZE) {
@@ -120,6 +218,19 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 写入十进制数。
+     *
+     * <p>根据精度选择存储方式：
+     * <ul>
+     *   <li>紧凑型（precision ≤ 18）：直接存储为 long 值
+     *   <li>非紧凑型（precision > 18）：存储为字节数组（最多 16 字节）
+     * </ul>
+     *
+     * @param pos 字段位置索引
+     * @param value 十进制数值
+     * @param precision 精度
+     */
     @Override
     public void writeDecimal(int pos, Decimal value, int precision) {
         assert value == null || (value.precision() == precision);
@@ -155,6 +266,19 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 写入时间戳。
+     *
+     * <p>根据精度选择存储方式：
+     * <ul>
+     *   <li>紧凑型（precision ≤ 3）：直接存储毫秒值
+     *   <li>非紧凑型（precision > 3）：存储毫秒值和纳秒值
+     * </ul>
+     *
+     * @param pos 字段位置索引
+     * @param value 时间戳值
+     * @param precision 精度
+     */
     @Override
     public void writeTimestamp(int pos, Timestamp value, int precision) {
         if (Timestamp.isCompact(precision)) {
@@ -177,6 +301,19 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 写入变体类型数据。
+     *
+     * <p>变体数据包含值和元数据两部分，格式为：
+     * <ul>
+     *   <li>4 字节：值的长度
+     *   <li>N 字节：值数据
+     *   <li>M 字节：元数据
+     * </ul>
+     *
+     * @param pos 字段位置索引
+     * @param variant 变体对象
+     */
     @Override
     public void writeVariant(int pos, Variant variant) {
         byte[] value = variant.value();
@@ -194,18 +331,40 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         cursor += roundedSize;
     }
 
+    /**
+     * 写入 Blob 大对象。
+     *
+     * <p>将 Blob 转换为字节数组后写入。
+     *
+     * @param pos 字段位置索引
+     * @param blob Blob 对象
+     */
     @Override
     public void writeBlob(int pos, Blob blob) {
         byte[] bytes = blob.toData();
         writeBinary(pos, bytes, 0, bytes.length);
     }
 
+    /**
+     * 将填充字节清零。
+     *
+     * <p>为了保持 8 字节对齐，需要将填充字节设置为 0。
+     *
+     * @param numBytes 实际数据字节数
+     */
     protected void zeroOutPaddingBytes(int numBytes) {
         if ((numBytes & 0x07) > 0) {
             segment.putLong(cursor + ((numBytes >> 3) << 3), 0L);
         }
     }
 
+    /**
+     * 确保有足够的容量。
+     *
+     * <p>如果当前内存段容量不足，自动扩容。
+     *
+     * @param neededSize 需要的额外空间大小
+     */
     protected void ensureCapacity(int neededSize) {
         final int length = cursor + neededSize;
         if (segment.size() < length) {
@@ -213,6 +372,16 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 将内存段数据写入可变长度部分。
+     *
+     * <p>支持跨多个 MemorySegment 的数据写入。
+     *
+     * @param pos 字段位置索引
+     * @param segments 源内存段数组
+     * @param offset 源数据起始偏移量
+     * @param size 数据大小
+     */
     private void writeSegmentsToVarLenPart(
             int pos, MemorySegment[] segments, int offset, int size) {
         final int roundedSize = roundNumberOfBytesToNearestWord(size);
@@ -234,6 +403,15 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         cursor += roundedSize;
     }
 
+    /**
+     * 将多个内存段的数据写入可变长度部分。
+     *
+     * <p>逐段复制数据，处理跨段的情况。
+     *
+     * @param segments 源内存段数组
+     * @param offset 源数据起始偏移量
+     * @param size 数据大小
+     */
     private void writeMultiSegmentsToVarLenPart(MemorySegment[] segments, int offset, int size) {
         // Write the bytes to the variable length portion.
         int needCopy = size;
@@ -253,6 +431,14 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 将字节数组写入可变长度部分。
+     *
+     * @param pos 字段位置索引
+     * @param bytes 字节数组
+     * @param offset 数组起始偏移量
+     * @param len 数据长度
+     */
     private void writeBytesToVarLenPart(int pos, byte[] bytes, int offset, int len) {
         final int roundedSize = roundNumberOfBytesToNearestWord(len);
 
@@ -270,7 +456,13 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         cursor += roundedSize;
     }
 
-    /** Increases the capacity to ensure that it can hold at least the minimum capacity argument. */
+    /**
+     * 扩容内存段。
+     *
+     * <p>采用 1.5 倍扩容策略，确保有足够空间。
+     *
+     * @param minCapacity 最小所需容量
+     */
     private void grow(int minCapacity) {
         int oldCapacity = segment.size();
         int newCapacity = oldCapacity + (oldCapacity >> 1);
@@ -281,6 +473,14 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         afterGrow();
     }
 
+    /**
+     * 将字节数向上取整到最近的字（8 字节）边界。
+     *
+     * <p>用于确保数据按 8 字节对齐，提高访问性能。
+     *
+     * @param numBytes 原始字节数
+     * @return 对齐后的字节数
+     */
     protected static int roundNumberOfBytesToNearestWord(int numBytes) {
         int remainder = numBytes & 0x07;
         if (remainder == 0) {
@@ -290,6 +490,22 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         }
     }
 
+    /**
+     * 将字节数组写入固定长度部分。
+     *
+     * <p>数据格式：
+     * <ul>
+     *   <li>最高位 = 1（标记数据在固定长度部分）
+     *   <li>接下来 7 位 = 数据长度
+     *   <li>剩余 7 字节 = 实际数据
+     * </ul>
+     *
+     * @param segment 目标内存段
+     * @param fieldOffset 字段偏移量
+     * @param bytes 字节数组
+     * @param offset 数组起始偏移量
+     * @param len 数据长度（≤7）
+     */
     private static void writeBytesToFixLenPart(
             MemorySegment segment, int fieldOffset, byte[] bytes, int offset, int len) {
         long firstByte = len | 0x80; // first bit is 1, other bits is len
@@ -309,6 +525,11 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
         segment.putLong(fieldOffset, offsetAndSize);
     }
 
+    /**
+     * 获取内存段。
+     *
+     * @return 当前使用的内存段
+     */
     public MemorySegment getSegments() {
         return segment;
     }

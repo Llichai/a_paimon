@@ -32,46 +32,114 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * The reader that reads the batches of records.
+ * 批量读取记录的读取器接口。
  *
+ * <p>RecordReader 是 Paimon 数据读取的核心抽象,提供分批读取能力以提高性能。
+ *
+ * <h2>核心概念</h2>
+ *
+ * <ul>
+ *   <li>批量读取:每次读取一批记录,而非单条记录,减少方法调用开销
+ *   <li>迭代器模式:返回 {@link RecordIterator} 遍历批内的记录
+ *   <li>资源管理:支持批次级别的资源释放({@link RecordIterator#releaseBatch()})
+ * </ul>
+ *
+ * <h2>使用模式</h2>
+ *
+ * <pre>{@code
+ * try (RecordReader<T> reader = ...) {
+ *     RecordIterator<T> batch;
+ *     while ((batch = reader.readBatch()) != null) {
+ *         T record;
+ *         while ((record = batch.next()) != null) {
+ *             // 处理记录
+ *         }
+ *         batch.releaseBatch(); // 释放批次资源
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h2>数据转换</h2>
+ *
+ * <p>提供函数式编程风格的 API:
+ *
+ * <ul>
+ *   <li>{@link #transform(Function)}:转换记录类型
+ *   <li>{@link #filter(Filter)}:过滤记录
+ *   <li>{@link #toCloseableIterator()}:转换为标准迭代器
+ * </ul>
+ *
+ * <h2>线程安全性</h2>
+ *
+ * <p>实现类通常不是线程安全的,一个 reader 实例应该只由单个线程使用。
+ *
+ * @param <T> 记录类型
  * @since 0.4.0
  */
 @Public
 public interface RecordReader<T> extends Closeable {
 
     /**
-     * Reads one batch. The method should return null when reaching the end of the input.
+     * 读取一批记录。
      *
-     * <p>The returned iterator object and any contained objects may be held onto by the source for
-     * some time, so it should not be immediately reused by the reader.
+     * <p>到达输入末尾时应返回 null。
+     *
+     * <p><strong>重要:</strong>返回的迭代器对象和其包含的对象可能会被源持有一段时间,
+     * 因此不应立即被读取器重用。
+     *
+     * @return 记录迭代器,如果已到达末尾则返回 null
+     * @throws IOException 如果发生 I/O 错误
      */
     @Nullable
     RecordIterator<T> readBatch() throws IOException;
 
-    /** Closes the reader and should release all resources. */
+    /**
+     * 关闭读取器并释放所有资源。
+     *
+     * @throws IOException 如果发生 I/O 错误
+     */
     @Override
     void close() throws IOException;
 
     /**
-     * An internal iterator interface which presents a more restrictive API than {@link Iterator}.
+     * 内部迭代器接口,提供比标准 {@link Iterator} 更严格的 API。
+     *
+     * <p>该接口的设计目标:
+     *
+     * <ul>
+     *   <li>支持批次级别的资源管理(releaseBatch)
+     *   <li>允许抛出 IOException,适合 I/O 密集型操作
+     *   <li>提供转换和过滤能力
+     * </ul>
+     *
+     * @param <T> 记录类型
      */
     interface RecordIterator<T> {
 
         /**
-         * Gets the next record from the iterator. Returns null if this iterator has no more
-         * elements.
+         * 获取下一条记录。
+         *
+         * @return 下一条记录,如果没有更多元素则返回 null
+         * @throws IOException 如果发生 I/O 错误
          */
         @Nullable
         T next() throws IOException;
 
         /**
-         * Releases the batch that this iterator iterated over. This is not supposed to close the
-         * reader and its resources, but is simply a signal that this iterator is not used anymore.
-         * This method can be used as a hook to recycle/reuse heavyweight object structures.
+         * 释放此迭代器遍历的批次。
+         *
+         * <p>这不会关闭读取器及其资源,只是表示该迭代器不再使用。
+         * 该方法可用作钩子来回收/重用重量级对象结构。
          */
         void releaseBatch();
 
-        /** Returns an iterator that applies {@code function} to each element. */
+        /**
+         * 返回对每个元素应用 {@code function} 的迭代器。
+         *
+         * @param function 转换函数
+         * @param <R> 结果类型
+         * @return 转换后的迭代器
+         */
         default <R> RecordReader.RecordIterator<R> transform(Function<T, R> function) {
             RecordReader.RecordIterator<T> thisIterator = this;
             return new RecordReader.RecordIterator<R>() {
@@ -92,7 +160,12 @@ public interface RecordReader<T> extends Closeable {
             };
         }
 
-        /** Filters a {@link RecordIterator}. */
+        /**
+         * 过滤记录迭代器。
+         *
+         * @param filter 过滤条件
+         * @return 过滤后的迭代器
+         */
         default RecordIterator<T> filter(Filter<T> filter) {
             RecordIterator<T> thisIterator = this;
             return new RecordIterator<T>() {
@@ -119,12 +192,16 @@ public interface RecordReader<T> extends Closeable {
     }
 
     // -------------------------------------------------------------------------
-    //                     Util methods
+    //                     工具方法
     // -------------------------------------------------------------------------
 
     /**
-     * Performs the given action for each remaining element in {@link RecordReader} until all
-     * elements have been processed or the action throws an exception.
+     * 对 {@link RecordReader} 中的每个剩余元素执行给定操作。
+     *
+     * <p>遍历所有元素直到处理完成或动作抛出异常。该方法会自动关闭读取器。
+     *
+     * @param action 要对每个元素执行的操作
+     * @throws IOException 如果发生 I/O 错误
      */
     default void forEachRemaining(Consumer<? super T> action) throws IOException {
         RecordReader.RecordIterator<T> batch;

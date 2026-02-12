@@ -60,7 +60,105 @@ import java.util.function.BiFunction;
 import static org.apache.paimon.sort.zorder.ZOrderByteUtils.NULL_BYTES;
 import static org.apache.paimon.sort.zorder.ZOrderByteUtils.PRIMITIVE_BUFFER_SIZE;
 
-/** Z-indexer for responsibility to generate z-index. */
+/**
+ * Z-Order 索引器。
+ *
+ * <p>该类负责生成 Z-Order 索引，用于多维数据的空间排序。Z-Order（也称为 Morton 编码）是一种空间填充曲线，
+ * 通过交错组合多个维度的比特位，将多维数据映射到一维空间。
+ *
+ * <h2>Z-Order 原理</h2>
+ * <p>Z-Order 通过比特位交错技术实现多维到一维的映射：
+ * <ul>
+ *   <li><b>比特交错</b>：将各维度的二进制位按位交错排列</li>
+ *   <li><b>空间局部性</b>：相邻的多维点在 Z-Order 中也倾向于相邻</li>
+ *   <li><b>简单高效</b>：计算复杂度低，易于实现</li>
+ *   <li><b>固定长度</b>：所有列贡献相同字节数，便于排序</li>
+ * </ul>
+ *
+ * <h2>应用场景</h2>
+ * <ul>
+ *   <li><b>数据聚类</b>：将空间上接近的数据存储在一起</li>
+ *   <li><b>数据跳过</b>：通过 Z-Order 索引实现高效的数据过滤</li>
+ *   <li><b>查询优化</b>：提升多维范围查询性能</li>
+ *   <li><b>数据分区</b>：用于数据的空间分区</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 1. 创建 Z-Order 索引器（使用默认 8 字节）
+ * RowType rowType = RowType.of(
+ *     DataTypes.INT(),
+ *     DataTypes.STRING()
+ * );
+ * List<String> orderColumns = Arrays.asList("id", "name");
+ * ZIndexer indexer = new ZIndexer(rowType, orderColumns);
+ *
+ * // 2. 创建索引器并指定变长类型的字节大小
+ * ZIndexer indexer = new ZIndexer(rowType, orderColumns, 16);
+ *
+ * // 3. 初始化索引器
+ * indexer.open();
+ *
+ * // 4. 为行生成索引
+ * InternalRow row = ...;
+ * byte[] indexBytes = indexer.index(row);
+ *
+ * // 5. 使用索引进行排序
+ * List<InternalRow> rows = ...;
+ * rows.sort((r1, r2) -> {
+ *     byte[] idx1 = indexer.index(r1);
+ *     byte[] idx2 = indexer.index(r2);
+ *     return Arrays.compare(idx1, idx2);
+ * });
+ * }</pre>
+ *
+ * <h2>实现细节</h2>
+ * <ul>
+ *   <li><b>固定长度字段</b>：数值类型使用 8 字节（PRIMITIVE_BUFFER_SIZE）</li>
+ *   <li><b>变长字段</b>：字符串和二进制类型可配置长度（默认 8 字节）</li>
+ *   <li><b>字节交错</b>：使用 {@link ZOrderByteUtils#interleaveBits} 交错各列的字节</li>
+ *   <li><b>NULL 处理</b>：NULL 值使用全 0 字节表示</li>
+ * </ul>
+ *
+ * <h2>性能考虑</h2>
+ * <ul>
+ *   <li>变长类型会被截断或填充到指定长度</li>
+ *   <li>不支持复杂类型（Array、Map、Row）</li>
+ *   <li>使用 ByteBuffer 重用避免频繁分配</li>
+ *   <li>总字节数 = 固定长度列数 * 8 + 变长列数 * 配置长度</li>
+ * </ul>
+ *
+ * <h2>与 Hilbert 曲线的对比</h2>
+ * <table border="1">
+ * <tr>
+ *   <th>特性</th>
+ *   <th>Z-Order</th>
+ *   <th>Hilbert</th>
+ * </tr>
+ * <tr>
+ *   <td>实现复杂度</td>
+ *   <td>简单</td>
+ *   <td>复杂</td>
+ * </tr>
+ * <tr>
+ *   <td>计算性能</td>
+ *   <td>快</td>
+ *   <td>较慢</td>
+ * </tr>
+ * <tr>
+ *   <td>空间局部性</td>
+ *   <td>好</td>
+ *   <td>更好</td>
+ * </tr>
+ * <tr>
+ *   <td>字节长度</td>
+ *   <td>可配置</td>
+ *   <td>固定</td>
+ * </tr>
+ * </table>
+ *
+ * @see ZOrderByteUtils
+ */
 public class ZIndexer implements Serializable {
 
     private final Set<RowProcessor> functionSet;
@@ -141,7 +239,37 @@ public class ZIndexer implements Serializable {
                 isVarType(type) ? varTypeSize : PRIMITIVE_BUFFER_SIZE);
     }
 
-    /** Type Visitor to generate function map from row column to z-index. */
+    /**
+     * 数据类型访问者。
+     *
+     * <p>该访问者为不同的数据类型生成相应的 Z-Order 索引处理函数。每个数据类型都有特定的转换逻辑，
+     * 将原始值转换为有序字节表示，以便进行字节交错操作。
+     *
+     * <h3>类型转换策略</h3>
+     * <ul>
+     *   <li><b>有符号整数</b>：翻转符号位，使负数排在正数前面</li>
+     *   <li><b>浮点数</b>：按照 IEEE 754 标准转换为有序的符号-幅度表示</li>
+     *   <li><b>字符串/二进制</b>：截断或填充到指定长度</li>
+     *   <li><b>时间类型</b>：转换为对应的整数或长整数</li>
+     *   <li><b>Decimal</b>：转换为未缩放的字节数组</li>
+     * </ul>
+     *
+     * <h3>支持的类型</h3>
+     * <ul>
+     *   <li><b>数值类型</b>：TINYINT, SMALLINT, INT, BIGINT, FLOAT, DOUBLE, DECIMAL</li>
+     *   <li><b>字符串类型</b>：CHAR, VARCHAR</li>
+     *   <li><b>二进制类型</b>：BINARY, VARBINARY</li>
+     *   <li><b>时间类型</b>：DATE, TIME, TIMESTAMP, LOCAL_ZONED_TIMESTAMP</li>
+     *   <li><b>布尔类型</b>：BOOLEAN</li>
+     * </ul>
+     *
+     * <h3>不支持的类型</h3>
+     * <ul>
+     *   <li>ARRAY, MAP, ROW, MULTISET - 复杂类型</li>
+     *   <li>VARIANT - 变体类型</li>
+     *   <li>BLOB - 大对象类型</li>
+     * </ul>
+     */
     public static class TypeVisitor implements DataTypeVisitor<ZProcessFunction>, Serializable {
 
         private final int fieldIndex;
@@ -380,7 +508,12 @@ public class ZIndexer implements Serializable {
         }
     }
 
-    /** Be used as converting row field record to devoted bytes. */
+    /**
+     * 行处理器。
+     *
+     * <p>用于将行字段转换为 Z-Order 索引所需的字节表示。
+     * 每个处理器封装了特定字段的转换逻辑和字节缓冲区。
+     */
     public static class RowProcessor implements Serializable {
 
         private transient ByteBuffer reuse;
@@ -401,7 +534,12 @@ public class ZIndexer implements Serializable {
         }
     }
 
-    /** Process function interface. */
+    /**
+     * Z-Order 处理函数接口。
+     *
+     * <p>该函数接口定义了从行数据提取字段并转换为字节数组的操作，用于后续的比特位交错。
+     * 使用 ByteBuffer 作为重用缓冲区，避免频繁的内存分配。
+     */
     public interface ZProcessFunction
             extends BiFunction<InternalRow, ByteBuffer, byte[]>, Serializable {}
 }

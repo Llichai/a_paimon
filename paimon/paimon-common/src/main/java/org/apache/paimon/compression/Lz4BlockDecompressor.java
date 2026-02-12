@@ -27,15 +27,31 @@ import static org.apache.paimon.compression.CompressorUtils.readIntLE;
 import static org.apache.paimon.compression.CompressorUtils.validateLength;
 
 /**
- * Decode data written with {@link Lz4BlockCompressor}. It reads from and writes to byte arrays
- * provided from the outside, thus reducing copy time.
+ * LZ4 块解压缩器。
  *
- * <p>This class is copied and modified from {@link net.jpountz.lz4.LZ4BlockInputStream}.
+ * <p>解码由 {@link Lz4BlockCompressor} 写入的数据。它从外部提供的字节数组读取和写入数据,
+ * 从而减少了复制时间。
+ *
+ * <p>该类从 {@link net.jpountz.lz4.LZ4BlockInputStream} 复制并修改而来。
+ *
+ * <p>特点:
+ * <ul>
+ *   <li>使用 LZ4 安全解压缩模式,防止缓冲区溢出</li>
+ *   <li>读取并验证8字节头部信息</li>
+ *   <li>验证解压缩后的数据长度</li>
+ *   <li>零拷贝设计,直接使用外部缓冲区</li>
+ * </ul>
  */
 public class Lz4BlockDecompressor implements BlockDecompressor {
 
+    /** LZ4 安全解压缩器实例 */
     private final LZ4SafeDecompressor decompressor;
 
+    /**
+     * 创建 LZ4 块解压缩器。
+     *
+     * <p>使用 LZ4 最快的安全解压缩模式。
+     */
     public Lz4BlockDecompressor() {
         this.decompressor = LZ4Factory.fastestInstance().safeDecompressor();
     }

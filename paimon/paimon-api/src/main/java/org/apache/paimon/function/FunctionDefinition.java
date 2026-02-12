@@ -27,7 +27,38 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonTyp
 import java.util.List;
 import java.util.Objects;
 
-/** Function definition. */
+/**
+ * 函数定义接口,表示函数的具体实现方式。
+ *
+ * <p>Paimon 支持三种类型的函数定义:
+ * <ol>
+ *   <li>{@link FileFunctionDefinition}: 基于文件的函数(JAR、Python脚本等)
+ *   <li>{@link SQLFunctionDefinition}: SQL表达式函数
+ *   <li>{@link LambdaFunctionDefinition}: Lambda表达式函数
+ * </ol>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 创建文件函数定义
+ * List<FunctionFileResource> resources = Arrays.asList(
+ *     new FunctionFileResource("jar", "/path/to/udf.jar")
+ * );
+ * FunctionDefinition fileDef = FunctionDefinition.file(
+ *     resources, "java", "com.example.MyUDF", "myFunction"
+ * );
+ *
+ * // 创建 SQL 函数定义
+ * FunctionDefinition sqlDef = FunctionDefinition.sql("x + y + z");
+ *
+ * // 创建 Lambda 函数定义
+ * FunctionDefinition lambdaDef = FunctionDefinition.lambda(
+ *     "(x, y) -> x + y", "python"
+ * );
+ * }</pre>
+ *
+ * @see Function
+ * @see FunctionChange
+ */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.PROPERTY,

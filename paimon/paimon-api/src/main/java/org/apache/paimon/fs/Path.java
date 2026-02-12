@@ -28,8 +28,97 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * Names a file or directory in a {@code FileIO}. Path strings use slash as the directory separator.
+ * 文件或目录路径。
  *
+ * <p>该类用于在 {@code FileIO} 中命名文件或目录,是 Paimon 文件系统抽象层的核心类。
+ * 路径字符串使用斜杠(/)作为目录分隔符,支持跨平台的路径表示和操作。
+ *
+ * <h2>主要功能</h2>
+ * <ul>
+ *   <li><b>路径表示</b>: 统一表示文件和目录路径
+ *   <li><b>路径解析</b>: 支持 URI 格式的路径解析
+ *   <li><b>路径操作</b>: 支持路径的组合、规范化等操作
+ *   <li><b>跨平台</b>: 处理 Windows 和 Unix 系统的路径差异
+ * </ul>
+ *
+ * <h2>路径格式</h2>
+ * <p>路径字符串本质上是 URI,但具有以下特点:
+ * <ul>
+ *   <li>元素不需要转义
+ *   <li>使用斜杠(/)作为目录分隔符
+ *   <li>支持额外的规范化处理
+ *   <li>支持 scheme、authority 和 path 组件
+ * </ul>
+ *
+ * <h2>路径示例</h2>
+ * <pre>{@code
+ * // 本地文件系统路径
+ * Path localPath = new Path("/tmp/data/table");
+ *
+ * // HDFS 路径
+ * Path hdfsPath = new Path("hdfs://namenode:9000/user/paimon/table");
+ *
+ * // S3 路径
+ * Path s3Path = new Path("s3://bucket/path/to/table");
+ *
+ * // Windows 路径
+ * Path windowsPath = new Path("C:/Users/data/table");
+ *
+ * // 父子路径组合
+ * Path parent = new Path("/tmp/data");
+ * Path child = new Path(parent, "table");
+ * // 结果: /tmp/data/table
+ *
+ * // 获取父路径和文件名
+ * Path path = new Path("/tmp/data/table");
+ * Path parent = path.getParent();  // /tmp/data
+ * String name = path.getName();     // table
+ * }</pre>
+ *
+ * <h2>路径规范化</h2>
+ * <p>路径在创建时会自动进行规范化:
+ * <ul>
+ *   <li>移除重复的斜杠: "/tmp//data" → "/tmp/data"
+ *   <li>移除末尾斜杠: "/tmp/data/" → "/tmp/data"
+ *   <li>处理 Windows 驱动器字母: "C:\data" → "/C:/data"
+ *   <li>将反斜杠转换为斜杠(Windows): "C:\data\file" → "/C:/data/file"
+ * </ul>
+ *
+ * <h2>跨平台支持</h2>
+ * <p>该类自动处理不同操作系统的路径格式:
+ * <ul>
+ *   <li><b>Windows</b>: 支持驱动器字母(C:)和反斜杠(\)
+ *   <li><b>Unix/Linux</b>: 使用标准的斜杠(/)分隔符
+ *   <li><b>相对路径</b>: 自动添加 "./" 前缀(Linux)
+ * </ul>
+ *
+ * <h2>URI 组件</h2>
+ * <p>路径可以包含以下 URI 组件:
+ * <ul>
+ *   <li><b>scheme</b>: 协议类型(hdfs、s3、file 等)
+ *   <li><b>authority</b>: 主机和端口信息
+ *   <li><b>path</b>: 实际的路径字符串
+ *   <li><b>fragment</b>: 片段标识符(可选)
+ * </ul>
+ *
+ * <h2>设计理念</h2>
+ * <p>该类采用基于 URI 的路径抽象:
+ * <ul>
+ *   <li>统一不同文件系统的路径表示
+ *   <li>支持本地和远程文件系统
+ *   <li>提供跨平台的路径操作
+ *   <li>保持路径字符串的可读性
+ * </ul>
+ *
+ * <h2>实现特点</h2>
+ * <ul>
+ *   <li><b>不可变性</b>: 路径对象一旦创建就不可修改
+ *   <li><b>可序列化</b>: 实现 Serializable 接口,支持序列化
+ *   <li><b>可比较</b>: 实现 Comparable 接口,支持排序
+ *   <li><b>线程安全</b>: 不可变对象,天然线程安全
+ * </ul>
+ *
+ * @see org.apache.paimon.fs.FileIO
  * @since 0.4.0
  */
 @Public
@@ -37,62 +126,83 @@ public class Path implements Comparable<Path>, Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** The directory separator, a slash. */
+    /** 目录分隔符,斜杠。 */
     public static final String SEPARATOR = "/";
 
-    /** The directory separator, a slash, as a character. */
+    /** 目录分隔符,斜杠,字符形式。 */
     public static final char SEPARATOR_CHAR = '/';
 
-    /** The current directory, ".". */
+    /** 当前目录,"."。 */
     public static final String CUR_DIR = ".";
 
-    /** Whether the current host is a Windows machine. */
+    /** 当前主机是否为 Windows 机器。 */
     public static final boolean WINDOWS = System.getProperty("os.name").startsWith("Windows");
 
-    /** A pre-compiled regex/state-machine to match the path formats pattern. */
+    /** 预编译的正则表达式,用于匹配 Windows 驱动器字母。 */
     private static final Pattern HAS_DRIVE_LETTER_SPECIFIER = Pattern.compile("^/?[a-zA-Z]:");
 
-    /** A pre-compiled regex/state-machine to match the duplicated slashes pattern. */
+    /** 预编译的正则表达式,用于匹配重复的斜杠。 */
     private static final Pattern SLASHES = Pattern.compile("/+");
 
-    /** A hierarchical URI. */
+    /** 层次化的 URI。 */
     private URI uri;
 
     /**
-     * Create a new Path based on the child path resolved against the parent path.
+     * 基于父路径和子路径创建新路径。
      *
-     * @param parent the parent path
-     * @param child the child path
+     * <p>将子路径解析为相对于父路径的路径。
+     *
+     * @param parent 父路径字符串
+     * @param child 子路径字符串
      */
     public Path(String parent, String child) {
         this(new Path(parent), new Path(child));
     }
 
     /**
-     * Create a new Path based on the child path resolved against the parent path.
+     * 基于父路径和子路径创建新路径。
      *
-     * @param parent the parent path
-     * @param child the child path
+     * <p>将子路径解析为相对于父路径的路径。
+     *
+     * @param parent 父路径对象
+     * @param child 子路径字符串
      */
     public Path(Path parent, String child) {
         this(parent, new Path(child));
     }
 
     /**
-     * Create a new Path based on the child path resolved against the parent path.
+     * 基于父路径和子路径创建新路径。
      *
-     * @param parent the parent path
-     * @param child the child path
+     * <p>将子路径解析为相对于父路径的路径。
+     *
+     * @param parent 父路径字符串
+     * @param child 子路径对象
      */
     public Path(String parent, Path child) {
         this(new Path(parent), child);
     }
 
     /**
-     * Create a new Path based on the child path resolved against the parent path.
+     * 基于父路径和子路径创建新路径。
      *
-     * @param parent the parent path
-     * @param child the child path
+     * <p>将子路径解析为相对于父路径的路径。这是路径组合的核心方法:
+     * <ul>
+     *   <li>在父路径的路径部分末尾添加斜杠(如果需要)
+     *   <li>使用 URI 解析机制将子路径解析为相对于父路径的路径
+     *   <li>保留父路径的 scheme 和 authority
+     * </ul>
+     *
+     * <p>示例:
+     * <pre>{@code
+     * Path parent = new Path("/tmp/data");
+     * Path child = new Path("table");
+     * Path result = new Path(parent, child);
+     * // result: /tmp/data/table
+     * }</pre>
+     *
+     * @param parent 父路径对象
+     * @param child 子路径对象
      */
     public Path(Path parent, Path child) {
         // Add a slash to parent's path so resolution is compatible with URI's
@@ -120,10 +230,12 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Checks if the provided path string is either null or has zero length and throws a {@link
-     * IllegalArgumentException} if any of the two conditions apply.
+     * 检查路径字符串参数。
      *
-     * @param path the path string to be checked
+     * <p>验证路径字符串不为 null 且长度不为零,否则抛出 {@link IllegalArgumentException}。
+     *
+     * @param path 要检查的路径字符串
+     * @throws IllegalArgumentException 如果路径为 null 或空字符串
      */
     private void checkPathArg(String path) {
         // disallow construction of a Path from an empty string
@@ -136,10 +248,30 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Construct a path from a String. Path strings are URIs, but with unescaped elements and some
-     * additional normalization.
+     * 从字符串构造路径。
      *
-     * @param pathString the path string
+     * <p>路径字符串是 URI,但具有未转义的元素和额外的规范化处理。
+     * 该构造函数会解析路径字符串的各个组件(scheme、authority、path)并进行规范化。
+     *
+     * <p>解析过程:
+     * <ol>
+     *   <li>处理 Windows 驱动器字母(如 "C:")
+     *   <li>解析 scheme(如 "hdfs:")
+     *   <li>解析 authority(如 "//namenode:9000")
+     *   <li>解析 path 部分
+     *   <li>规范化路径
+     * </ol>
+     *
+     * <p>示例:
+     * <pre>{@code
+     * new Path("/tmp/data");
+     * new Path("hdfs://namenode:9000/user/data");
+     * new Path("C:/Users/data");
+     * new Path("s3://bucket/path/to/file");
+     * }</pre>
+     *
+     * @param pathString 路径字符串
+     * @throws IllegalArgumentException 如果路径字符串为 null 或空
      */
     public Path(String pathString) {
         checkPathArg(pathString);
@@ -182,20 +314,33 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Construct a path from a URI.
+     * 从 URI 构造路径。
      *
-     * @param aUri the source URI
+     * <p>直接使用提供的 URI,并进行规范化处理。
+     *
+     * @param aUri 源 URI
      */
     public Path(URI aUri) {
         uri = aUri.normalize();
     }
 
     /**
-     * Construct a Path from a scheme, an authority and a path string.
+     * 从 scheme、authority 和路径字符串构造路径。
      *
-     * @param scheme the scheme
-     * @param authority the authority
-     * @param path the path
+     * <p>该构造函数用于显式指定 URI 的各个组件。主要用于构造带有特定
+     * scheme 和 authority 的路径(如 HDFS、S3 等远程文件系统路径)。
+     *
+     * <p>示例:
+     * <pre>{@code
+     * new Path("hdfs", "namenode:9000", "/user/data");
+     * new Path("s3", "my-bucket", "/path/to/file");
+     * new Path("file", null, "/tmp/data");
+     * }</pre>
+     *
+     * @param scheme scheme 字符串(如 "hdfs", "s3")
+     * @param authority authority 字符串(如 "namenode:9000")
+     * @param path 路径字符串
+     * @throws IllegalArgumentException 如果路径字符串为 null 或空
      */
     public Path(String scheme, String authority, String path) {
         checkPathArg(path);
@@ -215,12 +360,16 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Initializes a path object given the scheme, authority, path and fragment string.
+     * 初始化路径对象。
      *
-     * @param scheme the scheme string.
-     * @param authority the authority string.
-     * @param path the path string.
-     * @param fragment the fragment string.
+     * <p>根据给定的 scheme、authority、path 和 fragment 字符串创建内部 URI 对象。
+     * 在创建过程中会对路径进行规范化处理。
+     *
+     * @param scheme scheme 字符串
+     * @param authority authority 字符串
+     * @param path 路径字符串
+     * @param fragment fragment 字符串
+     * @throws IllegalArgumentException 如果 URI 语法错误
      */
     private void initialize(String scheme, String authority, String path, String fragment) {
         try {
@@ -233,12 +382,19 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Normalize a path string to use non-duplicated forward slashes as the path separator and
-     * remove any trailing path separators.
+     * 规范化路径字符串。
      *
-     * @param scheme the URI scheme. Used to deduce whether we should replace backslashes or not
-     * @param path the scheme-specific part
-     * @return the normalized path string
+     * <p>使用非重复的正斜杠作为路径分隔符,并移除末尾的路径分隔符。
+     * 规范化规则包括:
+     * <ul>
+     *   <li>移除重复的斜杠: "/tmp//data" → "/tmp/data"
+     *   <li>在 Windows 上将反斜杠替换为斜杠
+     *   <li>移除非根路径末尾的斜杠
+     * </ul>
+     *
+     * @param scheme URI scheme,用于判断是否应该替换反斜杠
+     * @param path scheme 特定的路径部分
+     * @return 规范化后的路径字符串
      */
     private static String normalizePath(String scheme, String path) {
         // Remove duplicated slashes.
@@ -264,19 +420,24 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Checks if the provided path string contains a windows drive letter.
+     * 检查路径字符串是否包含 Windows 驱动器字母。
      *
-     * @return True, if the path string contains a windows drive letter, false otherwise.
+     * <p>Windows 驱动器字母格式: "C:", "D:", "/C:", 等。
+     *
+     * @param path 路径字符串
+     * @return 如果路径包含 Windows 驱动器字母返回 true,否则返回 false
      */
     private static boolean hasWindowsDrive(String path) {
         return (WINDOWS && HAS_DRIVE_LETTER_SPECIFIER.matcher(path).find());
     }
 
     /**
-     * Get start position without windows drive letter.
+     * 获取去除 Windows 驱动器字母后的起始位置。
      *
-     * @param path the path string.
-     * @return the start position of without windows drive letter.
+     * <p>用于跳过 Windows 驱动器字母部分,找到实际路径的起始位置。
+     *
+     * @param path 路径字符串
+     * @return 去除 Windows 驱动器字母后的起始位置
      */
     private static int startPositionWithoutWindowsDrive(String path) {
         if (hasWindowsDrive(path)) {
@@ -287,18 +448,26 @@ public class Path implements Comparable<Path>, Serializable {
     }
 
     /**
-     * Convert this Path to a URI.
+     * 将此路径转换为 URI。
      *
-     * @return this Path as a URI
+     * @return 此路径对应的 URI
      */
     public URI toUri() {
         return uri;
     }
 
     /**
-     * Returns the final component of this path, i.e., everything that follows the last separator.
+     * 返回路径的最后一个组件。
      *
-     * @return the final component of the path
+     * <p>即路径中最后一个分隔符之后的所有内容,通常是文件名或目录名。
+     *
+     * <p>示例:
+     * <pre>{@code
+     * new Path("/tmp/data/table").getName();  // returns "table"
+     * new Path("s3://bucket/path/file").getName();  // returns "file"
+     * }</pre>
+     *
+     * @return 路径的最后一个组件
      */
     public String getName() {
         String path = uri.getPath();
@@ -306,15 +475,38 @@ public class Path implements Comparable<Path>, Serializable {
         return path.substring(slash + 1);
     }
 
-    /** Create a temporary path (to be used as a copy) for this path. */
+    /**
+     * 为此路径创建临时路径。
+     *
+     * <p>临时路径用于原子性写入操作,先写入临时文件,然后重命名为目标文件。
+     * 临时文件名格式: ".{原文件名}.{UUID}.tmp"
+     *
+     * <p>示例:
+     * <pre>{@code
+     * Path path = new Path("/tmp/data/table");
+     * Path tempPath = path.createTempPath();
+     * // tempPath: /tmp/data/.table.uuid.tmp
+     * }</pre>
+     *
+     * @return 临时路径对象
+     */
     public Path createTempPath() {
         return new Path(getParent(), String.format(".%s.%s.tmp", getName(), UUID.randomUUID()));
     }
 
     /**
-     * Returns the parent of a path or null if at root.
+     * 返回路径的父路径。
      *
-     * @return the parent of a path or null if at root
+     * <p>如果路径已经是根路径,则返回 null。
+     *
+     * <p>示例:
+     * <pre>{@code
+     * new Path("/tmp/data/table").getParent();  // returns "/tmp/data"
+     * new Path("/tmp").getParent();             // returns "/"
+     * new Path("/").getParent();                // returns null
+     * }</pre>
+     *
+     * @return 父路径,如果已经是根路径则返回 null
      */
     public Path getParent() {
         String path = uri.getPath();
@@ -334,6 +526,16 @@ public class Path implements Comparable<Path>, Serializable {
         return new Path(uri.getScheme(), uri.getAuthority(), parent);
     }
 
+    /**
+     * 返回路径的字符串表示形式。
+     *
+     * <p>注意: 不使用 uri.toString(),因为它会转义所有字符。
+     * 我们希望在字符串中保留非法字符的未转义形式,以便进行 glob 处理等操作。
+     *
+     * <p>返回格式: [scheme:][[//authority]/path][#fragment]
+     *
+     * @return 路径的字符串表示形式
+     */
     @Override
     public String toString() {
         // we can't use uri.toString(), which escapes everything, because we want
@@ -363,6 +565,14 @@ public class Path implements Comparable<Path>, Serializable {
         return buffer.toString();
     }
 
+    /**
+     * 比较路径对象是否相等。
+     *
+     * <p>两个路径相等当且仅当它们的 URI 相等。
+     *
+     * @param o 要比较的对象
+     * @return 如果路径相等返回 true,否则返回 false
+     */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof Path)) {
@@ -372,11 +582,24 @@ public class Path implements Comparable<Path>, Serializable {
         return this.uri.equals(that.uri);
     }
 
+    /**
+     * 返回路径的哈希码。
+     *
+     * @return 路径的哈希码
+     */
     @Override
     public int hashCode() {
         return uri.hashCode();
     }
 
+    /**
+     * 比较路径的顺序。
+     *
+     * <p>路径的比较基于其 URI 的字典顺序。
+     *
+     * @param that 要比较的路径
+     * @return 负数、零或正数,分别表示此路径小于、等于或大于指定路径
+     */
     @Override
     public int compareTo(Path that) {
         return this.uri.compareTo(that.uri);

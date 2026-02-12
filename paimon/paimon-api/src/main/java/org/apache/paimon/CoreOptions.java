@@ -66,7 +66,54 @@ import static org.apache.paimon.options.MemorySize.VALUE_256_MB;
 import static org.apache.paimon.options.description.TextElement.text;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Core options for paimon. */
+/**
+ * Paimon 核心配置选项类。
+ *
+ * <p>该类定义了 Paimon 表的所有核心配置选项，包括表类型、分桶策略、合并引擎、排序策略等。
+ *
+ * <h2>表类型选项</h2>
+ * <ul>
+ *   <li>type: 表的类型(TABLE、CHANGELOG、APPEND_ONLY)
+ * </ul>
+ *
+ * <h2>分桶和分区选项</h2>
+ * <ul>
+ *   <li>bucket: 分桶数量(动态分桶、推迟分桶或固定分桶)
+ *   <li>bucket-key: 分桶键
+ * </ul>
+ *
+ * <h2>数据合并选项</h2>
+ * <ul>
+ *   <li>merge-engine: 合并引擎类型(deduplicate、partial-update、aggregating)
+ *   <li>write-buffer-size: 写入缓冲区大小
+ *   <li>write-buffer-spillable: 是否允许缓冲区溢出
+ * </ul>
+ *
+ * <h2>排序和索引选项</h2>
+ * <ul>
+ *   <li>sort-keys: 排序键
+ *   <li>file-index: 文件索引配置
+ * </ul>
+ *
+ * <h2>过期和清理选项</h2>
+ * <ul>
+ *   <li>snapshot.time-retained: 快照时间保留策略
+ *   <li>snapshot.num-retained: 快照数量保留策略
+ *   <li>changelog.time-retained: 变更日志时间保留策略
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 创建表选项
+ * Options options = new Options();
+ * options.set(CoreOptions.TYPE, CoreOptions.TableType.CHANGELOG);
+ * options.set(CoreOptions.BUCKET, 4);
+ * options.set(CoreOptions.MERGE_ENGINE, CoreOptions.MergeEngine.DEDUPLICATE);
+ * options.set(CoreOptions.SORT_KEYS, "id");
+ * }</pre>
+ *
+ * @since 0.1.0
+ */
 public class CoreOptions implements Serializable {
 
     public static final String FIELDS_PREFIX = "fields";

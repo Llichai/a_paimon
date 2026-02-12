@@ -25,7 +25,27 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing databases. */
+/**
+ * 列出数据库响应对象。
+ *
+ * <p>该类表示列出所有数据库名称的分页响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>databases - 数据库名称列表
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "databases": ["db1", "db2", "db3"],
+ *   "nextPageToken": "token_xyz789"
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListDatabasesResponse implements PagedResponse<String> {
 

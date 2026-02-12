@@ -31,7 +31,53 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 import java.util.List;
 import java.util.Map;
 
-/** Request for creating function. */
+/**
+ * 创建函数请求。
+ *
+ * <p>用于向 REST 服务器发送创建用户自定义函数(UDF)的请求,包含函数的完整定义信息。
+ *
+ * <p>函数可以有多个方言定义(如 SQL、Python 等),支持输入输出参数定义。
+ *
+ * <p>JSON 序列化格式:
+ *
+ * <pre>{@code
+ * {
+ *   "name": "my_function",
+ *   "inputParams": [
+ *     {"id": 0, "name": "x", "type": "INT"}
+ *   ],
+ *   "returnParams": [
+ *     {"id": 0, "name": "result", "type": "INT"}
+ *   ],
+ *   "deterministic": true,
+ *   "definitions": {
+ *     "SQL": {
+ *       "content": "SELECT x + 1",
+ *       "language": "SQL"
+ *     }
+ *   },
+ *   "comment": "Increment function",
+ *   "options": {}
+ * }
+ * }</pre>
+ *
+ * <p>示例: 创建简单的 SQL 函数
+ *
+ * <pre>{@code
+ * List<DataField> inputs = Arrays.asList(
+ *     new DataField(0, "x", DataTypes.INT())
+ * );
+ * List<DataField> outputs = Arrays.asList(
+ *     new DataField(0, "result", DataTypes.INT())
+ * );
+ * Map<String, FunctionDefinition> defs = Map.of(
+ *     "SQL", new FunctionDefinition("SELECT x + 1", "SQL")
+ * );
+ * CreateFunctionRequest request = new CreateFunctionRequest(
+ *     "increment", inputs, outputs, true, defs, "Add 1 to input", Map.of()
+ * );
+ * }</pre>
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateFunctionRequest implements RESTRequest {
 
@@ -43,27 +89,45 @@ public class CreateFunctionRequest implements RESTRequest {
     private static final String FIELD_COMMENT = "comment";
     private static final String FIELD_OPTIONS = "options";
 
+    /** 函数名称。 */
     @JsonProperty(FIELD_NAME)
     private final String functionName;
 
+    /** 输入参数列表。 */
     @JsonProperty(FIELD_INPUT_PARAMETERS)
     private final List<DataField> inputParams;
 
+    /** 返回值参数列表。 */
     @JsonProperty(FIELD_RETURN_PARAMETERS)
     private final List<DataField> returnParams;
 
+    /** 是否为确定性函数(相同输入总是返回相同输出)。 */
     @JsonProperty(FIELD_DETERMINISTIC)
     private final boolean deterministic;
 
+    /** 函数定义映射,键为方言名称(如 SQL、Python),值为函数定义。 */
     @JsonProperty(FIELD_DEFINITIONS)
     private final Map<String, FunctionDefinition> definitions;
 
+    /** 函数注释。 */
     @JsonProperty(FIELD_COMMENT)
     private final String comment;
 
+    /** 函数配置选项。 */
     @JsonProperty(FIELD_OPTIONS)
     private final Map<String, String> options;
 
+    /**
+     * 构造函数。
+     *
+     * @param functionName 函数名称
+     * @param inputParams 输入参数列表
+     * @param returnParams 返回值参数列表
+     * @param deterministic 是否为确定性函数
+     * @param definitions 函数定义映射
+     * @param comment 函数注释
+     * @param options 函数配置选项
+     */
     @JsonCreator
     public CreateFunctionRequest(
             @JsonProperty(FIELD_NAME) String functionName,
@@ -82,6 +146,11 @@ public class CreateFunctionRequest implements RESTRequest {
         this.options = options;
     }
 
+    /**
+     * 从 Function 对象构造请求。
+     *
+     * @param function 函数对象
+     */
     public CreateFunctionRequest(Function function) {
         this.functionName = function.name();
         this.inputParams = function.inputParams().orElse(null);
@@ -92,40 +161,81 @@ public class CreateFunctionRequest implements RESTRequest {
         this.options = function.options();
     }
 
+    /**
+     * 获取函数名称。
+     *
+     * @return 函数名称
+     */
     @JsonGetter(FIELD_NAME)
     public String name() {
         return functionName;
     }
 
+    /**
+     * 获取输入参数列表。
+     *
+     * @return 输入参数列表
+     */
     @JsonGetter(FIELD_INPUT_PARAMETERS)
     public List<DataField> inputParams() {
         return inputParams;
     }
 
+    /**
+     * 获取返回值参数列表。
+     *
+     * @return 返回值参数列表
+     */
     @JsonGetter(FIELD_RETURN_PARAMETERS)
     public List<DataField> returnParams() {
         return returnParams;
     }
 
+    /**
+     * 判断是否为确定性函数。
+     *
+     * @return true 如果是确定性函数
+     */
     @JsonGetter(FIELD_DETERMINISTIC)
     public boolean isDeterministic() {
         return deterministic;
     }
 
+    /**
+     * 获取函数定义映射。
+     *
+     * @return 函数定义映射
+     */
     @JsonGetter(FIELD_DEFINITIONS)
     public Map<String, FunctionDefinition> definitions() {
         return definitions;
     }
 
+    /**
+     * 获取指定方言的函数定义。
+     *
+     * @param dialect 方言名称(如 SQL、Python)
+     * @return 函数定义
+     */
     public FunctionDefinition definition(String dialect) {
         return definitions.get(dialect);
     }
 
+    /**
+     * 获取函数注释。
+     *
+     * @return 函数注释
+     */
     @JsonGetter(FIELD_COMMENT)
     public String comment() {
         return comment;
     }
 
+    /**
+     * 获取函数配置选项。
+     *
+     * @return 配置选项映射
+     */
     @JsonGetter(FIELD_OPTIONS)
     public Map<String, String> options() {
         return options;

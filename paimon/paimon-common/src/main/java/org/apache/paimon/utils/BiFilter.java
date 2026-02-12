@@ -21,16 +21,37 @@ package org.apache.paimon.utils;
 import org.apache.paimon.predicate.Predicate;
 
 /**
- * Represents a filter (boolean-valued function) of two argument. This class is for avoiding name
- * conflicting to {@link Predicate}.
+ * 二元过滤器接口。
+ *
+ * <p>表示一个接受两个参数的过滤器(布尔值函数)。该类用于避免与 {@link Predicate} 的命名冲突。
+ *
+ * <p>这是一个函数式接口,其函数方法是 {@link #test(Object, Object)}。
+ *
+ * @param <T> 第一个参数的类型
+ * @param <U> 第二个参数的类型
  */
 @FunctionalInterface
 public interface BiFilter<T, U> {
 
+    /** 总是返回 true 的过滤器常量 */
     BiFilter<?, ?> ALWAYS_TRUE = (t, u) -> true;
 
+    /**
+     * 使用给定的参数评估此过滤器。
+     *
+     * @param t 第一个输入参数
+     * @param u 第二个输入参数
+     * @return 如果输入参数匹配过滤器,则为 {@code true},否则为 {@code false}
+     */
     boolean test(T t, U u);
 
+    /**
+     * 返回总是返回 true 的过滤器。
+     *
+     * @param <T> 第一个参数的类型
+     * @param <U> 第二个参数的类型
+     * @return 总是返回 true 的过滤器
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     static <T, U> BiFilter<T, U> alwaysTrue() {
         return (BiFilter) ALWAYS_TRUE;

@@ -30,7 +30,32 @@ import java.io.IOException;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Rocksdb state for key -> a single value. */
+/**
+ * 基于 RocksDB 的单值状态实现.
+ *
+ * <p>RocksDBValueState 使用 RocksDB 存储键值对,支持大规模持久化状态数据。
+ * 结合 Caffeine LRU 缓存,在保证容量的同时提供较好的查询性能。
+ *
+ * <h2>存储机制:</h2>
+ * <ul>
+ *   <li>数据直接存储在 RocksDB 的列族中
+ *   <li>查询时先查缓存,缓存未命中则查 RocksDB
+ *   <li>写入时同时更新 RocksDB 和缓存
+ *   <li>删除时先检查键是否存在,存在才执行删除并更新缓存
+ * </ul>
+ *
+ * <h2>性能特点:</h2>
+ * <ul>
+ *   <li><b>查询延迟</b>: 缓存命中时纳秒级,未命中时微秒级
+ *   <li><b>写入延迟</b>: 微秒级(写 MemTable)
+ *   <li><b>容量</b>: 几乎无限(受磁盘空间限制)
+ * </ul>
+ *
+ * @param <K> 键的类型
+ * @param <V> 值的类型
+ * @see RocksDBState RocksDB 状态基类
+ * @see ValueState 单值状态接口
+ */
 public class RocksDBValueState<K, V> extends RocksDBState<K, V, RocksDBState.Reference>
         implements ValueState<K, V> {
 

@@ -27,13 +27,28 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * A {@link GlobalIndexReader} that combines results from multiple readers by performing a union
- * (OR) operation on their results.
+ * 联合全局索引读取器。
+ *
+ * <p>该读取器组合多个读取器的结果,通过执行并集(OR)运算来合并它们的查询结果。
+ * 适用于需要同时查询多个索引文件或分区的场景。
+ *
+ * <p>主要应用场景:
+ * <ul>
+ *   <li>多文件查询 - 合并多个索引文件的查询结果
+ *   <li>分区表查询 - 合并不同分区的索引结果
+ *   <li>索引合并 - 在索引重组过程中查询多个索引片段
+ * </ul>
  */
 public class UnionGlobalIndexReader implements GlobalIndexReader {
 
+    /** 被联合的读取器列表 */
     private final List<GlobalIndexReader> readers;
 
+    /**
+     * 构造联合全局索引读取器。
+     *
+     * @param readers 要联合的读取器列表
+     */
     public UnionGlobalIndexReader(List<GlobalIndexReader> readers) {
         this.readers = readers;
     }
@@ -113,6 +128,14 @@ public class UnionGlobalIndexReader implements GlobalIndexReader {
         return union(reader -> reader.visitVectorSearch(vectorSearch));
     }
 
+    /**
+     * 对所有读取器执行联合操作。
+     *
+     * <p>遍历所有读取器,对每个读取器应用访问函数,然后将结果通过 OR 运算合并。
+     *
+     * @param visitor 访问函数
+     * @return 合并后的索引结果
+     */
     private Optional<GlobalIndexResult> union(
             Function<GlobalIndexReader, Optional<GlobalIndexResult>> visitor) {
         Optional<GlobalIndexResult> result = Optional.empty();
@@ -129,6 +152,7 @@ public class UnionGlobalIndexReader implements GlobalIndexReader {
         return result;
     }
 
+    /** 关闭所有被联合的读取器。 */
     @Override
     public void close() throws IOException {
         for (GlobalIndexReader reader : readers) {

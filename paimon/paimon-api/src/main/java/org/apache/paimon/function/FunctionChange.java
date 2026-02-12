@@ -31,7 +31,48 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.Objects;
 
-/** Function change. */
+/**
+ * 函数变更接口,表示对函数的修改操作。
+ *
+ * <p>该接口定义了可以对函数进行的各种变更操作,包括:
+ * <ul>
+ *   <li>设置/删除函数选项
+ *   <li>更新函数注释
+ *   <li>添加/更新/删除函数定义
+ * </ul>
+ *
+ * <h2>变更类型</h2>
+ * <ol>
+ *   <li>{@link SetFunctionOption}: 设置函数配置选项
+ *   <li>{@link RemoveFunctionOption}: 删除函数配置选项
+ *   <li>{@link UpdateFunctionComment}: 更新函数注释
+ *   <li>{@link AddDefinition}: 添加函数定义
+ *   <li>{@link UpdateDefinition}: 更新函数定义
+ *   <li>{@link DropDefinition}: 删除函数定义
+ * </ol>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 设置函数选项
+ * FunctionChange change1 = FunctionChange.setOption("timeout", "30s");
+ *
+ * // 更新函数注释
+ * FunctionChange change2 = FunctionChange.updateComment("Updated function description");
+ *
+ * // 添加 SQL 定义
+ * FunctionDefinition sqlDef = FunctionDefinition.sql("SELECT x + y");
+ * FunctionChange change3 = FunctionChange.addDefinition("sql", sqlDef);
+ *
+ * // 删除定义
+ * FunctionChange change4 = FunctionChange.dropDefinition("old_impl");
+ *
+ * // 应用变更
+ * catalog.alterFunction(identifier, change1, change2, change3);
+ * }</pre>
+ *
+ * @see Function
+ * @see FunctionDefinition
+ */
 @Public
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -59,31 +100,70 @@ import java.util.Objects;
 })
 public interface FunctionChange extends Serializable {
 
+    /**
+     * 创建设置函数选项的变更。
+     *
+     * @param key 选项键
+     * @param value 选项值
+     * @return SetFunctionOption 变更对象
+     */
     static FunctionChange setOption(String key, String value) {
         return new FunctionChange.SetFunctionOption(key, value);
     }
 
+    /**
+     * 创建删除函数选项的变更。
+     *
+     * @param key 要删除的选项键
+     * @return RemoveFunctionOption 变更对象
+     */
     static FunctionChange removeOption(String key) {
         return new FunctionChange.RemoveFunctionOption(key);
     }
 
+    /**
+     * 创建更新函数注释的变更。
+     *
+     * @param comment 新的注释内容
+     * @return UpdateFunctionComment 变更对象
+     */
     static FunctionChange updateComment(String comment) {
         return new FunctionChange.UpdateFunctionComment(comment);
     }
 
+    /**
+     * 创建添加函数定义的变更。
+     *
+     * @param name 定义名称
+     * @param definition 函数定义
+     * @return AddDefinition 变更对象
+     */
     static FunctionChange addDefinition(String name, FunctionDefinition definition) {
         return new FunctionChange.AddDefinition(name, definition);
     }
 
+    /**
+     * 创建更新函数定义的变更。
+     *
+     * @param name 定义名称
+     * @param definition 新的函数定义
+     * @return UpdateDefinition 变更对象
+     */
     static FunctionChange updateDefinition(String name, FunctionDefinition definition) {
         return new FunctionChange.UpdateDefinition(name, definition);
     }
 
+    /**
+     * 创建删除函数定义的变更。
+     *
+     * @param name 要删除的定义名称
+     * @return DropDefinition 变更对象
+     */
     static FunctionChange dropDefinition(String name) {
         return new FunctionChange.DropDefinition(name);
     }
 
-    /** set a function option for function change. */
+    /** 设置函数选项的变更操作。 */
     final class SetFunctionOption implements FunctionChange {
 
         private static final long serialVersionUID = 1L;
@@ -132,7 +212,7 @@ public interface FunctionChange extends Serializable {
         }
     }
 
-    /** remove a function option for function change. */
+    /** 删除函数选项的变更操作。 */
     final class RemoveFunctionOption implements FunctionChange {
 
         private static final long serialVersionUID = 1L;
@@ -169,14 +249,14 @@ public interface FunctionChange extends Serializable {
         }
     }
 
-    /** update a function comment for function change. */
+    /** 更新函数注释的变更操作。 */
     final class UpdateFunctionComment implements FunctionChange {
 
         private static final long serialVersionUID = 1L;
 
         private static final String FIELD_COMMENT = "comment";
 
-        // If comment is null, means to remove comment
+        // 如果 comment 为 null,表示删除注释
         @JsonProperty(FIELD_COMMENT)
         private final @Nullable String comment;
 
@@ -207,7 +287,7 @@ public interface FunctionChange extends Serializable {
         }
     }
 
-    /** add definition for function change. */
+    /** 添加函数定义的变更操作。 */
     final class AddDefinition implements FunctionChange {
         private static final long serialVersionUID = 1L;
         private static final String FIELD_DEFINITION_NAME = "name";
@@ -255,7 +335,7 @@ public interface FunctionChange extends Serializable {
         }
     }
 
-    /** update definition for function change. */
+    /** 更新函数定义的变更操作。 */
     final class UpdateDefinition implements FunctionChange {
         private static final long serialVersionUID = 1L;
         private static final String FIELD_DEFINITION_NAME = "name";
@@ -303,7 +383,7 @@ public interface FunctionChange extends Serializable {
         }
     }
 
-    /** drop definition for function change. */
+    /** 删除函数定义的变更操作。 */
     final class DropDefinition implements FunctionChange {
         private static final long serialVersionUID = 1L;
         private static final String FIELD_DEFINITION_NAME = "name";
@@ -339,7 +419,7 @@ public interface FunctionChange extends Serializable {
         }
     }
 
-    /** Actions for function alter. */
+    /** 函数变更操作的类型常量。 */
     class Actions {
         public static final String FIELD_TYPE = "action";
         public static final String ADD_DEFINITION_ACTION = "addDefinition";

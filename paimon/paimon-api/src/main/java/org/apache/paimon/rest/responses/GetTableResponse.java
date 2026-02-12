@@ -26,7 +26,43 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonGet
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
-/** Response for getting table. */
+/**
+ * 获取表响应对象。
+ *
+ * <p>该类表示获取表详细信息的响应,继承自 {@link AuditRESTResponse} 以包含审计信息。
+ *
+ * <p>响应字段说明:
+ * <ul>
+ *   <li>id - 表唯一标识符
+ *   <li>database - 所属数据库名称
+ *   <li>name - 表名称
+ *   <li>path - 表存储路径
+ *   <li>isExternal - 是否为外部表
+ *   <li>schemaId - 当前 Schema ID
+ *   <li>schema - 表 Schema 对象
+ *   <li>审计字段 - owner, createdAt, createdBy, updatedAt, updatedBy
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "id": "table_001",
+ *   "database": "my_database",
+ *   "name": "my_table",
+ *   "path": "hdfs://namenode:8020/warehouse/my_database/my_table",
+ *   "isExternal": false,
+ *   "schemaId": 1,
+ *   "schema": { ... },
+ *   "owner": "admin",
+ *   "createdAt": 1609459200000,
+ *   "createdBy": "user1",
+ *   "updatedAt": 1609545600000,
+ *   "updatedBy": "user2"
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetTableResponse extends AuditRESTResponse implements RESTResponse {
 

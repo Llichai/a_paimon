@@ -26,14 +26,48 @@ import org.apache.paimon.types.DataField;
 import java.io.IOException;
 import java.util.List;
 
-/** Abstract base class for global indexers. */
+/**
+ * 全局索引器的抽象基类。
+ *
+ * <p>全局索引器负责创建索引的读写器,是全局索引功能的核心接口。
+ * 不同的索引类型(如 Bloom Filter、向量索引等)通过实现此接口来提供特定的索引能力。
+ *
+ * <p>主要职责:
+ * <ul>
+ *   <li>创建索引写入器 - 用于构建和写入索引数据
+ *   <li>创建索引读取器 - 用于读取和查询索引数据
+ * </ul>
+ */
 public interface GlobalIndexer {
 
+    /**
+     * 创建索引写入器。
+     *
+     * @param fileWriter 文件写入器
+     * @return 全局索引写入器
+     * @throws IOException 如果创建失败
+     */
     GlobalIndexWriter createWriter(GlobalIndexFileWriter fileWriter) throws IOException;
 
+    /**
+     * 创建索引读取器。
+     *
+     * @param fileReader 文件读取器
+     * @param files 索引文件元数据列表
+     * @return 全局索引读取器
+     * @throws IOException 如果创建失败
+     */
     GlobalIndexReader createReader(GlobalIndexFileReader fileReader, List<GlobalIndexIOMeta> files)
             throws IOException;
 
+    /**
+     * 创建全局索引器实例。
+     *
+     * @param type 索引类型标识符
+     * @param dataField 数据字段定义
+     * @param options 配置选项
+     * @return 全局索引器实例
+     */
     static GlobalIndexer create(String type, DataField dataField, Options options) {
         GlobalIndexerFactory globalIndexerFactory = GlobalIndexerFactoryUtils.load(type);
         return globalIndexerFactory.create(dataField, options);

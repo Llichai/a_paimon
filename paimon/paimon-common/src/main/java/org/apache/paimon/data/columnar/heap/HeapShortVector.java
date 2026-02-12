@@ -22,17 +22,34 @@ import org.apache.paimon.data.columnar.writable.WritableShortVector;
 
 import java.util.Arrays;
 
-/** This class represents a nullable short column vector. */
+/**
+ * 堆短整数列向量实现类。
+ *
+ * <p>这个类表示一个可空的短整数列向量，用于在列式存储中高效地存储和访问短整数类型的数据（SMALLINT）。
+ * 它使用 16 位 short 数组作为底层存储，支持字典编码。
+ *
+ * <h2>性能特点</h2>
+ * <ul>
+ *   <li><b>内存效率</b>: 每个短整数值占用2字节，是 int 的一半</li>
+ *   <li><b>字典压缩</b>: 对于重复值多的数据，支持字典编码</li>
+ * </ul>
+ *
+ * @see AbstractHeapVector 堆向量的基类
+ * @see WritableShortVector 可写短整数向量接口
+ */
 public class HeapShortVector extends AbstractHeapVector implements WritableShortVector {
 
     private static final long serialVersionUID = -8278486456144676292L;
 
+    /** 存储短整数值的数组。 */
     public short[] vector;
 
     /**
-     * Don't use this except for testing purposes.
+     * 构造一个堆短整数列向量。
      *
-     * @param len the number of rows
+     * <p>注意: 除了测试目的外，不要直接使用此构造函数。
+     *
+     * @param len 向量的容量
      */
     public HeapShortVector(int len) {
         super(len);

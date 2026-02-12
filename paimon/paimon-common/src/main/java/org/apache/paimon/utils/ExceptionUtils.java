@@ -34,20 +34,40 @@ import java.util.function.Predicate;
 
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
-/** A collection of utility functions for dealing with exceptions and exception workflows. */
+/**
+ * 用于处理异常和异常工作流的实用工具函数集合。
+ *
+ * <p>提供了全面的异常处理功能，包括：
+ * <ul>
+ *   <li>异常的字符串化和格式化输出
+ *   <li>JVM 致命错误检测
+ *   <li>OutOfMemoryError 的增强和分类（Metaspace/Direct/Heap）
+ *   <li>异常重新抛出和转换
+ *   <li>异常链的查找和检查
+ *   <li>多异常合并处理
+ * </ul>
+ *
+ * <h3>主要功能:</h3>
+ * <ul>
+ *   <li><b>致命错误检测:</b> 识别 JVM 致命错误（InternalError、UnknownError、ThreadDeath）
+ *   <li><b>OOM 增强:</b> 为 OutOfMemoryError 添加详细的原因描述和解决方案
+ *   <li><b>异常重抛:</b> 多种重抛策略，适配不同的异常签名场景
+ *   <li><b>异常查找:</b> 在异常链中查找特定类型或消息的异常
+ *   <li><b>异常剥离:</b> 剥离 ExecutionException 和 CompletionException 等包装异常
+ * </ul>
+ */
 public final class ExceptionUtils {
 
-    /** The stringified representation of a null exception reference. */
+    /** null 异常引用的字符串表示 */
     public static final String STRINGIFIED_NULL_EXCEPTION = "(null)";
 
     /**
-     * Makes a string representation of the exception's stack trace, or "(null)", if the exception
-     * is null.
+     * 创建异常堆栈跟踪的字符串表示，如果异常为 null 则返回 "(null)"。
      *
-     * <p>This method makes a best effort and never fails.
+     * <p>此方法尽最大努力不会失败。
      *
-     * @param e The exception to stringify.
-     * @return A string with exception name and call stack.
+     * @param e 要字符串化的异常
+     * @return 包含异常名称和调用栈的字符串
      */
     public static String stringifyException(final Throwable e) {
         if (e == null) {

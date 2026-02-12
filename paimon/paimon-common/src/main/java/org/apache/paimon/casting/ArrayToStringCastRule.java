@@ -26,7 +26,36 @@ import org.apache.paimon.types.DataTypeFamily;
 import org.apache.paimon.types.DataTypeRoot;
 import org.apache.paimon.types.VarCharType;
 
-/** {@link DataTypeRoot#ARRAY} to {@link DataTypeFamily#CHARACTER_STRING} cast rule. */
+/**
+ * {@link DataTypeRoot#ARRAY} 到 {@link DataTypeFamily#CHARACTER_STRING} 的类型转换规则。
+ *
+ * <p>功能说明: 将数组转换为字符串表示,格式类似 JSON 数组
+ *
+ * <p>转换语义:
+ *
+ * <ul>
+ *   <li>输出格式: "[element1, element2, ..., elementN]"
+ *   <li>元素转换: 每个元素递归地转换为字符串
+ *   <li>NULL 处理: null 元素显示为字符串 "null"
+ *   <li>分隔符: 元素之间使用 ", " 分隔
+ * </ul>
+ *
+ * <p>转换示例:
+ *
+ * <pre>
+ * ARRAY[1, 2, 3] -> STRING '[1, 2, 3]'
+ * ARRAY['a', 'b', 'c'] -> STRING '[a, b, c]'
+ * ARRAY[1, null, 3] -> STRING '[1, null, 3]'
+ * ARRAY[] -> STRING '[]'
+ * ARRAY[ARRAY[1, 2], ARRAY[3, 4]] -> STRING '[[1, 2], [3, 4]]'
+ * </pre>
+ *
+ * <p>嵌套数组: 支持嵌套数组的递归转换
+ *
+ * <p>NULL 值处理: 输入数组为 NULL 时,输出也为 NULL
+ *
+ * <p>SQL 标准兼容性: 符合 SQL:2016 标准中数组到字符串的显式转换规则
+ */
 public class ArrayToStringCastRule extends AbstractCastRule<InternalArray, BinaryString> {
 
     static final ArrayToStringCastRule INSTANCE = new ArrayToStringCastRule();

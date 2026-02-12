@@ -25,19 +25,51 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/** Utility class for memory operations. */
+/**
+ * 内存操作工具类。
+ *
+ * <p>该类提供了访问和使用 sun.misc.Unsafe 的能力,支持底层内存操作。
+ *
+ * <h2>核心功能</h2>
+ *
+ * <ul>
+ *   <li>获取 Unsafe 实例,用于直接内存访问
+ *   <li>获取平台的本地字节序
+ *   <li>获取 DirectByteBuffer 的内存地址
+ *   <li>使用反射获取类字段偏移量
+ * </ul>
+ *
+ * <h2>安全性警告</h2>
+ *
+ * <p>使用 Unsafe 进行内存操作绕过了 JVM 的安全检查,需要特别小心:
+ *
+ * <ul>
+ *   <li>错误的偏移量会导致内存越界和 JVM 崩溃
+ *   <li>直接内存访问不受 GC 保护,可能导致悬空指针
+ *   <li>仅在性能关键路径且充分测试的情况下使用
+ * </ul>
+ */
 public class MemoryUtils {
 
-    /** The "unsafe", which can be used to perform native memory accesses. */
+    /** Unsafe 实例,用于执行本地内存访问。 */
     @SuppressWarnings({"restriction", "UseOfSunClasses"})
     public static final sun.misc.Unsafe UNSAFE = getUnsafe();
 
-    /** The native byte order of the platform on which the system currently runs. */
+    /** 平台的本地字节序。 */
     public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
 
+    /** ByteBuffer 中 address 字段的偏移量,用于获取堆外内存地址。 */
     private static final long BUFFER_ADDRESS_FIELD_OFFSET =
             getClassFieldOffset(Buffer.class, "address");
 
+    /**
+     * 获取 Unsafe 实例。
+     *
+     * <p>通过反射访问 sun.misc.Unsafe 的私有静态字段 "theUnsafe"。
+     *
+     * @return Unsafe 实例
+     * @throws Error 如果无法访问 Unsafe(权限不足、字段不存在等)
+     */
     @SuppressWarnings("restriction")
     private static sun.misc.Unsafe getUnsafe() {
         try {
@@ -60,6 +92,16 @@ public class MemoryUtils {
         }
     }
 
+    /**
+     * 获取类中字段的内存偏移量。
+     *
+     * <p>该偏移量可用于 Unsafe 的 get/put 方法直接访问对象字段。
+     *
+     * @param cl 目标类
+     * @param fieldName 字段名称
+     * @return 字段的内存偏移量
+     * @throws Error 如果无法获取字段偏移量(字段不存在、权限不足等)
+     */
     private static long getClassFieldOffset(
             @SuppressWarnings("SameParameterValue") Class<?> cl, String fieldName) {
         try {
@@ -95,10 +137,15 @@ public class MemoryUtils {
     }
 
     /**
-     * Get native memory address wrapped by the given {@link ByteBuffer}.
+     * 获取 ByteBuffer 包装的本地内存地址。
      *
-     * @param buffer {@link ByteBuffer} which wraps the native memory address to get
-     * @return native memory address wrapped by the given {@link ByteBuffer}
+     * <p>该方法仅适用于 DirectByteBuffer,返回其底层的堆外内存地址。
+     *
+     * @param buffer 必须是 DirectByteBuffer
+     * @return 堆外内存的起始地址
+     * @throws IllegalArgumentException 如果 buffer 不是 DirectByteBuffer
+     * @throws IllegalStateException 如果地址无效(为负或超出范围)
+     * @throws Error 如果无法访问 address 字段
      */
     static long getByteBufferAddress(ByteBuffer buffer) {
         Preconditions.checkNotNull(buffer, "buffer is null");
@@ -123,6 +170,10 @@ public class MemoryUtils {
         return offHeapAddress;
     }
 
-    /** Should not be instantiated. */
+    /**
+     * 私有构造函数,防止实例化。
+     *
+     * <p>该类是工具类,所有方法都是静态的。
+     */
     private MemoryUtils() {}
 }

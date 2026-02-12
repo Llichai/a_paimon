@@ -25,7 +25,22 @@ import javax.annotation.Nullable;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** A {@link ColumnarRowIterator} with {@link VectorizedRecordIterator}. */
+/**
+ * 向量化行迭代器,扩展 {@link ColumnarRowIterator} 并实现 {@link VectorizedRecordIterator}。
+ *
+ * <p>此迭代器除了支持逐行访问外,还提供了对整个 {@link VectorizedColumnBatch} 的访问,
+ * 适用于需要批量处理数据的向量化算子。
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li>向量化执行引擎的数据迭代
+ *   <li>需要同时支持行访问和批访问的场景
+ *   <li>批量处理优化
+ * </ul>
+ *
+ * @see ColumnarRowIterator 父类迭代器
+ * @see VectorizedRecordIterator 向量化记录迭代器接口
+ */
 public class VectorizedRowIterator extends ColumnarRowIterator implements VectorizedRecordIterator {
 
     public VectorizedRowIterator(Path filePath, ColumnarRow row, @Nullable Runnable recycler) {

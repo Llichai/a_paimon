@@ -22,10 +22,20 @@ import java.io.Serializable;
 import java.util.function.Consumer;
 
 /**
- * This interface is basically Java's {@link Consumer} interface enhanced with the {@link
- * Serializable}.
+ * 可序列化的 Consumer 接口。
  *
- * @param <T> type of the consumed elements.
+ * <p>这是 Java {@link Consumer} 接口的可序列化版本，增加了 {@link Serializable} 支持。
+ *
+ * <p>主要用途：
+ * <ul>
+ *   <li>分布式计算 - 在分布式环境中传递消费者逻辑
+ *   <li>状态序列化 - 支持状态的序列化和恢复
+ *   <li>Lambda 序列化 - 支持 Lambda 表达式的序列化
+ * </ul>
+ *
+ * @param <T> 被消费元素的类型
+ * @see Consumer
+ * @see Serializable
  */
 @FunctionalInterface
 public interface SerializableConsumer<T> extends Consumer<T>, Serializable {}

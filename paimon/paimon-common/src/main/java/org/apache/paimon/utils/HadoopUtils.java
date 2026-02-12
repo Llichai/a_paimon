@@ -45,19 +45,41 @@ import static org.apache.paimon.options.ConfigOptions.key;
 import static org.apache.paimon.options.description.TextElement.text;
 
 /**
- * Utility class for working with Hadoop-related classes. This should only be used if Hadoop is on
- * the classpath. Note: decoupled from specific engines.
+ * Hadoop 工具类。
+ *
+ * <p>提供与 Hadoop 相关类一起工作的工具方法。此类仅在 Hadoop 在类路径上时使用，与特定引擎解耦。
+ *
+ * <p>主要功能：
+ * <ul>
+ *   <li>加载 Hadoop 配置 - 从多个来源加载配置（环境变量、配置文件、选项）
+ *   <li>配置优先级管理 - 支持多级配置优先级覆盖
+ *   <li>配置文件解析 - 解析 XML 格式的 Hadoop 配置文件
+ *   <li>配置加载策略 - 支持不同的配置加载策略（全部、仅环境变量、仅选项）
+ * </ul>
+ *
+ * <p>配置加载优先级（从低到高）：
+ * <ol>
+ *   <li>HADOOP_HOME 环境变量
+ *   <li>HADOOP_CONF_DIR 环境变量
+ *   <li>Paimon catalog 或 table 配置（hadoop-conf-dir）
+ *   <li>Paimon table 高级配置（hadoop.* 前缀）
+ * </ol>
+ *
+ * @see Configuration
+ * @see HdfsConfiguration
  */
 public class HadoopUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(HadoopUtils.class);
 
+    /** Hadoop 配置加载器选项，指定加载 Hadoop 配置的方式。 */
     public static final ConfigOption<HadoopConfigLoader> HADOOP_CONF_LOADER =
             key("hadoop-conf-loader")
                     .enumType(HadoopConfigLoader.class)
                     .defaultValue(HadoopConfigLoader.ALL)
                     .withDescription("Specifies the way of loading hadoop config.");
 
+    /** 是否加载默认 Hadoop 配置选项。 */
     public static final ConfigOption<Boolean> HADOOP_LOAD_DEFAULT_CONFIG =
             key("hadoop-load-default-config")
                     .booleanType()
@@ -65,13 +87,32 @@ public class HadoopUtils {
                     .withDescription(
                             "Specifies whether load the default configuration from core-default.xml、hdfs-default.xml, which may lead larger size for the serialization of table.");
 
+    /** Hadoop 配置前缀数组。 */
     private static final String[] CONFIG_PREFIXES = {"hadoop."};
+
+    /** HADOOP_HOME 环境变量名。 */
     public static final String HADOOP_HOME_ENV = "HADOOP_HOME";
+
+    /** HADOOP_CONF_DIR 环境变量名。 */
     public static final String HADOOP_CONF_ENV = "HADOOP_CONF_DIR";
 
-    /** Path to Hadoop configuration. */
+    /** Hadoop 配置目录路径选项键。 */
     public static final String PATH_HADOOP_CONFIG = "hadoop-conf-dir";
 
+    /**
+     * 获取 Hadoop 配置。
+     *
+     * <p>从多个来源加载 Hadoop 配置，按优先级从低到高依次为：
+     * <ol>
+     *   <li>HADOOP_HOME 环境变量
+     *   <li>HADOOP_CONF_DIR 环境变量
+     *   <li>Paimon catalog 或 table 配置
+     *   <li>Paimon table 高级配置（hadoop.* 前缀）
+     * </ol>
+     *
+     * @param options Paimon 配置选项
+     * @return Hadoop 配置对象
+     */
     public static Configuration getHadoopConfiguration(Options options) {
 
         // Instantiate an HdfsConfiguration to load the hdfs-site.xml and hdfs-default.xml
@@ -158,8 +199,19 @@ public class HadoopUtils {
     }
 
     /**
-     * Search Hadoop configuration files in the given path, and add them to the configuration if
-     * found.
+     * 在给定路径中搜索 Hadoop 配置文件，如果找到则添加到配置中。
+     *
+     * <p>搜索并加载以下配置文件（如果存在）：
+     * <ul>
+     *   <li>core-site.xml - 核心配置
+     *   <li>hdfs-site.xml - HDFS 配置
+     *   <li>mapred-site.xml - MapReduce 配置
+     * </ul>
+     *
+     * @param configuration 要添加配置的 Hadoop Configuration 对象
+     * @param possibleHadoopConfPath 可能的 Hadoop 配置路径
+     * @param options Paimon 配置选项
+     * @return 如果找到配置文件则返回 true，否则返回 false
      */
     public static boolean addHadoopConfIfFound(
             Configuration configuration, String possibleHadoopConfPath, Options options) {
@@ -208,6 +260,14 @@ public class HadoopUtils {
         }
     }
 
+    /**
+     * 读取 Hadoop XML 配置文件内容并添加到配置中。
+     *
+     * <p>解析 XML 格式的 Hadoop 配置文件，提取 property 节点中的键值对。
+     *
+     * @param xml XML 配置文件内容
+     * @param conf 要添加配置的 Hadoop Configuration 对象
+     */
     public static void readHadoopXml(String xml, Configuration conf) {
         NodeList propertyNodes;
         try {
@@ -233,7 +293,16 @@ public class HadoopUtils {
         }
     }
 
-    /** Specifies the way of loading hadoop config. */
+    /**
+     * Hadoop 配置加载器枚举。
+     *
+     * <p>指定加载 Hadoop 配置的方式：
+     * <ul>
+     *   <li>ALL - 从环境变量和 catalog 选项加载
+     *   <li>ENV - 仅从环境变量加载
+     *   <li>OPTION - 仅从 catalog 或 table 选项加载
+     * </ul>
+     */
     public enum HadoopConfigLoader implements DescribedEnum {
         ALL("all", "Load Hadoop conf from environment variables and catalog option.", true, true),
         ENV("env", "Load Hadoop conf from environment variables only.", true, false),

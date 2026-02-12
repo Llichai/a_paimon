@@ -49,18 +49,89 @@ import java.util.concurrent.locks.ReentrantLock;
 import static org.apache.paimon.fs.local.LocalFileIOLoader.SCHEME;
 import static org.apache.paimon.utils.Preconditions.checkState;
 
-/** {@link FileIO} for local file. */
+/**
+ * 本地文件系统的 {@link FileIO} 实现。
+ *
+ * <p>LocalFileIO 为本地文件系统提供了文件 I/O 操作的完整实现,支持:
+ * <ul>
+ *   <li>文件读写操作 - 基于 FileChannel 的高效 I/O</li>
+ *   <li>目录管理 - 创建、删除、列表目录</li>
+ *   <li>文件重命名 - 使用原子移动操作确保安全性</li>
+ *   <li>文件复制 - 支持覆盖和跳过已存在文件</li>
+ *   <li>位置读取 - 支持随机访问和向量化读取</li>
+ * </ul>
+ *
+ * <h3>实现特点</h3>
+ * <ul>
+ *   <li><b>线程安全</b>: 使用 ReentrantLock 确保重命名操作的原子性</li>
+ *   <li><b>性能优化</b>: 使用 FileChannel 进行零拷贝 I/O</li>
+ *   <li><b>错误处理</b>: 完整的异常处理和权限检查</li>
+ *   <li><b>兼容性</b>: 与 HadoopFileIO 行为保持一致</li>
+ * </ul>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 创建本地文件系统实例
+ * LocalFileIO fileIO = LocalFileIO.create();
+ *
+ * // 写入文件
+ * Path path = new Path("file:///tmp/test.txt");
+ * try (PositionOutputStream out = fileIO.newOutputStream(path, true)) {
+ *     out.write("Hello, Paimon!".getBytes());
+ * }
+ *
+ * // 读取文件
+ * try (SeekableInputStream in = fileIO.newInputStream(path)) {
+ *     byte[] buffer = new byte[1024];
+ *     int read = in.read(buffer);
+ * }
+ *
+ * // 重命名文件(原子操作)
+ * Path newPath = new Path("file:///tmp/test_new.txt");
+ * fileIO.rename(path, newPath);
+ * }</pre>
+ *
+ * <h3>路径处理</h3>
+ * <p>LocalFileIO 会自动处理路径中的 scheme:
+ * <ul>
+ *   <li>输入: {@code file:///tmp/data} → 输出: {@code /tmp/data}</li>
+ *   <li>空路径会被转换为当前目录 {@code .}</li>
+ * </ul>
+ *
+ * <h3>性能考虑</h3>
+ * <ul>
+ *   <li><b>I/O 优化</b>: FileChannel 支持零拷贝和内存映射</li>
+ *   <li><b>并发控制</b>: 重命名操作使用全局锁,避免文件系统竞态</li>
+ *   <li><b>缓冲管理</b>: 依赖操作系统的文件系统缓存</li>
+ * </ul>
+ *
+ * @see FileIO
+ * @see SeekableInputStream
+ * @see PositionOutputStream
+ * @see LocalFileIOLoader
+ */
 public class LocalFileIO implements FileIO {
 
     private static final Logger LOG = LoggerFactory.getLogger(LocalFileIO.class);
 
+    /** 全局单例实例,用于共享本地文件系统访问。 */
     public static final LocalFileIO INSTANCE = new LocalFileIO();
 
     private static final long serialVersionUID = 1L;
 
-    // the lock to ensure atomic renaming
+    /**
+     * 用于确保重命名操作原子性的全局锁。
+     *
+     * <p>在多线程环境中,多个线程可能同时尝试重命名文件到相同的目标位置。
+     * 该锁确保重命名操作(检查目标是否存在 + 执行移动)是原子的,避免竞态条件。
+     */
     private static final ReentrantLock RENAME_LOCK = new ReentrantLock();
 
+    /**
+     * 创建一个新的 LocalFileIO 实例。
+     *
+     * @return 新的 LocalFileIO 实例
+     */
     public static LocalFileIO create() {
         return new LocalFileIO();
     }
@@ -255,9 +326,15 @@ public class LocalFileIO implements FileIO {
     }
 
     /**
-     * Converts the given Path to a File for this file system. If the path is empty, we will return
-     * <tt>new File(".")</tt> instead of <tt>new File("")</tt>, since the latter returns
-     * <tt>false</tt> for <tt>isDirectory</tt> judgement.
+     * 将给定的 Path 转换为本地文件系统的 File 对象。
+     *
+     * <p>该方法会移除路径中的 scheme(如 "file://"),只保留本地文件系统路径。
+     * 对于空路径,返回 {@code new File(".")} 而不是 {@code new File("")},
+     * 因为后者的 {@code isDirectory()} 判断会返回 false。
+     *
+     * @param path 要转换的路径
+     * @return 对应的 File 对象
+     * @throws IllegalStateException 如果路径为 null
      */
     public File toFile(Path path) {
         // remove scheme
@@ -271,13 +348,36 @@ public class LocalFileIO implements FileIO {
         return new File(localPath);
     }
 
-    /** Local {@link SeekableInputStream}. */
+    /**
+     * 本地文件系统的 {@link SeekableInputStream} 实现。
+     *
+     * <p>该实现提供了高性能的随机访问读取能力:
+     * <ul>
+     *   <li><b>FileChannel</b>: 使用 NIO FileChannel 实现零拷贝读取</li>
+     *   <li><b>Seek 操作</b>: 支持 O(1) 的位置定位</li>
+     *   <li><b>向量化读取</b>: 实现 VectoredReadable 接口,支持批量读取</li>
+     *   <li><b>位置读取</b>: pread 操作不改变当前文件位置</li>
+     * </ul>
+     *
+     * <h3>性能特性</h3>
+     * <ul>
+     *   <li>FileChannel 支持操作系统级别的缓冲和预读</li>
+     *   <li>pread 使用 positioned read,适合并发场景</li>
+     *   <li>seek 操作只在位置改变时才执行</li>
+     * </ul>
+     */
     public static class LocalSeekableInputStream extends SeekableInputStream
             implements VectoredReadable {
 
         private final FileInputStream in;
         private final FileChannel channel;
 
+        /**
+         * 创建一个本地可查找输入流。
+         *
+         * @param file 要读取的文件
+         * @throws FileNotFoundException 如果文件不存在
+         */
         public LocalSeekableInputStream(File file) throws FileNotFoundException {
             this.in = new FileInputStream(file);
             this.channel = in.getChannel();
@@ -320,11 +420,33 @@ public class LocalFileIO implements FileIO {
         }
     }
 
-    /** Local {@link PositionOutputStream}. */
+    /**
+     * 本地文件系统的 {@link PositionOutputStream} 实现。
+     *
+     * <p>该实现提供了基于 FileChannel 的高性能写入能力:
+     * <ul>
+     *   <li><b>位置跟踪</b>: 通过 FileChannel.position() 获取当前写入位置</li>
+     *   <li><b>缓冲写入</b>: 依赖操作系统的文件系统缓存</li>
+     *   <li><b>原子操作</b>: flush 确保数据持久化到磁盘</li>
+     * </ul>
+     *
+     * <h3>性能建议</h3>
+     * <ul>
+     *   <li>对于大量小写入,考虑使用 BufferedOutputStream 包装</li>
+     *   <li>flush 操作会触发 fsync,影响性能</li>
+     *   <li>close 前会自动 flush</li>
+     * </ul>
+     */
     public static class LocalPositionOutputStream extends PositionOutputStream {
 
         private final FileOutputStream out;
 
+        /**
+         * 创建一个本地位置输出流。
+         *
+         * @param file 要写入的文件
+         * @throws FileNotFoundException 如果文件无法创建
+         */
         public LocalPositionOutputStream(File file) throws FileNotFoundException {
             this.out = new FileOutputStream(file);
         }
@@ -360,6 +482,17 @@ public class LocalFileIO implements FileIO {
         }
     }
 
+    /**
+     * 本地文件的 {@link FileStatus} 实现。
+     *
+     * <p>封装本地文件的元数据信息,包括:
+     * <ul>
+     *   <li>文件大小(字节数)</li>
+     *   <li>文件类型(文件或目录)</li>
+     *   <li>文件路径(带 scheme)</li>
+     *   <li>最后修改时间</li>
+     * </ul>
+     */
     private static class LocalFileStatus implements FileStatus {
 
         private final File file;

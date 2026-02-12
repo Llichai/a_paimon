@@ -35,8 +35,29 @@ import java.util.Map;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * A {@link RecordReader.RecordIterator} that returns {@link InternalRow}s. The next row is set by
- * {@link ColumnarRow#setRowId}.
+ * 列式行迭代器,用于逐行迭代 {@link VectorizedColumnBatch} 中的数据。
+ *
+ * <p>此迭代器通过 {@link ColumnarRow} 提供对列批次的行式访问,
+ * 内部通过递增 rowId 来遍历批次中的所有行。
+ *
+ * <h2>设计特点</h2>
+ * <ul>
+ *   <li><b>复用对象:</b> 每次迭代返回同一个 ColumnarRow 对象,避免频繁分配内存
+ *   <li><b>位置追踪:</b> 跟踪已返回的行位置,支持 {@link #returnedPosition()} 查询
+ *   <li><b>映射支持:</b> 支持分区映射和列映射
+ *   <li><b>行追踪:</b> 支持为行分配 row_id 和 snapshot_id
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li>从列式存储读取数据并逐行处理
+ *   <li>配合 RecordReader 进行迭代读取
+ *   <li>支持行级别的断点续读
+ * </ul>
+ *
+ * @see ColumnarRow 列式行视图
+ * @see VectorizedColumnBatch 向量化列批次
+ * @see RecordReader.RecordIterator 记录迭代器接口
  */
 public class ColumnarRowIterator extends RecyclableIterator<InternalRow>
         implements FileRecordIterator<InternalRow> {

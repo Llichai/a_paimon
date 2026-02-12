@@ -40,27 +40,84 @@ import static org.apache.paimon.data.BinarySection.HIGHEST_SECOND_TO_EIGHTH_BIT;
 import static org.apache.paimon.memory.MemorySegment.BYTE_ARRAY_BASE_OFFSET;
 import static org.apache.paimon.memory.MemorySegment.LITTLE_ENDIAN;
 
-/** Utils for {@link MemorySegment}. */
+/**
+ * 内存段工具类。
+ *
+ * <p>提供对单个或多个内存段进行操作的工具方法,是处理跨段数据的核心工具类。
+ *
+ * <h2>核心功能</h2>
+ *
+ * <ul>
+ *   <li>基本类型读写:支持 byte、boolean、int、long、short、float、double 等
+ *   <li>复杂类型读取:支持 Decimal、Timestamp、Binary、BinaryString、Variant等
+ *   <li>批量操作:复制、比较、哈希计算
+ *   <li>跨段处理:自动处理数据跨越多个内存段的情况
+ *   <li>位操作:提供位级别的 get/set/unset 操作
+ * </ul>
+ *
+ * <h2>多段处理</h2>
+ *
+ * <p>当数据跨越多个内存段时,该类会:
+ *
+ * <ul>
+ *   <li>自动计算每个段的偏移量和数据长度
+ *   <li>分段读取或写入数据
+ *   <li>优化单段情况,避免不必要的计算
+ * </ul>
+ *
+ * <h2>性能优化</h2>
+ *
+ * <ul>
+ *   <li>使用 ThreadLocal 复用临时缓冲区,减少内存分配
+ *   <li>对于在第一个段内的数据,使用快速路径直接访问
+ *   <li>批量操作每次处理 8 字节,提高效率
+ *   <li>使用 Unsafe 进行内存复制,性能优于 System.arraycopy
+ * </ul>
+ *
+ * <h2>字节序</h2>
+ *
+ * <p>所有多字节类型的读写都考虑了字节序(大端/小端)的处理。
+ *
+ * <h2>线程安全性</h2>
+ *
+ * <p>该类是无状态的工具类,方法是线程安全的。但 ThreadLocal 缓冲区的复用要求同一线程不能嵌套调用。
+ *
+ * @see MemorySegment
+ */
 public class MemorySegmentUtils {
 
+    /** 每个字中的地址位数,用于位操作计算。 */
     private static final int ADDRESS_BITS_PER_WORD = 3;
 
+    /** 位字节索引掩码,用于计算字节内的位位置。 */
     public static final int BIT_BYTE_INDEX_MASK = 7;
 
+    /** 最大可复用字节数组长度:64 KB。 */
     private static final int MAX_BYTES_LENGTH = 1024 * 64;
 
+    /** 最大可复用字符数组长度:32 K。 */
     private static final int MAX_CHARS_LENGTH = 1024 * 32;
 
+    /** ThreadLocal 字节数组缓存,避免频繁分配。 */
     private static final ThreadLocal<byte[]> BYTES_LOCAL = new ThreadLocal<>();
+
+    /** ThreadLocal 字符数组缓存,避免频繁分配。 */
     private static final ThreadLocal<char[]> CHARS_LOCAL = new ThreadLocal<>();
 
     /**
-     * Allocate bytes that is only for temporary usage, it should not be stored in somewhere else.
-     * Use a {@link ThreadLocal} to reuse bytes to avoid overhead of byte[] new and gc.
+     * 分配可复用的字节数组。
      *
-     * <p>If there are methods that can only accept a byte[], instead of a MemorySegment[]
-     * parameter, we can allocate a reuse bytes and copy the MemorySegment data to byte[], then call
-     * the method. Such as String deserialization.
+     * <p>该方法使用 ThreadLocal 缓存来复用字节数组,避免频繁的 GC:
+     *
+     * <ul>
+     *   <li>如果请求长度 <= MAX_BYTES_LENGTH,返回缓存的或新分配的 MAX_BYTES_LENGTH 大小数组
+     *   <li>如果请求长度 > MAX_BYTES_LENGTH,直接分配指定大小的新数组
+     * </ul>
+     *
+     * <p><strong>重要:</strong>返回的数组仅供临时使用,不应存储到其他地方。
+     *
+     * @param length 需要的数组长度
+     * @return 可复用的字节数组,长度 >= length
      */
     public static byte[] allocateReuseBytes(int length) {
         byte[] bytes = BYTES_LOCAL.get();
@@ -79,6 +136,14 @@ public class MemorySegmentUtils {
         return bytes;
     }
 
+    /**
+     * 分配可复用的字符数组。
+     *
+     * <p>使用方式与 {@link #allocateReuseBytes(int)} 类似。
+     *
+     * @param length 需要的数组长度
+     * @return 可复用的字符数组,长度 >= length
+     */
     public static char[] allocateReuseChars(int length) {
         char[] chars = CHARS_LOCAL.get();
 
@@ -97,14 +162,16 @@ public class MemorySegmentUtils {
     }
 
     /**
-     * Copy bytes of segments to output view.
+     * 将内存段数据复制到 DataOutputView。
      *
-     * <p>Note: It just copies the data in, not include the length.
+     * <p>该方法会自动处理跨段数据复制。注意:只复制数据本身,不包含长度信息。
      *
-     * @param segments source segments
-     * @param offset offset for segments
-     * @param sizeInBytes size in bytes
-     * @param target target output view
+     * @param segments 源内存段数组
+     * @param offset 起始偏移量
+     * @param sizeInBytes 要复制的字节数
+     * @param target 目标输出视图
+     * @throws IOException 如果发生 I/O 错误
+     * @throws RuntimeException 如果数据不足
      */
     public static void copyToView(
             MemorySegment[] segments, int offset, int sizeInBytes, DataOutputView target)

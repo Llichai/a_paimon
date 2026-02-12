@@ -34,14 +34,41 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-/** Cache for block reading. */
+/**
+ * 块读取缓存。
+ *
+ * <p>该类为 SST 文件的块读取提供缓存支持,使用 {@link CacheManager} 来管理内存页。
+ * 缓存可以显著减少磁盘 I/O,提高读取性能。
+ *
+ * <p>主要功能:
+ * <ul>
+ *   <li>缓存数据块和索引块
+ *   <li>支持块级别的解压缩
+ *   <li>自动刷新过期的缓存项
+ *   <li>统一管理缓存生命周期
+ * </ul>
+ */
 public class BlockCache implements Closeable {
 
+    /** 文件路径 */
     private final Path filePath;
+
+    /** 可定位输入流 */
     private final SeekableInputStream input;
+
+    /** 缓存管理器 */
     private final CacheManager cacheManager;
+
+    /** 块缓存映射,键为缓存键,值为内存段容器 */
     private final Map<CacheKey, SegmentContainer> blocks;
 
+    /**
+     * 构造块缓存。
+     *
+     * @param filePath 文件路径
+     * @param input 可定位输入流
+     * @param cacheManager 缓存管理器
+     */
     public BlockCache(Path filePath, SeekableInputStream input, CacheManager cacheManager) {
         this.filePath = filePath;
         this.input = input;
@@ -49,6 +76,14 @@ public class BlockCache implements Closeable {
         this.blocks = new HashMap<>();
     }
 
+    /**
+     * 从指定位置读取数据。
+     *
+     * @param offset 文件偏移量
+     * @param length 数据长度
+     * @return 读取的字节数组
+     * @throws IOException 如果读取失败
+     */
     private byte[] readFrom(long offset, int length) throws IOException {
         byte[] buffer = new byte[length];
         input.seek(offset);
@@ -56,6 +91,18 @@ public class BlockCache implements Closeable {
         return buffer;
     }
 
+    /**
+     * 获取指定位置的块。
+     *
+     * <p>如果块已缓存且未过期,则直接返回缓存的内存段;
+     * 否则从文件读取、解压缩并缓存。
+     *
+     * @param position 块在文件中的位置
+     * @param length 块的长度
+     * @param decompressFunc 解压缩函数
+     * @param isIndex 是否为索引块
+     * @return 包含块数据的内存段
+     */
     public MemorySegment getBlock(
             long position, int length, Function<byte[], byte[]> decompressFunc, boolean isIndex) {
         CacheKey cacheKey = CacheKey.forPosition(filePath, position, length, isIndex);
@@ -76,6 +123,11 @@ public class BlockCache implements Closeable {
         return container.access();
     }
 
+    /**
+     * 关闭缓存并释放所有缓存的块。
+     *
+     * @throws IOException 如果关闭失败
+     */
     @Override
     public void close() throws IOException {
         Set<CacheKey> sets = new HashSet<>(blocks.keySet());

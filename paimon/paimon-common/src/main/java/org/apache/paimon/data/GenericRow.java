@@ -30,18 +30,34 @@ import java.util.Objects;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /**
- * An internal data structure representing data of {@link RowType}.
+ * {@link RowType} 的内部数据结构实现。
  *
- * <p>{@link GenericRow} is a generic implementation of {@link InternalRow} which is backed by an
- * array of Java {@link Object}. A {@link GenericRow} can have an arbitrary number of fields of
- * different types. The fields in a row can be accessed by position (0-based) using either the
- * generic {@link #getField(int)} or type-specific getters (such as {@link #getInt(int)}). A field
- * can be updated by the generic {@link #setField(int, Object)}.
+ * <p>{@link GenericRow} 是 {@link InternalRow} 的通用实现,底层由 Java {@link Object} 数组支持。
+ * {@link GenericRow} 可以包含任意数量的不同类型字段。行中的字段可以通过位置(从0开始)访问,
+ * 既可以使用通用的 {@link #getField(int)} 方法,也可以使用类型特定的 getter 方法(如 {@link #getInt(int)})。
+ * 字段可以通过通用的 {@link #setField(int, Object)} 方法更新。
  *
- * <p>Note: All fields of this data structure must be internal data structures. See {@link
- * InternalRow} for more information about internal data structures.
+ * <p>数据结构特点:
+ * <ul>
+ *   <li>灵活性: 基于对象数组,可以存储任意类型的字段</li>
+ *   <li>可变性: 支持字段的动态更新</li>
+ *   <li>空值支持: 字段值可以为 null 表示空值</li>
+ *   <li>性能权衡: 相比 {@link BinaryRow},序列化和访问性能较低,但使用更灵活</li>
+ * </ul>
  *
- * <p>The fields in {@link GenericRow} can be null for representing nullability.
+ * <p>注意:此数据结构的所有字段必须是内部数据结构。关于内部数据结构的更多信息,
+ * 请参阅 {@link InternalRow} 的文档。
+ *
+ * <p>{@link GenericRow} 中的字段可以为 null 以表示空值。这与 {@link BinaryRow}
+ * 使用位图标记空值的方式不同。
+ *
+ * <p>使用场景:
+ * <ul>
+ *   <li>测试和原型开发</li>
+ *   <li>小数据集处理</li>
+ *   <li>需要频繁修改字段的场景</li>
+ *   <li>不需要高性能序列化的场景</li>
+ * </ul>
  *
  * @since 0.4.0
  */
@@ -50,21 +66,21 @@ public final class GenericRow implements InternalRow, Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** The array to store the actual internal format values. */
+    /** 存储实际内部格式值的数组。每个元素必须是内部数据结构或基本类型的包装类。 */
     private final Object[] fields;
 
-    /** The kind of change that a row describes in a changelog. */
+    /** 此行在变更日志中描述的变更类型。 */
     private RowKind kind;
 
     /**
-     * Creates an instance of {@link GenericRow} with given kind and number of fields.
+     * 创建具有给定变更类型和字段数量的 {@link GenericRow} 实例。
      *
-     * <p>Initially, all fields are set to null.
+     * <p>初始时,所有字段都设置为 null。
      *
-     * <p>Note: All fields of the row must be internal data structures.
+     * <p>注意:行的所有字段必须是内部数据结构。
      *
-     * @param kind kind of change that this row describes in a changelog
-     * @param arity number of fields
+     * @param kind 此行在变更日志中描述的变更类型
+     * @param arity 字段数量
      */
     public GenericRow(RowKind kind, int arity) {
         this.fields = new Object[arity];
@@ -72,14 +88,13 @@ public final class GenericRow implements InternalRow, Serializable {
     }
 
     /**
-     * Creates an instance of {@link GenericRow} with given number of fields.
+     * 创建具有给定字段数量的 {@link GenericRow} 实例。
      *
-     * <p>Initially, all fields are set to null. By default, the row describes a {@link
-     * RowKind#INSERT} in a changelog.
+     * <p>初始时,所有字段都设置为 null。默认情况下,此行描述变更日志中的 {@link RowKind#INSERT} 操作。
      *
-     * <p>Note: All fields of the row must be internal data structures.
+     * <p>注意:行的所有字段必须是内部数据结构。
      *
-     * @param arity number of fields
+     * @param arity 字段数量
      */
     public GenericRow(int arity) {
         this.fields = new Object[arity];
@@ -87,25 +102,29 @@ public final class GenericRow implements InternalRow, Serializable {
     }
 
     /**
-     * Sets the field value at the given position.
+     * 设置给定位置的字段值。
      *
-     * <p>Note: The given field value must be an internal data structures. Otherwise the {@link
-     * GenericRow} is corrupted and may throw exception when processing. See {@link InternalRow} for
-     * more information about internal data structures.
+     * <p>注意:给定的字段值必须是内部数据结构。否则 {@link GenericRow} 将损坏,
+     * 在处理时可能抛出异常。关于内部数据结构的更多信息,请参阅 {@link InternalRow}。
      *
-     * <p>The field value can be null for representing nullability.
+     * <p>字段值可以为 null 以表示空值。
+     *
+     * @param pos 字段位置(从0开始)
+     * @param value 要设置的字段值(必须是内部数据结构)
      */
     public void setField(int pos, Object value) {
         this.fields[pos] = value;
     }
 
     /**
-     * Returns the field value at the given position.
+     * 返回给定位置的字段值。
      *
-     * <p>Note: The returned value is in internal data structure. See {@link InternalRow} for more
-     * information about internal data structures.
+     * <p>注意:返回的值是内部数据结构。关于内部数据结构的更多信息,请参阅 {@link InternalRow}。
      *
-     * <p>The returned field value can be null for representing nullability.
+     * <p>返回的字段值可以为 null 以表示空值。
+     *
+     * @param pos 字段位置(从0开始)
+     * @return 字段值(内部数据结构或 null)
      */
     public Object getField(int pos) {
         return this.fields[pos];
@@ -251,15 +270,27 @@ public final class GenericRow implements InternalRow, Serializable {
     }
 
     // ----------------------------------------------------------------------------------------
-    // Utilities
+    // 工具方法
     // ----------------------------------------------------------------------------------------
 
     /**
-     * Creates an instance of {@link GenericRow} with given field values.
+     * 使用给定的字段值创建 {@link GenericRow} 实例。
      *
-     * <p>By default, the row describes a {@link RowKind#INSERT} in a changelog.
+     * <p>默认情况下,此行描述变更日志中的 {@link RowKind#INSERT} 操作。
      *
-     * <p>Note: All fields of the row must be internal data structures.
+     * <p>注意:行的所有字段必须是内部数据结构。
+     *
+     * <p>使用示例:
+     * <pre>{@code
+     * GenericRow row = GenericRow.of(
+     *     BinaryString.fromString("hello"),
+     *     42,
+     *     true
+     * );
+     * }</pre>
+     *
+     * @param values 字段值数组(每个值必须是内部数据结构)
+     * @return 新创建的 GenericRow 实例
      */
     public static GenericRow of(Object... values) {
         GenericRow row = new GenericRow(values.length);
@@ -272,9 +303,22 @@ public final class GenericRow implements InternalRow, Serializable {
     }
 
     /**
-     * Creates an instance of {@link GenericRow} with given kind and field values.
+     * 使用给定的变更类型和字段值创建 {@link GenericRow} 实例。
      *
-     * <p>Note: All fields of the row must be internal data structures.
+     * <p>注意:行的所有字段必须是内部数据结构。
+     *
+     * <p>使用示例:
+     * <pre>{@code
+     * GenericRow row = GenericRow.ofKind(
+     *     RowKind.UPDATE_AFTER,
+     *     BinaryString.fromString("world"),
+     *     100
+     * );
+     * }</pre>
+     *
+     * @param kind 变更类型
+     * @param values 字段值数组(每个值必须是内部数据结构)
+     * @return 新创建的 GenericRow 实例
      */
     public static GenericRow ofKind(RowKind kind, Object... values) {
         GenericRow row = new GenericRow(kind, values.length);

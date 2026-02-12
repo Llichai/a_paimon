@@ -33,7 +33,49 @@ import org.apache.paimon.data.variant.Variant;
 import java.io.Serializable;
 import java.util.Arrays;
 
-/** Columnar array to support access to vector column data. */
+/**
+ * 列式数组,用于访问向量化列数据的数组视图。
+ *
+ * <p>此类提供了对列向量中一段连续数据的数组视图,用于表示 ARRAY 类型的数据。
+ * 与 {@link ColumnarRow} 类似,它通过委托给底层列向量来访问元素,而不复制数据。
+ *
+ * <h2>设计模式</h2>
+ * <ul>
+ *   <li><b>外观模式:</b> 为列向量的一段数据提供数组访问接口
+ *   <li><b>切片视图:</b> 通过 offset 和 numElements 定义列向量的一个切片
+ *   <li><b>委托模式:</b> 所有数据访问委托给底层的 ColumnVector
+ * </ul>
+ *
+ * <h2>数据表示</h2>
+ * <pre>
+ * 列向量:  [e0, e1, e2, e3, e4, e5, e6, e7]
+ *             ↑           ↑
+ *          offset=2    numElements=3
+ *
+ * ColumnarArray 视图: [e2, e3, e4]
+ * </pre>
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li>表示嵌套的 ARRAY 类型字段
+ *   <li>从 ArrayColumnVector 中获取数组元素
+ *   <li>处理变长数组数据
+ * </ul>
+ *
+ * <h2>特性</h2>
+ * <ul>
+ *   <li><b>只读性:</b> 所有 setter 方法都会抛出 UnsupportedOperationException
+ *   <li><b>零拷贝:</b> 不复制数据,直接引用底层列向量
+ *   <li><b>类型化访问:</b> 支持各种基本类型和复杂类型的访问方法
+ *   <li><b>可序列化:</b> 支持序列化传输
+ * </ul>
+ *
+ * <p><b>注意:</b> 不支持 equals() 方法,需要逐字段比较数组元素。
+ *
+ * @see InternalArray 内部数组接口
+ * @see ArrayColumnVector 数组列向量接口
+ * @see ColumnarRow 列式行视图
+ */
 public final class ColumnarArray implements InternalArray, DataSetters, Serializable {
 
     private static final long serialVersionUID = 1L;

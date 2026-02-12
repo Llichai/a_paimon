@@ -32,7 +32,28 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 import java.util.List;
 import java.util.Map;
 
-/** Response for getting a function. */
+/**
+ * 获取函数响应对象。
+ *
+ * <p>该类表示获取函数详细信息的响应,继承自 {@link AuditRESTResponse}。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>uuid - 函数唯一标识符
+ *   <li>functionName - 函数名称
+ *   <li>inputParams - 输入参数列表
+ *   <li>returnParams - 返回参数列表
+ *   <li>deterministic - 是否为确定性函数
+ *   <li>definitions - 函数定义映射(按方言)
+ *   <li>comment - 函数注释说明
+ *   <li>options - 函数配置选项
+ *   <li>审计字段 - owner, createdAt, createdBy, updatedAt, updatedBy
+ * </ul>
+ *
+ * <p>该响应可通过 {@link #toFunction(org.apache.paimon.catalog.Identifier)} 方法转换为 Function 对象。
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetFunctionResponse extends AuditRESTResponse {
 

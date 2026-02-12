@@ -36,14 +36,16 @@ import static org.apache.paimon.types.DataTypeChecks.getScale;
  * additional information regarding copyright ownership. */
 
 /**
- * Base interface for an internal data structure representing data of {@link RowType}.
+ * 内部数据结构的基础接口,用于表示 {@link RowType} 的数据。
  *
- * <p>The mappings from SQL data types to the internal data structures are listed in the following
- * table:
+ * <p>该接口定义了从 SQL 数据类型到内部数据结构的映射关系。这种映射对于高效的数据处理和序列化至关重要。
+ * 所有实现此接口的类都需要提供字段访问和行类型管理的能力。
+ *
+ * <p>SQL 数据类型到内部数据结构的映射表如下:
  *
  * <pre>
  * +--------------------------------+-----------------------------------------+
- * | SQL Data Types                 | Internal Data Structures                |
+ * | SQL 数据类型                    | 内部数据结构                              |
  * +--------------------------------+-----------------------------------------+
  * | BOOLEAN                        | boolean                                 |
  * +--------------------------------+-----------------------------------------+
@@ -65,9 +67,9 @@ import static org.apache.paimon.types.DataTypeChecks.getScale;
  * +--------------------------------+-----------------------------------------+
  * | DOUBLE                         | double                                  |
  * +--------------------------------+-----------------------------------------+
- * | DATE                           | int (number of days since epoch)        |
+ * | DATE                           | int (从 epoch 开始的天数)                 |
  * +--------------------------------+-----------------------------------------+
- * | TIME                           | int (number of milliseconds of the day) |
+ * | TIME                           | int (一天中的毫秒数)                      |
  * +--------------------------------+-----------------------------------------+
  * | TIMESTAMP                      | {@link Timestamp}                       |
  * +--------------------------------+-----------------------------------------+
@@ -81,7 +83,15 @@ import static org.apache.paimon.types.DataTypeChecks.getScale;
  * +--------------------------------+-----------------------------------------+
  * </pre>
  *
- * <p>Nullability is always handled by the container data structure.
+ * <p>空值处理:所有的空值(NULL)都由容器数据结构统一处理。每个字段都可以独立地标记为空值,
+ * 这通过位图(bit set)或其他机制来实现,具体取决于实现类。
+ *
+ * <p>实现说明:
+ * <ul>
+ *   <li>{@link GenericRow}: 基于 Java 对象数组的通用实现,灵活但性能较低</li>
+ *   <li>{@link BinaryRow}: 基于内存段的二进制实现,高性能且内存紧凑</li>
+ *   <li>{@link JoinedRow}: 用于连接操作的复合行实现</li>
+ * </ul>
  *
  * @see GenericRow
  * @see JoinedRow
@@ -91,31 +101,56 @@ import static org.apache.paimon.types.DataTypeChecks.getScale;
 public interface InternalRow extends DataGetters {
 
     /**
-     * Returns the number of fields in this row.
+     * 返回此行中的字段数量。
      *
-     * <p>The number does not include {@link RowKind}. It is kept separately.
+     * <p>字段数量不包括 {@link RowKind},行类型信息单独存储和管理。
+     * 这个设计使得行类型信息和字段数据可以独立处理。
+     *
+     * @return 行中的字段数量
      */
     int getFieldCount();
 
     /**
-     * Returns the kind of change that this row describes in a changelog.
+     * 返回此行在变更日志(changelog)中描述的变更类型。
      *
+     * <p>行类型用于表示在流式处理场景中行数据的变更语义:
+     * <ul>
+     *   <li>INSERT: 插入新行</li>
+     *   <li>UPDATE_BEFORE: 更新操作的旧值</li>
+     *   <li>UPDATE_AFTER: 更新操作的新值</li>
+     *   <li>DELETE: 删除行</li>
+     * </ul>
+     *
+     * @return 变更类型
      * @see RowKind
      */
     RowKind getRowKind();
 
     /**
-     * Sets the kind of change that this row describes in a changelog.
+     * 设置此行在变更日志(changelog)中描述的变更类型。
      *
+     * <p>此方法用于在流式处理中标记行的变更语义,
+     * 允许下游算子正确处理插入、更新和删除操作。
+     *
+     * @param kind 要设置的变更类型
      * @see RowKind
      */
     void setRowKind(RowKind kind);
 
     // ------------------------------------------------------------------------------------------
-    // Access Utilities
+    // 访问工具方法
     // ------------------------------------------------------------------------------------------
 
-    /** Returns the data class for the given {@link DataType}. */
+    /**
+     * 返回给定 {@link DataType} 对应的数据类。
+     *
+     * <p>此方法根据数据类型返回其在 Java 中的表示类,用于类型检查和反射操作。
+     * 该映射关系与接口注释中的类型映射表一致。
+     *
+     * @param type 数据类型
+     * @return 对应的 Java 类
+     * @throws IllegalArgumentException 如果数据类型不支持
+     */
     static Class<?> getDataClass(DataType type) {
         // ordered by type root definition
         switch (type.getTypeRoot()) {
@@ -159,11 +194,21 @@ public interface InternalRow extends DataGetters {
     }
 
     /**
-     * Creates an accessor for getting elements in an internal row data structure at the given
-     * position.
+     * 创建一个字段访问器,用于在内部行数据结构中获取指定位置的元素。
      *
-     * @param fieldType the element type of the row
-     * @param fieldPos the element position of the row
+     * <p>此方法根据字段类型生成优化的访问器,避免了类型转换和装箱的开销。
+     * 对于可空字段,访问器会自动处理空值检查。
+     *
+     * <p>使用示例:
+     * <pre>{@code
+     * // 创建一个字符串字段访问器
+     * FieldGetter getter = InternalRow.createFieldGetter(DataTypes.STRING(), 0);
+     * BinaryString value = (BinaryString) getter.getFieldOrNull(row);
+     * }</pre>
+     *
+     * @param fieldType 行元素的类型
+     * @param fieldPos 行元素的位置(从0开始)
+     * @return 字段访问器
      */
     static FieldGetter createFieldGetter(DataType fieldType, int fieldPos) {
         final FieldGetter fieldGetter;
@@ -245,17 +290,39 @@ public interface InternalRow extends DataGetters {
         };
     }
 
-    /** Accessor for getting the field of a row during runtime. */
+    /**
+     * 字段访问器接口,用于在运行时获取行的字段值。
+     *
+     * <p>该接口提供了类型安全的字段访问机制,支持空值处理。
+     * 实现类由 {@link #createFieldGetter} 方法动态生成,针对不同类型进行优化。
+     */
     interface FieldGetter extends Serializable {
+        /**
+         * 从行中获取字段值,如果字段为空则返回 null。
+         *
+         * @param row 要读取的行
+         * @return 字段值,如果为空则返回 null
+         */
         @Nullable
         Object getFieldOrNull(InternalRow row);
     }
 
     /**
-     * Creates a {@link FieldSetter} for setting elements to a row from a row at the given position.
+     * 创建一个字段设置器,用于将一个行中指定位置的元素设置到另一个行。
      *
-     * @param fieldType the element type of the row
-     * @param fieldPos the element position of the row
+     * <p>此方法根据字段类型生成优化的设置器,用于高效的字段复制操作。
+     * 对于可空字段,设置器会自动处理空值标记。
+     *
+     * <p>使用示例:
+     * <pre>{@code
+     * // 创建一个整数字段设置器
+     * FieldSetter setter = InternalRow.createFieldSetter(DataTypes.INT(), 0);
+     * setter.setFieldFrom(sourceRow, targetRow);
+     * }</pre>
+     *
+     * @param fieldType 行元素的类型
+     * @param fieldPos 行元素的位置(从0开始)
+     * @return 字段设置器
      */
     static FieldSetter createFieldSetter(DataType fieldType, int fieldPos) {
         final FieldSetter fieldSetter;
@@ -340,8 +407,19 @@ public interface InternalRow extends DataGetters {
         };
     }
 
-    /** Accessor for setting the field of a row during runtime. */
+    /**
+     * 字段设置器接口,用于在运行时设置行的字段值。
+     *
+     * <p>该接口提供了高效的字段复制机制,支持从一个行复制字段到另一个行。
+     * 实现类由 {@link #createFieldSetter} 方法动态生成,针对不同类型进行优化。
+     */
     interface FieldSetter extends Serializable {
+        /**
+         * 将源行中的字段值设置到目标行。
+         *
+         * @param from 源数据获取器
+         * @param to 目标数据设置器
+         */
         void setFieldFrom(DataGetters from, DataSetters to);
     }
 }

@@ -26,7 +26,33 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonGet
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
-/** Response for table snapshot. */
+/**
+ * 获取表快照响应对象。
+ *
+ * <p>该类表示获取指定表的快照信息的响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>snapshot - 表快照对象,包含快照的完整信息
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "snapshot": {
+ *     "id": 1,
+ *     "schemaId": 0,
+ *     "commitUser": "user1",
+ *     "commitIdentifier": 123456789,
+ *     "commitKind": "APPEND",
+ *     "timeMillis": 1609459200000,
+ *     ...
+ *   }
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetTableSnapshotResponse implements RESTResponse {
 

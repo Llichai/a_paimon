@@ -33,61 +33,92 @@ import static org.apache.paimon.utils.Preconditions.checkNotNull;
  * additional information regarding copyright ownership. */
 
 /**
- * A {@code ConfigOption} describes a configuration parameter. It encapsulates the configuration
- * key, deprecated older versions of the key, and an optional default value for the configuration
- * parameter.
+ * 配置选项类,描述一个配置参数。
  *
- * <p>{@code ConfigOptions} are built via the {@link ConfigOptions} class. Once created, a config
- * option is immutable.
+ * <p>该类封装了配置项的以下信息:
+ * <ul>
+ *   <li>配置键(key)
+ *   <li>废弃的旧版本键(fallback keys)
+ *   <li>可选的默认值(default value)
+ *   <li>配置项的描述信息(description)
+ *   <li>配置值的类型(clazz)
+ * </ul>
  *
- * @param <T> The type of value associated with the configuration option.
+ * <h2>创建方式</h2>
+ * {@code ConfigOption} 通过 {@link ConfigOptions} 类构建。一旦创建完成,配置选项就是不可变的。
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 创建一个带默认值的字符串配置项
+ * ConfigOption<String> tempDir = ConfigOptions
+ *     .key("tmp.dir")
+ *     .stringType()
+ *     .defaultValue("/tmp")
+ *     .withDescription("临时目录路径");
+ *
+ * // 创建一个带回退键的配置项
+ * ConfigOption<Integer> parallelism = ConfigOptions
+ *     .key("parallelism")
+ *     .intType()
+ *     .defaultValue(1)
+ *     .withFallbackKeys("old.parallelism");
+ * }</pre>
+ *
+ * @param <T> 配置选项关联的值的类型
  * @since 0.4.0
  */
 @Public
 public class ConfigOption<T> {
 
+    /** 空的回退键数组常量 */
     private static final FallbackKey[] EMPTY = new FallbackKey[0];
 
+    /** 空的描述信息常量 */
     static final Description EMPTY_DESCRIPTION = Description.builder().text("").build();
 
     // ------------------------------------------------------------------------
 
-    /** The current key for that config option. */
+    /** 该配置选项的当前键 */
     private final String key;
 
-    /** The list of deprecated keys, in the order to be checked. */
+    /** 回退键列表,按检查顺序排列(包括废弃的键) */
     private final FallbackKey[] fallbackKeys;
 
-    /** The default value for this option. */
+    /** 该配置选项的默认值 */
     private final T defaultValue;
 
-    /** The description for this option. */
+    /** 该配置选项的描述信息 */
     private final Description description;
 
     /**
-     * Type of the value that this ConfigOption describes.
+     * 该 ConfigOption 描述的值的类型。
      *
      * <ul>
-     *   <li>typeClass == atomic class (e.g. {@code Integer.class}) -> {@code ConfigOption<Integer>}
-     *   <li>typeClass == {@code Map.class} -> {@code ConfigOption<Map<String, String>>}
+     *   <li>clazz == 原子类型 (如 {@code Integer.class}) -> {@code ConfigOption<Integer>}
+     *   <li>clazz == {@code Map.class} -> {@code ConfigOption<Map<String, String>>}
      * </ul>
      */
     private final Class<?> clazz;
 
     // ------------------------------------------------------------------------
 
+    /**
+     * 获取配置值的类型。
+     *
+     * @return 配置值的 Class 对象
+     */
     Class<?> getClazz() {
         return clazz;
     }
 
     /**
-     * Creates a new config option with fallback keys.
+     * 创建一个带有回退键的新配置选项。
      *
-     * @param key The current key for that config option
-     * @param clazz describes type of the ConfigOption, see description of the clazz field
-     * @param description Description for that option
-     * @param defaultValue The default value for this option
-     * @param fallbackKeys The list of fallback keys, in the order to be checked
+     * @param key 配置选项的当前键
+     * @param clazz 描述 ConfigOption 的类型,参见 clazz 字段的说明
+     * @param description 该选项的描述信息
+     * @param defaultValue 该选项的默认值
+     * @param fallbackKeys 回退键列表,按检查顺序排列
      */
     ConfigOption(
             String key,
@@ -105,44 +136,42 @@ public class ConfigOption<T> {
     // ------------------------------------------------------------------------
 
     /**
-     * Creates a new config option, using this option's key and default value, and adding the given
-     * fallback keys.
+     * 创建一个新的配置选项,使用当前选项的键和默认值,并添加给定的回退键。
      *
-     * <p>When obtaining a value from the configuration via {@link Options#get(ConfigOption)}, the
-     * fallback keys will be checked in the order provided to this method. The first key for which a
-     * value is found will be used - that value will be returned.
+     * <p>当通过 {@link Options#get(ConfigOption)} 从配置中获取值时,
+     * 会按照提供给此方法的顺序检查回退键。使用找到值的第一个键 - 返回该值。
      *
-     * @param fallbackKeys The fallback keys, in the order in which they should be checked.
-     * @return A new config options, with the given fallback keys.
+     * @param fallbackKeys 回退键,按应该检查的顺序
+     * @return 一个新的配置选项,包含给定的回退键
      */
     public ConfigOption<T> withFallbackKeys(String... fallbackKeys) {
         final Stream<FallbackKey> newFallbackKeys =
                 Arrays.stream(fallbackKeys).map(FallbackKey::createFallbackKey);
         final Stream<FallbackKey> currentAlternativeKeys = Arrays.stream(this.fallbackKeys);
 
-        // put fallback keys first so that they are prioritized
+        // 将回退键放在前面,使它们优先被检查
         final FallbackKey[] mergedAlternativeKeys =
                 Stream.concat(newFallbackKeys, currentAlternativeKeys).toArray(FallbackKey[]::new);
         return new ConfigOption<>(key, clazz, description, defaultValue, mergedAlternativeKeys);
     }
 
     /**
-     * Creates a new config option, using this option's key and default value, and adding the given
-     * description. The given description is used when generation the configuration documentation.
+     * 创建一个新的配置选项,使用当前选项的键和默认值,并添加给定的描述。
+     * 给定的描述用于生成配置文档。
      *
-     * @param description The description for this option.
-     * @return A new config option, with given description.
+     * @param description 该选项的描述
+     * @return 一个新的配置选项,包含给定的描述
      */
     public ConfigOption<T> withDescription(final String description) {
         return withDescription(Description.builder().text(description).build());
     }
 
     /**
-     * Creates a new config option, using this option's key and default value, and adding the given
-     * description. The given description is used when generation the configuration documentation.
+     * 创建一个新的配置选项,使用当前选项的键和默认值,并添加给定的描述。
+     * 给定的描述用于生成配置文档。
      *
-     * @param description The description for this option.
-     * @return A new config option, with given description.
+     * @param description 该选项的描述
+     * @return 一个新的配置选项,包含给定的描述
      */
     public ConfigOption<T> withDescription(final Description description) {
         return new ConfigOption<>(key, clazz, description, defaultValue, fallbackKeys);
@@ -151,37 +180,37 @@ public class ConfigOption<T> {
     // ------------------------------------------------------------------------
 
     /**
-     * Gets the configuration key.
+     * 获取配置键。
      *
-     * @return The configuration key
+     * @return 配置键
      */
     public String key() {
         return key;
     }
 
     /**
-     * Checks if this option has a default value.
+     * 检查该选项是否有默认值。
      *
-     * @return True if it has a default value, false if not.
+     * @return 如果有默认值返回 true,否则返回 false
      */
     public boolean hasDefaultValue() {
         return defaultValue != null;
     }
 
     /**
-     * Returns the default value, or null, if there is no default value.
+     * 返回默认值,如果没有默认值则返回 null。
      *
-     * @return The default value, or null.
+     * @return 默认值或 null
      */
     public T defaultValue() {
         return defaultValue;
     }
 
     /**
-     * Checks whether this option has deprecated keys.
+     * 检查该选项是否有废弃的键。
      *
-     * @return True if the option has deprecated keys, false if not.
-     * @deprecated Replaced by {@link #hasFallbackKeys()}
+     * @return 如果有废弃的键返回 true,否则返回 false
+     * @deprecated 由 {@link #hasFallbackKeys()} 替代
      */
     @Deprecated
     public boolean hasDeprecatedKeys() {
@@ -190,10 +219,10 @@ public class ConfigOption<T> {
     }
 
     /**
-     * Gets the deprecated keys, in the order to be checked.
+     * 获取废弃的键,按检查顺序排列。
      *
-     * @return The option's deprecated keys.
-     * @deprecated Replaced by {@link #fallbackKeys()}
+     * @return 该选项的废弃键
+     * @deprecated 由 {@link #fallbackKeys()} 替代
      */
     @Deprecated
     public Iterable<String> deprecatedKeys() {
@@ -206,27 +235,27 @@ public class ConfigOption<T> {
     }
 
     /**
-     * Checks whether this option has fallback keys.
+     * 检查该选项是否有回退键。
      *
-     * @return True if the option has fallback keys, false if not.
+     * @return 如果有回退键返回 true,否则返回 false
      */
     public boolean hasFallbackKeys() {
         return fallbackKeys != EMPTY;
     }
 
     /**
-     * Gets the fallback keys, in the order to be checked.
+     * 获取回退键,按检查顺序排列。
      *
-     * @return The option's fallback keys.
+     * @return 该选项的回退键
      */
     public Iterable<FallbackKey> fallbackKeys() {
         return (fallbackKeys == EMPTY) ? Collections.emptyList() : Arrays.asList(fallbackKeys);
     }
 
     /**
-     * Returns the description of this option.
+     * 返回该选项的描述信息。
      *
-     * @return The option's description.
+     * @return 该选项的描述
      */
     public Description description() {
         return description;

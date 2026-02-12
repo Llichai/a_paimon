@@ -18,7 +18,23 @@
 
 package org.apache.paimon.compression;
 
-/** Implementation of {@link BlockCompressionFactory} for Lz4 codec. */
+/**
+ * LZ4 编解码器的 {@link BlockCompressionFactory} 实现。
+ *
+ * <p>LZ4 是一种快速压缩算法,提供:
+ * <ul>
+ *   <li>极高的压缩和解压缩速度</li>
+ *   <li>适中的压缩率</li>
+ *   <li>低CPU占用</li>
+ * </ul>
+ *
+ * <p>适用场景:
+ * <ul>
+ *   <li>需要快速压缩/解压缩的场景</li>
+ *   <li>CPU资源受限的环境</li>
+ *   <li>实时数据处理</li>
+ * </ul>
+ */
 public class Lz4BlockCompressionFactory implements BlockCompressionFactory {
 
     @Override

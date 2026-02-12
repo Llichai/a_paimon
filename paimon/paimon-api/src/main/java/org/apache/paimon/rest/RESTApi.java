@@ -108,76 +108,324 @@ import static org.apache.paimon.rest.RESTUtil.extractPrefixMap;
 import static org.apache.paimon.rest.auth.AuthProviderFactory.createAuthProvider;
 
 /**
- * REST API for REST Catalog.
+ * REST Catalog 的核心 API 接口类。
  *
- * <p>This API class only includes interaction with REST Server and does not have file read and
- * write operations, which makes this API lightweight enough to avoid introducing dependencies such
- * as Hadoop and file systems.
+ * <p>这是与 REST Catalog 服务器交互的轻量级 API 类,只包含与 REST 服务器的交互逻辑,
+ * 不包含文件读写操作,因此足够轻量,避免引入 Hadoop 和文件系统等重量级依赖。
  *
- * <p>The following example show how to use the RESTApi:
+ * <h2>设计理念</h2>
+ * <ul>
+ *   <li><b>轻量级</b>: 只依赖 HTTP 客户端,不依赖 Hadoop 或文件系统
+ *   <li><b>无状态</b>: 每个请求独立,不维护会话状态
+ *   <li><b>RESTful</b>: 遵循 REST API 设计原则,使用标准 HTTP 方法
+ *   <li><b>认证集成</b>: 支持多种认证机制(Bearer Token、DLF 等)
+ *   <li><b>分页支持</b>: 所有列表操作都支持分页查询
+ * </ul>
  *
+ * <h2>主要功能</h2>
+ * <ul>
+ *   <li><b>数据库管理</b>: 创建、删除、修改、查询数据库
+ *   <li><b>表管理</b>: 创建、删除、重命名、修改表,提交快照
+ *   <li><b>视图管理</b>: 创建、删除、重命名、修改视图
+ *   <li><b>函数管理</b>: 创建、删除、修改用户定义函数
+ *   <li><b>分区管理</b>: 查询、标记已完成的分区
+ *   <li><b>快照管理</b>: 查询、提交、回滚快照
+ *   <li><b>分支管理</b>: 创建、删除、快进分支
+ *   <li><b>标签管理</b>: 创建、删除、查询标签
+ * </ul>
+ *
+ * <h2>认证机制</h2>
+ * <p>支持多种认证方式:
+ * <ul>
+ *   <li><b>Bearer Token</b>: 简单的 token 认证
+ *     <pre>{@code
+ *     options.set(TOKEN_PROVIDER, "bear");
+ *     options.set(TOKEN, "your-access-token");
+ *     }</pre>
+ *   <li><b>DLF (Data Lake Formation)</b>: 阿里云数据湖认证
+ *     <pre>{@code
+ *     options.set(TOKEN_PROVIDER, "dlf");
+ *     options.set(DLF_ACCESS_KEY_ID, "your-access-key-id");
+ *     options.set(DLF_ACCESS_KEY_SECRET, "your-access-key-secret");
+ *     options.set(DLF_REGION, "cn-hangzhou");
+ *     }</pre>
+ * </ul>
+ *
+ * <h2>配置合并</h2>
+ * <p>在初始化时,API 会从服务器获取配置并与本地配置合并:
+ * <pre>
+ * 1. 发送 GET /v1/config 请求
+ * 2. 获取服务器端配置
+ * 3. 服务器配置 + 客户端配置 → 最终配置
+ * 4. 使用合并后的配置进行后续操作
+ * </pre>
+ *
+ * <h2>分页查询</h2>
+ * <p>所有列表操作都提供两种方式:
+ * <ul>
+ *   <li><b>完整列表</b>: 如 {@link #listDatabases()},自动分页获取所有结果
+ *   <li><b>分页列表</b>: 如 {@link #listDatabasesPaged},支持手动分页控制
+ * </ul>
+ *
+ * <h2>错误处理</h2>
+ * <p>API 根据 HTTP 状态码抛出相应异常:
+ * <ul>
+ *   <li>404 → {@link NoSuchResourceException} - 资源不存在
+ *   <li>409 → {@link AlreadyExistsException} - 资源已存在
+ *   <li>403 → {@link ForbiddenException} - 无权限访问
+ *   <li>其他 → {@link org.apache.paimon.rest.exceptions.RESTException} - 其他 REST 错误
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ *
+ * <p><b>基础使用</b>:
  * <pre>{@code
+ * // 1. 配置选项
  * Options options = new Options();
- * options.set(URI, "<rest server url>");
- * options.set(WAREHOUSE, "my_instance_name");
+ * options.set(URI, "http://localhost:8080");
+ * options.set(WAREHOUSE, "my_warehouse");
  * options.set(TOKEN_PROVIDER, "dlf");
- * options.set(DLF_ACCESS_KEY_ID, "<access-key-id>");
- * options.set(DLF_ACCESS_KEY_SECRET, "<access-key-secret>");
+ * options.set(DLF_ACCESS_KEY_ID, "your-access-key-id");
+ * options.set(DLF_ACCESS_KEY_SECRET, "your-access-key-secret");
  *
+ * // 2. 创建 API 实例
  * RESTApi api = new RESTApi(options);
+ *
+ * // 3. 执行操作
+ * List<String> databases = api.listDatabases();
+ * System.out.println("Databases: " + databases);
+ *
  * List<String> tables = api.listTables("my_database");
- * System.out.println(tables);
+ * System.out.println("Tables: " + tables);
  * }</pre>
  *
- * <p>This class also provide util methods for serializing json {@link #toJson} and deserializing
- * json {@link #fromJson}.
+ * <p><b>数据库操作</b>:
+ * <pre>{@code
+ * // 创建数据库
+ * Map<String, String> props = new HashMap<>();
+ * props.put("owner", "admin");
+ * api.createDatabase("my_db", props);
  *
+ * // 查询数据库
+ * GetDatabaseResponse db = api.getDatabase("my_db");
+ * System.out.println("Database: " + db.getName());
+ *
+ * // 修改数据库
+ * api.alterDatabase("my_db", Arrays.asList("old_key"), Collections.singletonMap("new_key", "value"));
+ *
+ * // 删除数据库
+ * api.dropDatabase("my_db");
+ * }</pre>
+ *
+ * <p><b>表操作</b>:
+ * <pre>{@code
+ * // 创建表
+ * Schema schema = Schema.newBuilder()
+ *     .column("id", DataTypes.INT())
+ *     .column("name", DataTypes.STRING())
+ *     .primaryKey("id")
+ *     .build();
+ * Identifier tableId = Identifier.create("my_db", "my_table");
+ * api.createTable(tableId, schema);
+ *
+ * // 查询表
+ * GetTableResponse table = api.getTable(tableId);
+ * System.out.println("Table: " + table.getName());
+ *
+ * // 修改表
+ * List<SchemaChange> changes = Arrays.asList(
+ *     SchemaChange.addColumn("age", DataTypes.INT()),
+ *     SchemaChange.dropColumn("old_column")
+ * );
+ * api.alterTable(tableId, changes);
+ *
+ * // 重命名表
+ * Identifier newTableId = Identifier.create("my_db", "new_table");
+ * api.renameTable(tableId, newTableId);
+ *
+ * // 删除表
+ * api.dropTable(tableId);
+ * }</pre>
+ *
+ * <p><b>快照操作</b>:
+ * <pre>{@code
+ * // 查询最新快照
+ * TableSnapshot snapshot = api.loadSnapshot(tableId);
+ * System.out.println("Latest snapshot: " + snapshot.id());
+ *
+ * // 查询指定版本快照
+ * Snapshot versionSnapshot = api.loadSnapshot(tableId, "v1.0");
+ *
+ * // 提交快照
+ * boolean success = api.commitSnapshot(tableId, tableUuid, snapshot, statistics);
+ *
+ * // 回滚到某个快照
+ * api.rollbackTo(tableId, Instant.forSnapshot(snapshotId));
+ * }</pre>
+ *
+ * <p><b>分页查询</b>:
+ * <pre>{@code
+ * // 手动分页
+ * String pageToken = null;
+ * do {
+ *     PagedList<String> page = api.listTablesPaged(
+ *         "my_db",
+ *         100,           // maxResults
+ *         pageToken,     // pageToken
+ *         "prefix_%",    // 表名模式
+ *         null           // 表类型
+ *     );
+ *
+ *     for (String table : page.elements()) {
+ *         System.out.println("Table: " + table);
+ *     }
+ *
+ *     pageToken = page.nextPageToken();
+ * } while (pageToken != null);
+ * }</pre>
+ *
+ * <p><b>标签和分支</b>:
+ * <pre>{@code
+ * // 创建标签
+ * api.createTag(tableId, "v1.0", snapshotId, "7d");
+ *
+ * // 查询标签
+ * GetTagResponse tag = api.getTag(tableId, "v1.0");
+ *
+ * // 删除标签
+ * api.deleteTag(tableId, "v1.0");
+ *
+ * // 创建分支
+ * api.createBranch(tableId, "dev", "main");
+ *
+ * // 快进分支
+ * api.fastForward(tableId, "dev");
+ *
+ * // 删除分支
+ * api.dropBranch(tableId, "dev");
+ * }</pre>
+ *
+ * <h2>JSON 序列化工具</h2>
+ * <p>提供便捷的 JSON 序列化/反序列化方法:
+ * <pre>{@code
+ * // 对象转 JSON
+ * String json = RESTApi.toJson(object);
+ *
+ * // JSON 转对象
+ * MyClass obj = RESTApi.fromJson(json, MyClass.class);
+ * }</pre>
+ *
+ * <h2>线程安全性</h2>
+ * <p>RESTApi 实例是线程安全的,可以在多线程环境中共享使用。内部的 HTTP 客户端使用连接池管理。
+ *
+ * <h2>资源管理</h2>
+ * <p>RESTApi 不需要显式关闭,HTTP 客户端会自动管理连接池。
+ *
+ * @see HttpClient
+ * @see RESTAuthFunction
+ * @see Options
  * @since 1.2.0
  */
 @Public
 public class RESTApi {
 
+    /** HTTP 头部配置前缀,用于从配置中提取自定义 HTTP 头。 */
     public static final String HEADER_PREFIX = "header.";
+
+    /** 查询参数: 最大结果数,用于控制分页查询的每页大小。 */
     public static final String MAX_RESULTS = "maxResults";
+
+    /** 查询参数: 分页令牌,用于获取下一页结果。 */
     public static final String PAGE_TOKEN = "pageToken";
 
+    /** 查询参数: 数据库名称模式,支持 SQL LIKE 语法(目前仅支持前缀匹配)。 */
     public static final String DATABASE_NAME_PATTERN = "databaseNamePattern";
+
+    /** 查询参数: 表名称模式,支持 SQL LIKE 语法(目前仅支持前缀匹配)。 */
     public static final String TABLE_NAME_PATTERN = "tableNamePattern";
+
+    /** 查询参数: 表类型,用于按类型过滤表。 */
     public static final String TABLE_TYPE = "tableType";
+
+    /** 查询参数: 视图名称模式,支持 SQL LIKE 语法(目前仅支持前缀匹配)。 */
     public static final String VIEW_NAME_PATTERN = "viewNamePattern";
+
+    /** 查询参数: 函数名称模式,支持 SQL LIKE 语法(目前仅支持前缀匹配)。 */
     public static final String FUNCTION_NAME_PATTERN = "functionNamePattern";
+
+    /** 查询参数: 分区名称模式,支持 SQL LIKE 语法(目前仅支持前缀匹配)。 */
     public static final String PARTITION_NAME_PATTERN = "partitionNamePattern";
+
+    /** 查询参数: 标签名称前缀,用于按前缀过滤标签。 */
     public static final String TAG_NAME_PREFIX = "tagNamePrefix";
 
+    /**
+     * Token 过期安全时间(毫秒)。
+     *
+     * <p>当 token 剩余有效期小于此值时,会触发 token 刷新,以避免在使用过程中 token 过期。
+     * 默认值为 1 小时(3,600,000 毫秒)。
+     */
     public static final long TOKEN_EXPIRATION_SAFE_TIME_MILLIS = 3_600_000L;
 
+    /** Jackson ObjectMapper 实例,用于 JSON 序列化和反序列化。 */
     public static final ObjectMapper OBJECT_MAPPER = JsonSerdeUtil.OBJECT_MAPPER_INSTANCE;
 
+    /** HTTP 客户端,用于发送 REST 请求。 */
     private final HttpClient client;
+
+    /** REST 认证函数,用于生成请求的认证头部。 */
     private final RESTAuthFunction restAuthFunction;
+
+    /** 合并后的配置选项,包含客户端配置和服务器端配置。 */
     private final Options options;
+
+    /** 资源路径生成器,用于构建各种资源的 REST API 路径。 */
     private final ResourcePaths resourcePaths;
 
     /**
-     * Initializes a newly created {@code RESTApi} object.
+     * 初始化一个新的 {@code RESTApi} 对象。
      *
-     * <p>By default, {@code configRequired} is true, this means that there will be one REST request
-     * to merge configurations during initialization.
+     * <p>默认情况下,{@code configRequired} 为 true,这意味着在初始化期间会发送一个 REST 请求来合并配置。
      *
-     * @param options contains authentication and catalog information for REST Server
+     * <h2>初始化流程</h2>
+     * <ol>
+     *   <li>创建 HTTP 客户端
+     *   <li>发送 GET /v1/config 请求获取服务器配置
+     *   <li>将服务器配置与客户端配置合并
+     *   <li>创建认证函数
+     *   <li>准备资源路径生成器
+     * </ol>
+     *
+     * @param options 包含 REST 服务器的认证和 catalog 信息的配置选项
      */
     public RESTApi(Options options) {
         this(options, true);
     }
 
     /**
-     * Initializes a newly created {@code RESTApi} object.
+     * 初始化一个新的 {@code RESTApi} 对象。
      *
-     * <p>If the {@code options} are already obtained through {@link #options()}, you can configure
-     * configRequired to be false.
+     * <p>如果 {@code options} 已经通过 {@link #options()} 获取,可以将 configRequired 配置为 false,
+     * 以避免重复的配置合并请求。
      *
-     * @param options contains authentication and catalog information for REST Server
-     * @param configRequired is there one REST request to merge configurations during initialization
+     * <h2>配置合并说明</h2>
+     * <ul>
+     *   <li>如果 configRequired=true: 会发送 GET /v1/config 请求,将服务器配置与客户端配置合并
+     *   <li>如果 configRequired=false: 直接使用提供的 options,不发送配置请求
+     * </ul>
+     *
+     * <h2>使用场景</h2>
+     * <pre>{@code
+     * // 场景 1: 首次创建(需要合并配置)
+     * RESTApi api1 = new RESTApi(options, true);
+     * Options mergedOptions = api1.options();
+     *
+     * // 场景 2: 使用已合并的配置(不需要再次合并)
+     * RESTApi api2 = new RESTApi(mergedOptions, false);
+     * }</pre>
+     *
+     * @param options 包含 REST 服务器的认证和 catalog 信息的配置选项
+     * @param configRequired 是否需要发送 REST 请求来合并配置
      */
     public RESTApi(Options options, boolean configRequired) {
         this.client = new HttpClient(options.get(RESTCatalogOptions.URI));
@@ -204,16 +452,27 @@ public class RESTApi {
         this.resourcePaths = ResourcePaths.forCatalogProperties(options);
     }
 
-    /** Get the configured options which has been merged from REST Server. */
+    /**
+     * 获取合并后的配置选项。
+     *
+     * <p>返回的配置是客户端配置与 REST 服务器配置合并后的结果。
+     *
+     * @return 合并后的配置选项
+     */
     public Options options() {
         return options;
     }
 
     /**
-     * List databases.
+     * 列出所有数据库。
      *
-     * <p>Gets an array of databases for a catalog. There is no guarantee of a specific ordering of
-     * the elements in the array.
+     * <p>获取 catalog 中所有数据库的列表。数组中的元素不保证特定顺序。
+     *
+     * <h2>实现说明</h2>
+     * <p>此方法会自动处理分页,获取所有数据库并返回完整列表。
+     *
+     * @return 数据库名称列表
+     * @throws ForbiddenException 如果没有权限访问 catalog
      */
     public List<String> listDatabases() {
         return listDataFromPageApi(
@@ -226,17 +485,37 @@ public class RESTApi {
     }
 
     /**
-     * List databases.
+     * 分页列出数据库。
      *
-     * <p>Gets an array of databases for a catalog. There is no guarantee of a specific ordering of
-     * the elements in the array.
+     * <p>获取 catalog 中数据库的分页列表。数组中的元素不保证特定顺序。
      *
-     * @param maxResults Optional parameter indicating the maximum number of results to include in
-     *     the result. If maxResults is not specified or set to 0, will return the default number of
-     *     max results.
-     * @param pageToken Optional parameter indicating the next page token allows list to be start
-     *     from a specific point.
-     * @return {@link PagedList}: elements and nextPageToken.
+     * <h2>分页参数说明</h2>
+     * <ul>
+     *   <li>maxResults: 每页最大结果数,0 或 null 表示使用默认值
+     *   <li>pageToken: 分页令牌,null 表示从第一页开始
+     *   <li>databaseNamePattern: 数据库名称模式,支持 SQL LIKE 语法(目前仅支持前缀匹配)
+     * </ul>
+     *
+     * <h2>使用示例</h2>
+     * <pre>{@code
+     * // 首页查询
+     * PagedList<String> page1 = api.listDatabasesPaged(100, null, "prod_%");
+     * for (String db : page1.elements()) {
+     *     System.out.println("Database: " + db);
+     * }
+     *
+     * // 下一页查询
+     * if (page1.nextPageToken() != null) {
+     *     PagedList<String> page2 = api.listDatabasesPaged(100, page1.nextPageToken(), "prod_%");
+     *     // 处理第二页...
+     * }
+     * }</pre>
+     *
+     * @param maxResults 可选参数,指示结果中包含的最大结果数。如果未指定或设置为 0,将返回默认数量的最大结果
+     * @param pageToken 可选参数,指示下一页令牌,允许列表从特定点开始
+     * @param databaseNamePattern 数据库名称的 SQL LIKE 模式(%)。如果未设置或为空,将返回所有数据库。目前仅支持前缀匹配
+     * @return {@link PagedList}: 包含数据库名称列表和下一页令牌
+     * @throws ForbiddenException 如果没有权限访问 catalog
      */
     public PagedList<String> listDatabasesPaged(
             @Nullable Integer maxResults,
@@ -714,7 +993,32 @@ public class RESTApi {
                 restAuthFunction);
     }
 
-    public void registerTable(Identifier identifier, String path) {
+    /**
+     * 注册一个已存在的表到 REST Catalog。
+     *
+     * <p>此方法允许将文件系统上已存在的表注册到 REST Catalog 中,而不需要重新创建表。
+     * 这在迁移场景或将外部表纳入 REST Catalog 管理时非常有用。
+     *
+     * <h2>使用场景</h2>
+     * <ul>
+     *   <li>将 FileSystem Catalog 的表迁移到 REST Catalog
+     *   <li>将外部创建的表注册到 REST Catalog 进行统一管理
+     *   <li>恢复误删除的表元数据
+     * </ul>
+     *
+     * <h2>使用示例</h2>
+     * <pre>{@code
+     * Identifier tableId = Identifier.create("my_db", "my_table");
+     * String tablePath = "hdfs://namenode:8020/warehouse/my_db.db/my_table";
+     * api.registerTable(tableId, tablePath);
+     * }</pre>
+     *
+     * @param identifier 表的标识符(数据库名和表名)
+     * @param path 表在文件系统上的路径
+     * @throws NoSuchResourceException 如果数据库不存在或表路径无效
+     * @throws AlreadyExistsException 如果表已经在 catalog 中存在
+     * @throws ForbiddenException 如果没有权限在该数据库中注册表
+     */
         client.post(
                 resourcePaths.registerTable(identifier.getDatabaseName()),
                 new RegisterTableRequest(identifier, path),

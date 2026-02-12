@@ -35,14 +35,47 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Comparator;
 
-/** A {@link LookupStoreFactory} which uses hash to lookup records on disk. */
+/**
+ * 基于排序的查找存储工厂。
+ *
+ * <p>该工厂实现基于 SST 文件格式的查找存储，使用排序索引在磁盘上查找记录。
+ *
+ * <p>主要特性：
+ * <ul>
+ *   <li>基于 SST 文件格式的有序存储
+ *   <li>支持数据压缩
+ *   <li>使用布隆过滤器加速查找
+ *   <li>块缓存提高性能
+ * </ul>
+ *
+ * <p>实现机制：
+ * <ul>
+ *   <li>写入器：{@link SortLookupStoreWriter} - 基于 {@link org.apache.paimon.sst.SstFileWriter}
+ *   <li>读取器：{@link SortLookupStoreReader} - 基于 {@link org.apache.paimon.sst.SstFileReader}
+ * </ul>
+ */
 public class SortLookupStoreFactory implements LookupStoreFactory {
 
+    /** 键比较器 */
     private final Comparator<MemorySlice> comparator;
+
+    /** 缓存管理器 */
     private final CacheManager cacheManager;
+
+    /** 块大小 */
     private final int blockSize;
+
+    /** 压缩工厂（可选） */
     @Nullable private final BlockCompressionFactory compressionFactory;
 
+    /**
+     * 构造排序查找存储工厂。
+     *
+     * @param comparator 键比较器
+     * @param cacheManager 缓存管理器
+     * @param blockSize 块大小
+     * @param compression 压缩选项
+     */
     public SortLookupStoreFactory(
             Comparator<MemorySlice> comparator,
             CacheManager cacheManager,

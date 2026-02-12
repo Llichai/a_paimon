@@ -24,11 +24,26 @@ import org.apache.paimon.types.DataTypeFamily;
 import org.apache.paimon.types.DataTypeRoot;
 import org.apache.paimon.utils.BinaryStringUtils;
 
-/** {@link DataTypeRoot#BOOLEAN} to {@link DataTypeFamily#CHARACTER_STRING} cast rule. */
+/**
+ * 布尔类型到字符串类型的转换规则。
+ *
+ * <p>将 {@link DataTypeRoot#BOOLEAN} 转换为 {@link DataTypeFamily#CHARACTER_STRING}。
+ *
+ * <p>转换策略: 将 true 转换为 "true", false 转换为 "false"
+ *
+ * <p>示例:
+ *
+ * <pre>{@code
+ * // BOOLEAN true → VARCHAR "true"
+ * // BOOLEAN false → VARCHAR "false"
+ * }</pre>
+ */
 class BooleanToStringCastRule extends AbstractCastRule<Boolean, BinaryString> {
 
+    /** 单例实例 */
     static final BooleanToStringCastRule INSTANCE = new BooleanToStringCastRule();
 
+    /** 私有构造函数。 */
     private BooleanToStringCastRule() {
         super(
                 CastRulePredicate.builder()
@@ -37,6 +52,13 @@ class BooleanToStringCastRule extends AbstractCastRule<Boolean, BinaryString> {
                         .build());
     }
 
+    /**
+     * 创建布尔值到字符串的转换执行器。
+     *
+     * @param inputType 输入数据类型
+     * @param targetType 目标数据类型
+     * @return 转换执行器
+     */
     @Override
     public CastExecutor<Boolean, BinaryString> create(DataType inputType, DataType targetType) {
         return value ->

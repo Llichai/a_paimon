@@ -33,15 +33,113 @@ import java.util.stream.Stream;
 import static org.apache.paimon.utils.Preconditions.checkState;
 
 /**
- * Parser for creating instances of {@link org.apache.paimon.types.DataType} from a serialized
- * string created with {@link org.apache.paimon.types.DataType#serializeJson}.
+ * 用于从序列化字符串创建 {@link DataType} 实例的解析器。
+ *
+ * <p>这个解析器可以解析由 {@link DataType#serializeJson} 序列化的 JSON 格式,
+ * 以及标准的 SQL 类型字符串。支持两种解析模式:
+ *
+ * <h2>解析模式</h2>
+ * <ul>
+ *   <li><b>JSON 格式解析</b> - 解析结构化的 JSON 对象
+ *   <li><b>SQL 字符串解析</b> - 解析标准 SQL 类型定义字符串
+ * </ul>
+ *
+ * <h2>JSON 格式示例</h2>
+ * <pre>{@code
+ * // 简单类型
+ * "INT"
+ * "VARCHAR"
+ *
+ * // 带参数的类型
+ * {
+ *   "type": "DECIMAL",
+ *   "precision": 10,
+ *   "scale": 2
+ * }
+ *
+ * // 数组类型
+ * {
+ *   "type": "ARRAY",
+ *   "element": "INT"
+ * }
+ *
+ * // Map 类型
+ * {
+ *   "type": "MAP",
+ *   "key": "STRING",
+ *   "value": "INT"
+ * }
+ *
+ * // Row 类型
+ * {
+ *   "type": "ROW",
+ *   "fields": [
+ *     {"id": 0, "name": "id", "type": "INT"},
+ *     {"id": 1, "name": "name", "type": "STRING"}
+ *   ]
+ * }
+ * }</pre>
+ *
+ * <h2>SQL 字符串格式示例</h2>
+ * <pre>{@code
+ * // 简单类型
+ * "INT"
+ * "VARCHAR(50)"
+ * "DECIMAL(10, 2)"
+ *
+ * // 复杂类型
+ * "ARRAY<INT>"
+ * "MAP<STRING, INT>"
+ * "ROW<id INT, name STRING>"
+ *
+ * // 带可空性
+ * "INT NOT NULL"
+ * "VARCHAR(100) NULL"
+ * }</pre>
+ *
+ * <h2>字段 ID 处理</h2>
+ * <p>解析器支持两种字段 ID 分配模式:
+ * <ul>
+ *   <li>显式 ID - JSON 中明确指定字段 ID
+ *   <li>自动 ID - 使用 AtomicInteger 自动生成递增 ID
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 解析 SQL 字符串
+ * DataType type1 = DataTypeJsonParser.parseAtomicTypeSQLString("INT");
+ * DataType type2 = DataTypeJsonParser.parseAtomicTypeSQLString("VARCHAR(100)");
+ * DataType type3 = DataTypeJsonParser.parseAtomicTypeSQLString("ARRAY<INT>");
+ *
+ * // 解析 JSON
+ * JsonNode json = ...; // JSON 对象
+ * DataType type4 = DataTypeJsonParser.parseDataType(json);
+ * DataField field = DataTypeJsonParser.parseDataField(json);
+ * }</pre>
+ *
+ * @see DataType#serializeJson(com.fasterxml.jackson.core.JsonGenerator)
  */
 public final class DataTypeJsonParser {
 
+    /**
+     * 从 JSON 节点解析数据字段。
+     *
+     * <p>字段 ID 将从 JSON 中读取,如果未指定则自动生成。
+     *
+     * @param json JSON 节点
+     * @return 解析后的数据字段
+     */
     public static DataField parseDataField(JsonNode json) {
         return parseDataField(json, null);
     }
 
+    /**
+     * 从 JSON 节点解析数据字段,使用指定的字段 ID 计数器。
+     *
+     * @param json JSON 节点
+     * @param fieldId 字段 ID 计数器,用于自动生成 ID
+     * @return 解析后的数据字段
+     */
     private static DataField parseDataField(JsonNode json, AtomicInteger fieldId) {
         int id;
         JsonNode idNode = json.get("id");
@@ -66,10 +164,31 @@ public final class DataTypeJsonParser {
         return new DataField(id, name, type, description, defaultValue);
     }
 
+    /**
+     * 从 JSON 节点解析数据类型。
+     *
+     * <p>支持两种 JSON 格式:
+     * <ul>
+     *   <li>文本节点 - 直接是类型名称字符串
+     *   <li>对象节点 - 包含类型详细信息的 JSON 对象
+     * </ul>
+     *
+     * @param json JSON 节点
+     * @return 解析后的数据类型
+     */
     public static DataType parseDataType(JsonNode json) {
         return parseDataType(json, new AtomicInteger(-1));
     }
 
+    /**
+     * 从 JSON 节点解析数据类型,使用指定的字段 ID 计数器。
+     *
+     * <p>这是内部方法,用于递归解析嵌套类型。
+     *
+     * @param json JSON 节点
+     * @param fieldId 字段 ID 计数器
+     * @return 解析后的数据类型
+     */
     public static DataType parseDataType(JsonNode json, AtomicInteger fieldId) {
         if (json.isTextual()) {
             return parseAtomicTypeSQLString(json.asText());
@@ -99,6 +218,21 @@ public final class DataTypeJsonParser {
         throw new IllegalArgumentException("Can not parse: " + json);
     }
 
+    /**
+     * 从 SQL 类型字符串解析原子类型。
+     *
+     * <p>支持标准的 SQL 类型定义,包括:
+     * <ul>
+     *   <li>简单类型 - INT, BIGINT, VARCHAR, etc.
+     *   <li>带参数类型 - VARCHAR(100), DECIMAL(10,2), etc.
+     *   <li>带可空性 - INT NOT NULL, VARCHAR NULL, etc.
+     *   <li>复杂类型 - ARRAY&lt;INT&gt;, MAP&lt;STRING,INT&gt;, etc.
+     * </ul>
+     *
+     * @param string SQL 类型字符串
+     * @return 解析后的数据类型
+     * @throws IllegalArgumentException 如果字符串无法解析
+     */
     public static DataType parseAtomicTypeSQLString(String string) {
         List<Token> tokens = tokenize(string);
         TokenParser converter = new TokenParser(string, tokens);

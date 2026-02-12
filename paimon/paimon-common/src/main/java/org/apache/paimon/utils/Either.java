@@ -23,111 +23,123 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * A functional programming utility class that represents a value of one of two possible types. This
- * is a discriminated union type that can hold either a Left value (typically representing an error
- * or failure case) or a Right value (typically representing a success or correct result).
+ * 函数式编程实用工具类,表示两种可能类型之一的值。
  *
- * <p>The Either type is commonly used in functional programming to handle operations that can
- * either succeed or fail, providing a type-safe alternative to exceptions or null values.
+ * <p>这是一个可辨识联合类型,可以持有 Left 值(通常表示错误或失败情况)
+ * 或 Right 值(通常表示成功或正确结果)。
  *
- * <p>Usage examples:
+ * <p>Either 类型在函数式编程中常用于处理可能成功或失败的操作,
+ * 提供了一种类型安全的替代方案来处理异常或 null 值。
  *
+ * <h3>使用示例:</h3>
  * <pre>{@code
- * // Create a Left (error case)
+ * // 创建 Left (错误情况)
  * Either<String, Integer> error = Either.left("Invalid input");
  *
- * // Create a Right (success case)
+ * // 创建 Right (成功情况)
  * Either<String, Integer> success = Either.right(42);
  *
- * // Check and handle the result
+ * // 检查和处理结果
  * if (result.isRight()) {
  *     Integer value = result.getRight();
- *     // Process successful result
+ *     // 处理成功结果
  * } else {
  *     String error = result.getLeft();
- *     // Handle error case
+ *     // 处理错误情况
  * }
+ *
+ * // 使用函数式风格处理
+ * result.ifRight(value -> System.out.println("Success: " + value));
+ * result.ifLeft(error -> System.err.println("Error: " + error));
  * }</pre>
  *
- * @param <L> the type of the Left value (typically error/failure)
- * @param <R> the type of the Right value (typically success/result)
+ * @param <L> Left 值的类型(通常表示错误/失败)
+ * @param <R> Right 值的类型(通常表示成功/结果)
  */
 public abstract class Either<L, R> {
 
-    /** Private constructor to prevent direct instantiation. */
+    /** 私有构造函数,防止直接实例化 */
     private Either() {}
 
     /**
-     * Static factory method to create a Left-sided Either instance. Typically represents a failure
-     * or error.
+     * 创建 Left 侧的 Either 实例的静态工厂方法。
      *
-     * @param value The left-side value.
-     * @param <L> The type of the left value.
-     * @param <R> The type of the right value.
-     * @return A new Left instance.
+     * <p>通常表示失败或错误情况。
+     *
+     * @param value Left 侧的值
+     * @param <L> Left 值的类型
+     * @param <R> Right 值的类型
+     * @return 新的 Left 实例
+     * @throws NullPointerException 如果 value 为 null
      */
     public static <L, R> Either<L, R> left(L value) {
         return new Left<>(value);
     }
 
     /**
-     * Static factory method to create a Right-sided Either instance. Typically represents a
-     * successful or correct result.
+     * 创建 Right 侧的 Either 实例的静态工厂方法。
      *
-     * @param value The right-side value.
-     * @param <L> The type of the left value.
-     * @param <R> The type of the right value.
-     * @return A new Right instance.
+     * <p>通常表示成功或正确的结果。
+     *
+     * @param value Right 侧的值
+     * @param <L> Left 值的类型
+     * @param <R> Right 值的类型
+     * @return 新的 Right 实例
+     * @throws NullPointerException 如果 value 为 null
      */
     public static <L, R> Either<L, R> right(R value) {
         return new Right<>(value);
     }
 
     /**
-     * Checks if this instance is a Left.
+     * 检查此实例是否为 Left。
      *
-     * @return true if Left, false otherwise.
+     * @return 如果是 Left 则返回 true,否则返回 false
      */
     public abstract boolean isLeft();
 
     /**
-     * Checks if this instance is a Right.
+     * 检查此实例是否为 Right。
      *
-     * @return true if Right, false otherwise.
+     * @return 如果是 Right 则返回 true,否则返回 false
      */
     public abstract boolean isRight();
 
     /**
-     * Returns the left value if this is a Left instance.
+     * 如果这是 Left 实例,则返回 left 值。
      *
-     * @return The left value.
-     * @throws NoSuchElementException if this is a Right instance.
+     * @return Left 值
+     * @throws NoSuchElementException 如果这是 Right 实例
      */
     public abstract L getLeft();
 
     /**
-     * Returns the right value if this is a Right instance.
+     * 如果这是 Right 实例,则返回 right 值。
      *
-     * @return The right value.
-     * @throws NoSuchElementException if this is a Left instance.
+     * @return Right 值
+     * @throws NoSuchElementException 如果这是 Left 实例
      */
     public abstract R getRight();
 
     /**
-     * If this is a Left, performs the given action on its value.
+     * 如果这是 Left,则对其值执行给定的操作。
      *
-     * @param action The consumer function to execute.
+     * @param action 要执行的消费者函数
      */
     public abstract void ifLeft(Consumer<L> action);
 
     /**
-     * If this is a Right, performs the given action on its value.
+     * 如果这是 Right,则对其值执行给定的操作。
      *
-     * @param action The consumer function to execute.
+     * @param action 要执行的消费者函数
      */
     public abstract void ifRight(Consumer<R> action);
 
-    /** Private static inner class representing the Left state of Either. */
+    /**
+     * 表示 Either 的 Left 状态的私有静态内部类。
+     *
+     * <p>通常用于表示错误或失败情况。
+     */
     private static final class Left<L, R> extends Either<L, R> {
         private final L value;
 
@@ -162,7 +174,7 @@ public abstract class Either<L, R> {
 
         @Override
         public void ifRight(Consumer<R> action) {
-            // Do nothing
+            // 不执行任何操作
         }
 
         @Override
@@ -171,7 +183,11 @@ public abstract class Either<L, R> {
         }
     }
 
-    /** Private static inner class representing the Right state of Either. */
+    /**
+     * 表示 Either 的 Right 状态的私有静态内部类。
+     *
+     * <p>通常用于表示成功或正确的结果。
+     */
     private static final class Right<L, R> extends Either<L, R> {
         private final R value;
 
@@ -201,7 +217,7 @@ public abstract class Either<L, R> {
 
         @Override
         public void ifLeft(Consumer<L> action) {
-            // Do nothing
+            // 不执行任何操作
         }
 
         @Override

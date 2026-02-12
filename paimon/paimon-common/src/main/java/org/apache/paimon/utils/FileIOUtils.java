@@ -38,25 +38,124 @@ import java.util.Arrays;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /**
- * This is a utility class to deal files and directories. Contains utilities for recursive deletion
- * and creation of temporary files.
+ * 文件和目录处理工具类。
+ *
+ * <p>提供文件和目录的各种操作功能,是 Paimon 处理本地文件系统的核心工具类。
+ * 该类特别针对并发删除、跨平台兼容性和对象存储检测进行了优化。
+ *
+ * <h2>主要功能</h2>
+ * <ul>
+ *   <li><b>目录操作</b> - 递归删除、清空目录
+ *   <li><b>文件读写</b> - 支持 UTF-8 编码的文件读写
+ *   <li><b>安全删除</b> - 并发安全的文件删除(针对 Windows 和 MacOS)
+ *   <li><b>流操作</b> - 完整写入通道、读取所有字节
+ *   <li><b>对象存储检测</b> - 识别 S3、OSS、Azure Blob 等对象存储
+ * </ul>
+ *
+ * <h2>平台兼容性</h2>
+ * <ul>
+ *   <li><b>Windows</b> - 使用全局锁防止并发删除问题,最多重试10次
+ *   <li><b>MacOS</b> - 使用全局锁,删除后短暂等待
+ *   <li><b>Linux</b> - 直接操作,无需额外保护
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li><b>临时文件管理</b> - 创建和清理临时文件目录
+ *   <li><b>快照清理</b> - 删除过期的快照文件
+ *   <li><b>配置读写</b> - 读取和写入配置文件
+ *   <li><b>测试</b> - 在测试结束后清理测试数据
+ *   <li><b>对象存储判断</b> - 根据 URI scheme 判断是否为对象存储
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 1. 读取 UTF-8 文件
+ * File file = new File("/path/to/file.txt");
+ * String content = FileIOUtils.readFileUtf8(file);
+ *
+ * // 2. 写入 UTF-8 文件
+ * FileIOUtils.writeFileUtf8(file, "Hello World");
+ *
+ * // 3. 递归删除目录
+ * File directory = new File("/path/to/temp");
+ * FileIOUtils.deleteDirectory(directory);
+ *
+ * // 4. 静默删除(忽略异常)
+ * FileIOUtils.deleteDirectoryQuietly(directory);
+ *
+ * // 5. 删除文件或目录
+ * FileIOUtils.deleteFileOrDirectory(new File("/path/to/fileOrDir"));
+ *
+ * // 6. 判断是否为对象存储
+ * boolean isS3 = FileIOUtils.isObjectStore("s3a");     // true
+ * boolean isHdfs = FileIOUtils.isObjectStore("hdfs");  // false
+ *
+ * // 7. 读取所有字节(大文件安全)
+ * Path path = Paths.get("/path/to/large/file");
+ * byte[] data = FileIOUtils.readAllBytes(path);
+ *
+ * // 8. 完整写入通道
+ * ByteBuffer buffer = ByteBuffer.wrap(data);
+ * FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE);
+ * FileIOUtils.writeCompletely(channel, buffer);
+ * }</pre>
+ *
+ * <h2>技术细节</h2>
+ * <ul>
+ *   <li><b>并发删除锁</b> - DELETE_LOCK 是全局静态对象,防止 Windows/Mac 并发删除问题
+ *   <li><b>缓冲区限制</b> - 读取时使用 4KB 缓冲区,避免大文件的 OutOfMemoryError
+ *   <li><b>最大数组大小</b> - Integer.MAX_VALUE - 8,与 Java NIO 保持一致
+ *   <li><b>符号链接处理</b> - 不清理符号链接指向的用户目录
+ *   <li><b>并发安全</b> - deleteDirectory 和 deleteFileOrDirectory 方法并发安全
+ * </ul>
+ *
+ * <h2>性能优化</h2>
+ * <ul>
+ *   <li><b>分块读取</b> - 读取大文件时使用 4KB 缓冲区分块读取
+ *   <li><b>动态扩容</b> - 读取时数组容量翻倍扩容,最大不超过 MAX_BUFFER_SIZE
+ *   <li><b>短路检测</b> - 文件不存在时立即返回,无需递归
+ *   <li><b>平台优化</b> - Linux 下直接操作,Windows/Mac 使用锁保护
+ * </ul>
+ *
+ * <h2>注意事项</h2>
+ * <ul>
+ *   <li><b>Windows 重试</b> - Windows 下删除失败会重试10次,每次间隔1ms
+ *   <li><b>不关闭流</b> - 调用者负责关闭传入的流
+ *   <li><b>并发删除</b> - 支持多线程并发删除同一文件/目录
+ *   <li><b>大文件</b> - 超过 2GB 的文件会抛出 OutOfMemoryError
+ *   <li><b>符号链接</b> - 不跟随符号链接进行清理
+ * </ul>
+ *
+ * @see java.nio.file.Files
+ * @see java.io.File
  */
 public class FileIOUtils {
 
-    /** Global lock to prevent concurrent directory deletes under Windows and MacOS. */
+    /** 全局锁,防止 Windows 和 MacOS 下并发删除目录 */
     private static final Object DELETE_LOCK = new Object();
 
     /**
-     * The maximum size of array to allocate for reading. See {@code MAX_BUFFER_SIZE} in {@link
-     * java.nio.file.Files} for more.
+     * 读取时分配的最大数组大小。
+     * 参考 {@link java.nio.file.Files} 中的 MAX_BUFFER_SIZE。
      */
     private static final int MAX_BUFFER_SIZE = Integer.MAX_VALUE - 8;
 
-    /** The size of the buffer used for reading. */
+    /** 用于读取的缓冲区大小 */
     private static final int BUFFER_SIZE = 4096;
 
     // ------------------------------------------------------------------------
 
+    /**
+     * 完整地将 ByteBuffer 写入可写通道。
+     *
+     * <p>该方法确保 ByteBuffer 中的所有剩余字节都被写入通道。
+     * 如果一次 write 调用没有写入所有字节,会循环调用直到所有字节都被写入。
+     *
+     * @param channel 目标可写通道
+     * @param src 要写入的 ByteBuffer
+     * @throws IOException 如果写入过程中发生 I/O 错误
+     */
     public static void writeCompletely(WritableByteChannel channel, ByteBuffer src)
             throws IOException {
         while (src.hasRemaining()) {
@@ -68,28 +167,73 @@ public class FileIOUtils {
     //  Simple reading and writing of files
     // ------------------------------------------------------------------------
 
+    /**
+     * 读取文件内容为字符串。
+     *
+     * @param file 要读取的文件
+     * @param charsetName 字符集名称(如 "UTF-8", "GBK")
+     * @return 文件内容字符串
+     * @throws IOException 如果读取失败
+     */
     public static String readFile(File file, String charsetName) throws IOException {
         byte[] bytes = readAllBytes(file.toPath());
         return new String(bytes, charsetName);
     }
 
+    /**
+     * 使用 UTF-8 编码读取文件内容。
+     *
+     * @param file 要读取的文件
+     * @return 文件内容字符串
+     * @throws IOException 如果读取失败
+     */
     public static String readFileUtf8(File file) throws IOException {
         return readFile(file, "UTF-8");
     }
 
+    /**
+     * 将字符串内容写入文件。
+     *
+     * @param file 目标文件
+     * @param contents 要写入的内容
+     * @param encoding 字符编码(如 "UTF-8", "GBK")
+     * @throws IOException 如果写入失败
+     */
     public static void writeFile(File file, String contents, String encoding) throws IOException {
         byte[] bytes = contents.getBytes(encoding);
         Files.write(file.toPath(), bytes, StandardOpenOption.WRITE);
     }
 
+    /**
+     * 使用 UTF-8 编码将字符串内容写入文件。
+     *
+     * @param file 目标文件
+     * @param contents 要写入的内容
+     * @throws IOException 如果写入失败
+     */
     public static void writeFileUtf8(File file, String contents) throws IOException {
         writeFile(file, contents, "UTF-8");
     }
 
+    /**
+     * 将字节数组写入文件(覆盖模式)。
+     *
+     * @param file 目标文件
+     * @param data 要写入的字节数组
+     * @throws IOException 如果写入失败
+     */
     public static void writeByteArrayToFile(File file, byte[] data) throws IOException {
         writeByteArrayToFile(file, data, false);
     }
 
+    /**
+     * 将字节数组写入文件。
+     *
+     * @param file 目标文件
+     * @param data 要写入的字节数组
+     * @param append 是否追加模式(true=追加, false=覆盖)
+     * @throws IOException 如果写入失败
+     */
     public static void writeByteArrayToFile(File file, byte[] data, boolean append)
             throws IOException {
         OutputStream out = null;
@@ -103,6 +247,16 @@ public class FileIOUtils {
         }
     }
 
+    /**
+     * 打开文件输出流。
+     *
+     * <p>如果文件不存在,会自动创建文件及其父目录。
+     *
+     * @param file 目标文件
+     * @param append 是否追加模式
+     * @return FileOutputStream 实例
+     * @throws IOException 如果文件是目录、不可写或父目录创建失败
+     */
     public static FileOutputStream openOutputStream(File file, boolean append) throws IOException {
         if (file.exists()) {
             if (file.isDirectory()) {
@@ -383,6 +537,30 @@ public class FileIOUtils {
         }
     }
 
+    /**
+     * 判断给定的 URI scheme 是否表示对象存储。
+     *
+     * <p>支持识别以下对象存储:
+     * <ul>
+     *   <li><b>Amazon S3</b> - s3, s3a, s3n
+     *   <li><b>EMR</b> - emr
+     *   <li><b>Aliyun OSS</b> - oss
+     *   <li><b>Azure Blob</b> - wasb, abfs
+     *   <li><b>Google Cloud Storage</b> - gs
+     *   <li><b>Tencent COS</b> - cosn
+     *   <li><b>HTTP/FTP</b> - http, https, ftp (文件服务器)
+     * </ul>
+     *
+     * <p>对象存储的特点:
+     * <ul>
+     *   <li>最终一致性(eventual consistency)
+     *   <li>不支持原子性重命名
+     *   <li>列表操作可能延迟
+     * </ul>
+     *
+     * @param scheme URI scheme (如 "s3a", "hdfs", "file")
+     * @return 如果是对象存储返回 true,否则返回 false
+     */
     public static boolean isObjectStore(String scheme) {
         if (scheme.startsWith("s3")
                 || scheme.startsWith("emr")

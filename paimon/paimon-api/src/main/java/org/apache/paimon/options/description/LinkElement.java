@@ -18,27 +18,27 @@
 
 package org.apache.paimon.options.description;
 
-/** Element that represents a link in the {@link Description}. */
+/** 表示 {@link Description} 中的链接的元素。 */
 public class LinkElement implements InlineElement {
     private final String link;
     private final String text;
 
     /**
-     * Creates a link with a given url and description.
+     * 创建具有给定 URL 和描述的链接。
      *
-     * @param link address that this link should point to
-     * @param text a description for that link, that should be used in text
-     * @return link representation
+     * @param link 此链接应指向的地址
+     * @param text 应在文本中使用的链接描述
+     * @return 链接表示
      */
     public static LinkElement link(String link, String text) {
         return new LinkElement(link, text);
     }
 
     /**
-     * Creates a link with a given url. This url will be used as a description for that link.
+     * 创建具有给定 URL 的链接。此 URL 将用作该链接的描述。
      *
-     * @param link address that this link should point to
-     * @return link representation
+     * @param link 此链接应指向的地址
+     * @return 链接表示
      */
     public static LinkElement link(String link) {
         return new LinkElement(link, link);

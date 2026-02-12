@@ -23,10 +23,29 @@ import org.apache.paimon.data.InternalRow;
 import java.io.Serializable;
 
 /**
- * Record equaliser for RowData which can compare two RowData and returns whether they are equal.
+ * 记录相等判断器。
+ *
+ * <p>用于判断两个 RowData 是否相等的接口。该接口可以比较两个 {@link InternalRow} 对象,
+ * 并返回它们是否相等。
+ *
+ * <p>该接口通常由代码生成器动态生成,以获得最佳性能。生成的代码会针对特定的字段类型
+ * 和字段列表进行优化。
+ *
+ * <p>主要用途:
+ * <ul>
+ *   <li>去重操作</li>
+ *   <li>连接操作中的键比较</li>
+ *   <li>分组操作中的键比较</li>
+ * </ul>
  */
 public interface RecordEqualiser extends Serializable {
 
-    /** Returns {@code true} if the rows are equal to each other and {@code false} otherwise. */
+    /**
+     * 判断两个行是否相等。
+     *
+     * @param row1 第一个行
+     * @param row2 第二个行
+     * @return 如果行相等返回 {@code true},否则返回 {@code false}
+     */
     boolean equals(InternalRow row1, InternalRow row2);
 }

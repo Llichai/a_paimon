@@ -30,13 +30,45 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-/** A {@link GlobalIndexReader} wrapper for {@link FileIndexReader}. */
+/**
+ * {@link FileIndexReader} 到 {@link GlobalIndexReader} 的包装器。
+ *
+ * <p>该类将文件级索引读取器适配为全局索引读取器接口,通过转换函数将
+ * {@link FileIndexResult} 转换为 {@link GlobalIndexResult}。
+ *
+ * <p>主要用途:
+ * <ul>
+ *   <li>复用现有的文件级索引实现(如 Bitmap、Bloom Filter)
+ *   <li>统一全局索引和文件索引的查询接口
+ *   <li>管理底层流资源的生命周期
+ * </ul>
+ *
+ * <p>工作原理:
+ * <ol>
+ *   <li>接收谓词查询请求
+ *   <li>委托给底层文件索引读取器执行查询
+ *   <li>通过转换函数将文件索引结果转换为全局索引结果
+ *   <li>关闭时同时释放读取器和流资源
+ * </ol>
+ */
 public class FileIndexReaderWrapper implements GlobalIndexReader {
 
+    /** 被包装的文件索引读取器 */
     private final FileIndexReader reader;
+
+    /** 结果转换函数,将文件索引结果转换为全局索引结果 */
     private final Function<FileIndexResult, Optional<GlobalIndexResult>> transform;
+
+    /** 关闭时需要释放的资源(通常是输入流) */
     private final Closeable closeable;
 
+    /**
+     * 构造文件索引读取器包装器。
+     *
+     * @param reader 被包装的文件索引读取器
+     * @param transform 结果转换函数
+     * @param closeable 需要关闭的资源
+     */
     public FileIndexReaderWrapper(
             FileIndexReader reader,
             Function<FileIndexResult, Optional<GlobalIndexResult>> transform,

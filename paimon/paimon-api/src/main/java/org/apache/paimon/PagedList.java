@@ -27,8 +27,36 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * Paged List which supports request data from page streaming.
+ * 分页列表类，支持从分页流中请求数据。
  *
+ * <p>该类用于处理支持分页的 REST API 响应，包含当前页的数据元素和下一页的分页令牌。
+ *
+ * <h2>主要特点</h2>
+ * <ul>
+ *   <li>支持分页流式读取，不需要一次性加载所有数据
+ *   <li>提供获取当前页元素和下一页令牌的方法
+ *   <li>提供静态辅助方法来一次性加载所有分页数据
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 处理单个分页结果
+ * PagedList<Table> pagedResult = catalog.listTables("db1");
+ * List<Table> tables = pagedResult.getElements();
+ * String nextToken = pagedResult.getNextPageToken();
+ *
+ * if (nextToken != null) {
+ *     // 请求下一页
+ *     PagedList<Table> nextPage = catalog.listTables("db1", nextToken);
+ * }
+ *
+ * // 一次性加载所有数据
+ * List<Table> allTables = PagedList.listAllFromPagedApi(
+ *     pageToken -> catalog.listTables("db1", pageToken)
+ * );
+ * }</pre>
+ *
+ * @param <T> 列表中元素的类型
  * @since 1.1.0
  */
 public class PagedList<T> {

@@ -27,7 +27,32 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.Map;
 
-/** Response for table token. */
+/**
+ * 获取表令牌响应对象。
+ *
+ * <p>该类表示获取表访问令牌的响应,用于临时访问授权。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>token - 令牌键值对映射
+ *   <li>expiresAtMillis - 令牌过期时间戳(毫秒)
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "token": {
+ *     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *     "token_type": "Bearer"
+ *   },
+ *   "expiresAtMillis": 1609545600000
+ * }
+ * </pre>
+ *
+ * <p>客户端应在令牌过期前重新获取新令牌。
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetTableTokenResponse implements RESTResponse {
 

@@ -18,8 +18,19 @@
 
 package org.apache.paimon.globalindex;
 
-/** Generate score (may null) for row id in global index top-k situation. */
+/**
+ * 评分获取器,用于在全局索引 Top-K 场景中为行 ID 生成评分。
+ *
+ * <p>该接口用于向量搜索等需要相关性评分的索引类型,
+ * 为每个匹配的行 ID 提供一个浮点数评分值。
+ */
 public interface ScoreGetter {
 
+    /**
+     * 获取指定行 ID 的评分。
+     *
+     * @param rowId 行 ID
+     * @return 该行的评分值
+     */
     float score(long rowId);
 }

@@ -22,26 +22,78 @@ import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.memory.MemorySegment;
 
 /**
- * Normalized key computer for {@code SortBuffer}. For performance, subclasses are usually
- * implemented through CodeGenerator.
+ * 标准化键计算器。
+ *
+ * <p>用于 {@code SortBuffer} 的标准化键计算。标准化键是一种优化的排序键表示形式,
+ * 可以将排序字段转换为固定长度的字节数组,从而可以直接进行字节比较而无需反序列化,
+ * 大大提高排序性能。
+ *
+ * <p>为了性能考虑,该接口的子类通常通过 CodeGenerator 动态生成。
+ *
+ * <p>主要功能:
+ * <ul>
+ *   <li>将记录转换为标准化键并写入内存段</li>
+ *   <li>直接比较内存段中的标准化键</li>
+ *   <li>交换内存段中的标准化键</li>
+ *   <li>提供标准化键的元信息（长度、是否完全确定等）</li>
+ * </ul>
  */
 public interface NormalizedKeyComputer {
 
-    /** Writes a normalized key for the given record into the target {@link MemorySegment}. */
+    /**
+     * 为给定记录写入标准化键到目标 {@link MemorySegment}。
+     *
+     * @param record 要转换的记录
+     * @param target 目标内存段
+     * @param offset 目标内存段中的偏移量
+     */
     void putKey(InternalRow record, MemorySegment target, int offset);
 
-    /** Compares two normalized keys in respective {@link MemorySegment}. */
+    /**
+     * 比较两个标准化键。
+     *
+     * @param segI 第一个键所在的内存段
+     * @param offsetI 第一个键在内存段中的偏移量
+     * @param segJ 第二个键所在的内存段
+     * @param offsetJ 第二个键在内存段中的偏移量
+     * @return 比较结果: 负数表示第一个键较小,0表示相等,正数表示第一个键较大
+     */
     int compareKey(MemorySegment segI, int offsetI, MemorySegment segJ, int offsetJ);
 
-    /** Swaps two normalized keys in respective {@link MemorySegment}. */
+    /**
+     * 交换两个标准化键。
+     *
+     * @param segI 第一个键所在的内存段
+     * @param offsetI 第一个键在内存段中的偏移量
+     * @param segJ 第二个键所在的内存段
+     * @param offsetJ 第二个键在内存段中的偏移量
+     */
     void swapKey(MemorySegment segI, int offsetI, MemorySegment segJ, int offsetJ);
 
-    /** Get normalized keys bytes length. */
+    /**
+     * 获取标准化键的字节长度。
+     *
+     * @return 标准化键占用的字节数
+     */
     int getNumKeyBytes();
 
-    /** whether the normalized key can fully determines the comparison. */
+    /**
+     * 标准化键是否能完全确定比较结果。
+     *
+     * <p>如果标准化键能够完全表示排序字段的所有信息,则返回 true,
+     * 此时可以仅通过标准化键比较就确定最终的排序顺序。
+     * 如果返回 false,则在标准化键相等时还需要比较完整的记录。
+     *
+     * @return true 如果标准化键完全确定比较结果
+     */
     boolean isKeyFullyDetermines();
 
-    /** Flag whether normalized key comparisons should be inverted key. */
+    /**
+     * 标准化键比较是否应该反转。
+     *
+     * <p>用于支持降序排序。
+     *
+     * @return true 如果应该反转键比较结果
+     */
     boolean invertKey();
 }

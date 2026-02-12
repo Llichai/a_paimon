@@ -24,12 +24,33 @@ import java.util.Map.Entry;
 
 import static java.util.Objects.requireNonNull;
 
-/** Entry represents a key value. */
+/**
+ * 块条目,表示键值对。
+ *
+ * <p>该类实现了 {@link Entry} 接口,用于表示 SST 文件块中的键值对数据。
+ * 键和值都使用 {@link MemorySlice} 来表示,以实现零拷贝访问。
+ *
+ * <p>特点:
+ * <ul>
+ *   <li>不可变 - 键和值在创建后不可修改
+ *   <li>零拷贝 - 使用内存切片直接引用数据
+ *   <li>类型安全 - 不允许 null 键或值
+ * </ul>
+ */
 public class BlockEntry implements Entry<MemorySlice, MemorySlice> {
 
+    /** 键 */
     private final MemorySlice key;
+
+    /** 值 */
     private final MemorySlice value;
 
+    /**
+     * 构造块条目。
+     *
+     * @param key 键,不能为 null
+     * @param value 值,不能为 null
+     */
     public BlockEntry(MemorySlice key, MemorySlice value) {
         requireNonNull(key, "key is null");
         requireNonNull(value, "value is null");
@@ -37,16 +58,25 @@ public class BlockEntry implements Entry<MemorySlice, MemorySlice> {
         this.value = value;
     }
 
+    /** 返回键。 */
     @Override
     public MemorySlice getKey() {
         return key;
     }
 
+    /** 返回值。 */
     @Override
     public MemorySlice getValue() {
         return value;
     }
 
+    /**
+     * 不支持设置值操作。
+     *
+     * @param value 新值
+     * @return 不返回
+     * @throws UnsupportedOperationException 始终抛出
+     */
     @Override
     public final MemorySlice setValue(MemorySlice value) {
         throw new UnsupportedOperationException();

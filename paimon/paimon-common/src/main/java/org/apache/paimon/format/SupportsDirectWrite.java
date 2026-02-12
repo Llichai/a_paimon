@@ -23,8 +23,22 @@ import org.apache.paimon.fs.Path;
 
 import java.io.IOException;
 
-/** Create a FormatWriter which has full control abort file io. */
+/**
+ * 支持直接写入的格式写入器创建接口。
+ *
+ * <p>该接口允许格式写入器完全控制文件 I/O 操作，而不是通过预先创建的输出流。
+ * 这对于某些需要直接访问文件系统的格式（如需要在多个文件间切换）很有用。
+ */
 public interface SupportsDirectWrite {
 
+    /**
+     * 创建格式写入器，可以完全控制文件 I/O。
+     *
+     * @param fileIO 文件 I/O 操作对象
+     * @param path 文件路径
+     * @param compression 压缩类型
+     * @return 格式写入器实例
+     * @throws IOException 如果创建写入器失败
+     */
     FormatWriter create(FileIO fileIO, Path path, String compression) throws IOException;
 }

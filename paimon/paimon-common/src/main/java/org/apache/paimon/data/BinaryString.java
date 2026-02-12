@@ -34,17 +34,129 @@ import static org.apache.paimon.memory.MemorySegmentUtils.allocateReuseChars;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * A string which is backed by {@link MemorySegment}s.
+ * 二进制字符串类。
+ *
+ * <p>基于 {@link MemorySegment} 数组存储的字符串实现,提供高效的字符串操作和内存管理。
+ *
+ * <h2>核心特性</h2>
+ * <ul>
+ *   <li><b>UTF-8编码</b>:内部使用UTF-8编码存储字符串数据</li>
+ *   <li><b>内存段存储</b>:基于MemorySegment数组实现零拷贝和高效内存访问</li>
+ *   <li><b>不可变性</b>:字符串对象一旦创建,内容不可修改</li>
+ *   <li><b>跨段支持</b>:支持字符串数据跨越多个内存段存储</li>
+ * </ul>
+ *
+ * <h2>性能优化</h2>
+ * <ul>
+ *   <li>高速UTF-8编解码实现,相比标准实现提升30%以上</li>
+ *   <li>单段优化:当数据在单个段内时使用快速路径</li>
+ *   <li>ASCII优化:对纯ASCII字符串使用优化循环</li>
+ *   <li>内存复用:通过对象池复用字节数组和字符数组</li>
+ * </ul>
+ *
+ * <h2>主要操作</h2>
+ * <ul>
+ *   <li><b>字符串构造</b>:从String、byte[]、MemorySegment创建</li>
+ *   <li><b>字符串比较</b>:支持字典序比较</li>
+ *   <li><b>子字符串</b>:提取子串、查找、包含检查</li>
+ *   <li><b>大小写转换</b>:转大写、转小写</li>
+ *   <li><b>修剪空格</b>:去除首尾空白字符</li>
+ *   <li><b>字符串连接</b>:连接多个字符串,支持分隔符</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 从Java字符串创建
+ * BinaryString str = BinaryString.fromString("Hello, World!");
+ *
+ * // 从UTF-8字节数组创建
+ * byte[] bytes = "你好".getBytes(StandardCharsets.UTF_8);
+ * BinaryString str2 = BinaryString.fromBytes(bytes);
+ *
+ * // 子字符串操作
+ * BinaryString sub = str.substring(0, 5); // "Hello"
+ *
+ * // 大小写转换
+ * BinaryString upper = str.toUpperCase();
+ * BinaryString lower = str.toLowerCase();
+ *
+ * // 字符串连接
+ * BinaryString result = BinaryString.concat(str1, str2, str3);
+ * BinaryString csv = BinaryString.concatWs(
+ *     BinaryString.fromString(","),
+ *     values
+ * );
+ *
+ * // 字符串查找
+ * boolean contains = str.contains(BinaryString.fromString("World"));
+ * int index = str.indexOf(BinaryString.fromString("World"), 0);
+ * }</pre>
+ *
+ * <h2>内存布局</h2>
+ * <pre>
+ * BinaryString 结构:
+ * ┌────────────────────────────────────────────┐
+ * │ segments: MemorySegment[]                  │ ← 内存段数组
+ * │ offset: int                                │ ← 字符串在段中的起始偏移
+ * │ sizeInBytes: int                           │ ← 字符串字节长度
+ * └────────────────────────────────────────────┘
+ *
+ * 单段存储示例:
+ * ┌─────────────────────────────┐
+ * │ MemorySegment               │
+ * │  ┌─────┬──────────┬────────┐│
+ * │  │ ... │ UTF-8数据│  ...   ││
+ * │  └─────┴──────────┴────────┘│
+ * │     ↑                       │
+ * │   offset                    │
+ * │   |<- sizeInBytes ->|       │
+ * └─────────────────────────────┘
+ *
+ * 跨段存储示例:
+ * ┌────────────────┬────────────────┐
+ * │ Segment[0]     │ Segment[1]     │
+ * │  ┌──────┬─────┐│┌──────┬──────┐│
+ * │  │ ...  │Part1││Part2 │ ...  ││
+ * │  └──────┴─────┘│└──────┴──────┘│
+ * └────────────────┴────────────────┘
+ *        |<--- sizeInBytes --->|
+ * </pre>
+ *
+ * <h2>UTF-8编码说明</h2>
+ * <ul>
+ *   <li>1字节:7位 (0xxxxxxx) - ASCII字符</li>
+ *   <li>2字节:11位 (110xxxxx 10xxxxxx)</li>
+ *   <li>3字节:16位 (1110xxxx 10xxxxxx 10xxxxxx)</li>
+ *   <li>4字节:21位 (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx) - emoji等</li>
+ * </ul>
+ *
+ * <h2>注意事项</h2>
+ * <ul>
+ *   <li>所有索引和长度操作都是基于UTF-8字符(code point),而非字节</li>
+ *   <li>空字符串使用共享的 {@link #EMPTY_UTF8} 常量</li>
+ *   <li>字符串比较按字节序进行,与Java String的Unicode比较不同</li>
+ *   <li>对于非法UTF-8序列,编解码行为与Java保持一致</li>
+ * </ul>
  *
  * @since 0.4.0
+ * @see MemorySegment
+ * @see BinarySection
  */
 @Public
 public final class BinaryString extends BinarySection implements Comparable<BinaryString> {
 
     private static final long serialVersionUID = 1L;
 
+    /** 空字符串常量,避免重复创建空字符串对象。 */
     public static final BinaryString EMPTY_UTF8 = BinaryString.fromBytes(encodeUTF8(""));
 
+    /**
+     * 构造一个BinaryString对象。
+     *
+     * @param segments 存储字符串数据的内存段数组
+     * @param offset 字符串在内存段中的起始偏移量(字节)
+     * @param sizeInBytes 字符串的字节长度
+     */
     public BinaryString(MemorySegment[] segments, int offset, int sizeInBytes) {
         super(segments, offset, sizeInBytes);
         this.segments = segments;
@@ -53,13 +165,31 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
     }
 
     // ------------------------------------------------------------------------------------------
-    // Construction Utilities
+    // 构造工具方法
     // ------------------------------------------------------------------------------------------
 
+    /**
+     * 从内存地址创建BinaryString。
+     *
+     * <p>直接使用给定的内存段数组、偏移量和字节长度创建字符串对象。
+     *
+     * @param segments 内存段数组
+     * @param offset 字符串在内存段中的起始偏移量
+     * @param numBytes 字符串的字节长度
+     * @return 新的BinaryString对象
+     */
     public static BinaryString fromAddress(MemorySegment[] segments, int offset, int numBytes) {
         return new BinaryString(segments, offset, numBytes);
     }
 
+    /**
+     * 从Java字符串创建BinaryString。
+     *
+     * <p>将Java字符串编码为UTF-8格式并封装为BinaryString对象。
+     *
+     * @param str Java字符串,如果为null则返回null
+     * @return BinaryString对象,如果输入为null则返回null
+     */
     @Nullable
     public static BinaryString fromString(String str) {
         if (str == null) {
@@ -68,20 +198,34 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
         return fromBytes(encodeUTF8(str));
     }
 
-    /** Creates a {@link BinaryString} instance from the given UTF-8 bytes. */
+    /**
+     * 从UTF-8字节数组创建BinaryString。
+     *
+     * @param bytes UTF-8编码的字节数组
+     * @return 新的BinaryString对象
+     */
     public static BinaryString fromBytes(byte[] bytes) {
         return fromBytes(bytes, 0, bytes.length);
     }
 
     /**
-     * Creates a {@link BinaryString} instance from the given UTF-8 bytes with offset and number of
-     * bytes.
+     * 从UTF-8字节数组的指定范围创建BinaryString。
+     *
+     * @param bytes UTF-8编码的字节数组
+     * @param offset 起始偏移量
+     * @param numBytes 字节数量
+     * @return 新的BinaryString对象
      */
     public static BinaryString fromBytes(byte[] bytes, int offset, int numBytes) {
         return new BinaryString(new MemorySegment[] {MemorySegment.wrap(bytes)}, offset, numBytes);
     }
 
-    /** Creates a {@link BinaryString} instance that contains `length` spaces. */
+    /**
+     * 创建包含指定数量空格的BinaryString。
+     *
+     * @param length 空格数量
+     * @return 包含length个空格的BinaryString
+     */
     public static BinaryString blankString(int length) {
         byte[] spaces = new byte[length];
         Arrays.fill(spaces, (byte) ' ');
@@ -89,9 +233,16 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
     }
 
     // ------------------------------------------------------------------------------------------
-    // Public Interfaces
+    // 公共接口
     // ------------------------------------------------------------------------------------------
 
+    /**
+     * 将BinaryString转换为Java字符串。
+     *
+     * <p>执行UTF-8解码,将内部字节数据转换为Java String对象。
+     *
+     * @return 解码后的Java字符串
+     */
     @Override
     public String toString() {
         byte[] bytes = allocateReuseBytes(sizeInBytes);
@@ -100,10 +251,19 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
     }
 
     /**
-     * Compares two strings lexicographically. Since UTF-8 uses groups of six bits, it is sometimes
-     * useful to use octal notation which uses 3-bit groups. With a calculator which can convert
-     * between hexadecimal and octal it can be easier to manually create or interpret UTF-8 compared
-     * with using binary. So we just compare the binary.
+     * 字典序比较两个字符串。
+     *
+     * <p>由于UTF-8使用6位一组编码,有时使用八进制表示法(3位一组)会更方便。
+     * 本方法直接比较UTF-8字节序列,而不是Unicode码点。
+     *
+     * <p>性能优化:
+     * <ul>
+     *   <li>单段快速路径:当两个字符串都在单个内存段时使用优化比较</li>
+     *   <li>跨段比较:当字符串跨越多个段时使用复杂的段边界处理</li>
+     * </ul>
+     *
+     * @param other 要比较的另一个字符串
+     * @return 负数表示this < other, 0表示相等, 正数表示this > other
      */
     @Override
     public int compareTo(@Nonnull BinaryString other) {
@@ -125,7 +285,14 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
         return compareMultiSegments(other);
     }
 
-    /** Find the boundaries of segments, and then compare MemorySegment. */
+    /**
+     * 查找段边界并比较MemorySegment。
+     *
+     * <p>处理字符串跨越多个内存段的复杂情况。
+     *
+     * @param other 要比较的另一个字符串
+     * @return 比较结果
+     */
     private int compareMultiSegments(BinaryString other) {
 
         if (sizeInBytes == 0 || other.sizeInBytes == 0) {
@@ -204,10 +371,23 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
     }
 
     // ------------------------------------------------------------------------------------------
-    // Public methods on BinaryString
+    // BinaryString 公共方法
     // ------------------------------------------------------------------------------------------
 
-    /** Returns the number of UTF-8 code points in the string. */
+    /**
+     * 返回字符串中的UTF-8码点数量。
+     *
+     * <p>注意:这不是字节数,而是Unicode字符数。一个字符可能占用1-4个字节。
+     *
+     * <p>示例:
+     * <ul>
+     *   <li>"Hello" → 5个字符</li>
+     *   <li>"你好" → 2个字符(每个中文字符占3字节)</li>
+     *   <li>"😀" → 1个字符(emoji占4字节)</li>
+     * </ul>
+     *
+     * @return UTF-8码点(字符)数量
+     */
     public int numChars() {
         if (inFirstSegment()) {
             int len = 0;
@@ -253,7 +433,11 @@ public final class BinaryString extends BinarySection implements Comparable<Bina
         }
     }
 
-    /** Copy a new {@code BinaryString}. */
+    /**
+     * 复制当前BinaryString,创建一个新的独立对象。
+     *
+     * @return 新的BinaryString副本
+     */
     public BinaryString copy() {
         byte[] copy = MemorySegmentUtils.copyToBytes(segments, offset, sizeInBytes);
         return BinaryString.fromBytes(copy);

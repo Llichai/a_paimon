@@ -25,7 +25,19 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing views. */
+/**
+ * 列出视图响应对象。
+ *
+ * <p>该类表示列出数据库中所有视图名称的分页响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>views - 视图名称列表
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListViewsResponse implements PagedResponse<String> {
 

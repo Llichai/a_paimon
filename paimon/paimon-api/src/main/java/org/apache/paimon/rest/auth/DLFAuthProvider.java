@@ -33,7 +33,185 @@ import java.util.Map;
 import static org.apache.paimon.rest.RESTApi.TOKEN_EXPIRATION_SAFE_TIME_MILLIS;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
-/** Auth provider for <b>Ali CLoud</b> DLF. */
+/**
+ * 阿里云 Data Lake Formation (DLF) 认证提供者。
+ *
+ * <p>实现阿里云 DLF 服务的签名认证机制。与简单的 Bearer Token 认证不同,
+ * DLF 认证使用请求签名来确保请求的安全性和完整性,每个请求都需要根据请求内容计算唯一的签名。
+ *
+ * <h2>主要特性</h2>
+ * <ul>
+ *   <li><b>请求签名</b>: 每个请求基于内容和时间戳计算签名,防止篡改
+ *   <li><b>临时凭证</b>: 支持 STS 临时安全令牌,凭证可以自动刷新
+ *   <li><b>多种认证方式</b>: 支持 AccessKey、ECS RAM 角色、本地文件等
+ *   <li><b>签名算法</b>: 支持默认签名和 OpenAPI 签名两种算法
+ *   <li><b>自动刷新</b>: Token 接近过期时自动刷新
+ * </ul>
+ *
+ * <h2>认证机制</h2>
+ * <p>DLF 认证在 HTTP 头中添加以下信息:
+ * <pre>
+ * Authorization: DLF-HMAC-SHA1-V1 AccessKeyId:Signature
+ * x-dlf-date: 20260211T120000Z
+ * x-dlf-security-token: xxx (可选,使用 STS 时)
+ * x-dlf-content-sha256: UNSIGNED-PAYLOAD
+ * </pre>
+ *
+ * <h2>支持的认证方式</h2>
+ *
+ * <h3>1. AccessKey 认证(长期凭证)</h3>
+ * <pre>{@code
+ * Options options = new Options();
+ * options.set(TOKEN_PROVIDER, "dlf");
+ * options.set(DLF_ACCESS_KEY_ID, "LTAI...");
+ * options.set(DLF_ACCESS_KEY_SECRET, "xxx...");
+ * options.set(DLF_REGION, "cn-hangzhou");
+ *
+ * RESTApi api = new RESTApi(options);
+ * }</pre>
+ *
+ * <h3>2. STS 临时凭证</h3>
+ * <pre>{@code
+ * Options options = new Options();
+ * options.set(TOKEN_PROVIDER, "dlf");
+ * options.set(DLF_ACCESS_KEY_ID, "STS...");
+ * options.set(DLF_ACCESS_KEY_SECRET, "xxx...");
+ * options.set(DLF_SECURITY_TOKEN, "CAI...");
+ * options.set(DLF_REGION, "cn-hangzhou");
+ *
+ * RESTApi api = new RESTApi(options);
+ * }</pre>
+ *
+ * <h3>3. ECS RAM 角色(自动获取临时凭证)</h3>
+ * <pre>{@code
+ * Options options = new Options();
+ * options.set(TOKEN_PROVIDER, "dlf");
+ * options.set(DLF_TOKEN_LOADER, "ecs");
+ * options.set(DLF_TOKEN_ECS_ROLE_NAME, "MyECSRole");
+ * options.set(DLF_REGION, "cn-hangzhou");
+ *
+ * RESTApi api = new RESTApi(options);
+ * }</pre>
+ *
+ * <h3>4. 本地文件(从文件读取凭证)</h3>
+ * <pre>{@code
+ * Options options = new Options();
+ * options.set(TOKEN_PROVIDER, "dlf");
+ * options.set(DLF_TOKEN_LOADER, "local-file");
+ * options.set(DLF_TOKEN_PATH, "/path/to/credentials.json");
+ * options.set(DLF_REGION, "cn-hangzhou");
+ *
+ * RESTApi api = new RESTApi(options);
+ * }</pre>
+ *
+ * <h2>签名算法</h2>
+ *
+ * <h3>1. 默认签名算法(default)</h3>
+ * <ul>
+ *   <li>用于标准 DLF VPC 端点
+ *   <li>签名计算: HMAC-SHA1
+ *   <li>Authorization 格式: DLF-HMAC-SHA1-V1 AccessKeyId:Signature
+ * </ul>
+ *
+ * <h3>2. OpenAPI 签名算法(openapi)</h3>
+ * <ul>
+ *   <li>用于 DlfNext/2026-01-18 新版本 API
+ *   <li>签名计算: HMAC-SHA256
+ *   <li>Authorization 格式: Bearer AccessKeyId:Signature
+ * </ul>
+ *
+ * <p>可以通过配置指定签名算法:
+ * <pre>{@code
+ * options.set(DLF_SIGNING_ALGORITHM, "openapi");
+ * }</pre>
+ *
+ * <p>或者让系统根据端点主机自动选择:
+ * <ul>
+ *   <li>dlf*.aliyuncs.com → default
+ *   <li>dlf*.cn-*.aliyuncs.com → default
+ *   <li>其他 → openapi
+ * </ul>
+ *
+ * <h2>Token 自动刷新</h2>
+ * <p>当使用 {@link DLFTokenLoader} 时,系统会自动管理 token 生命周期:
+ * <pre>
+ * 1. 检查 token 是否过期(剩余时间 < 1小时)
+ * 2. 如果接近过期,调用 tokenLoader.loadToken() 刷新
+ * 3. 使用新 token 进行后续请求
+ * 4. 多线程环境下使用 synchronized 保证线程安全
+ * </pre>
+ *
+ * <h2>创建方式</h2>
+ *
+ * <p><b>从 TokenLoader 创建</b>:
+ * <pre>{@code
+ * DLFTokenLoader tokenLoader = new DLFECSTokenLoader(
+ *     "http://100.100.100.200/latest/meta-data/Ram/security-credentials/MyRole"
+ * );
+ * DLFAuthProvider authProvider = DLFAuthProvider.fromTokenLoader(
+ *     tokenLoader,
+ *     "https://dlf.cn-hangzhou.aliyuncs.com",
+ *     "cn-hangzhou",
+ *     "default"
+ * );
+ * }</pre>
+ *
+ * <p><b>从 AccessKey 创建</b>:
+ * <pre>{@code
+ * DLFAuthProvider authProvider = DLFAuthProvider.fromAccessKey(
+ *     "LTAI...",           // accessKeyId
+ *     "xxx...",            // accessKeySecret
+ *     null,                // securityToken (可选)
+ *     "https://dlf.cn-hangzhou.aliyuncs.com",
+ *     "cn-hangzhou",
+ *     "default"
+ * );
+ * }</pre>
+ *
+ * <h2>与 Bearer Token 的区别</h2>
+ * <table border="1">
+ *   <tr>
+ *     <th>特性</th>
+ *     <th>Bearer Token</th>
+ *     <th>DLF 认证</th>
+ *   </tr>
+ *   <tr>
+ *     <td>安全性</td>
+ *     <td>Token 固定,可能被截获</td>
+ *     <td>每个请求签名不同,防篡改</td>
+ *   </tr>
+ *   <tr>
+ *     <td>复杂度</td>
+ *     <td>简单,直接传递 token</td>
+ *     <td>复杂,需要计算签名</td>
+ *   </tr>
+ *   <tr>
+ *     <td>凭证刷新</td>
+ *     <td>需要手动更新</td>
+ *     <td>自动刷新临时凭证</td>
+ *   </tr>
+ *   <tr>
+ *     <td>适用场景</td>
+ *     <td>内部系统,简单认证</td>
+ *     <td>云环境,高安全要求</td>
+ *   </tr>
+ * </table>
+ *
+ * <h2>线程安全性</h2>
+ * <p>此类是线程安全的:
+ * <ul>
+ *   <li>token 字段使用 volatile 保证可见性
+ *   <li>token 刷新使用 synchronized 保证原子性
+ *   <li>多线程同时刷新时只有一个线程执行
+ * </ul>
+ *
+ * @see AuthProvider
+ * @see DLFToken
+ * @see DLFTokenLoader
+ * @see DLFRequestSigner
+ * @see DLFDefaultSigner
+ * @see DLFOpenApiSigner
+ */
 public class DLFAuthProvider implements AuthProvider {
 
     private static final Logger LOG = LoggerFactory.getLogger(DLFAuthProvider.class);

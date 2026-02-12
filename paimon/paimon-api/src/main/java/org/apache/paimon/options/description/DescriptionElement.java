@@ -18,12 +18,12 @@
 
 package org.apache.paimon.options.description;
 
-/** Part of a {@link Description} that can be converted into String representation. */
+/** {@link Description} 中可以被转换为字符串表示的部分。 */
 interface DescriptionElement {
     /**
-     * Transforms itself into String representation using given format.
+     * 使用给定的格式化器将自身转换为字符串表示。
      *
-     * @param formatter formatter to use.
+     * @param formatter 要使用的格式化器
      */
     void format(Formatter formatter);
 }

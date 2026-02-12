@@ -21,23 +21,23 @@ package org.apache.paimon.options.description;
 import java.util.Arrays;
 import java.util.List;
 
-/** Represents a list in the {@link Description}. */
+/** 表示 {@link Description} 中的列表。 */
 public class ListElement implements BlockElement {
 
     private final List<InlineElement> entries;
 
     /**
-     * Creates a list with blocks of text. For example:
+     * 创建包含文本块的列表。例如:
      *
      * <pre>{@code
      * .list(
-     * 	text("this is first element of list"),
-     * 	text("this is second element of list with a %s", link("https://link"))
+     * 	text("这是列表的第一个元素"),
+     * 	text("这是第二个元素,包含一个链接 %s", link("https://link"))
      * )
      * }</pre>
      *
-     * @param elements list of this list entries
-     * @return list representation
+     * @param elements 此列表的条目列表
+     * @return 列表表示
      */
     public static ListElement list(InlineElement... elements) {
         return new ListElement(Arrays.asList(elements));

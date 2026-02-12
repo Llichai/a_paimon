@@ -25,15 +25,30 @@ import static org.apache.paimon.compression.CompressorUtils.HEADER_LENGTH;
 import static org.apache.paimon.compression.CompressorUtils.writeIntLE;
 
 /**
- * Encode data into LZ4 format (not compatible with the LZ4 Frame format). It reads from and writes
- * to byte arrays provided from the outside, thus reducing copy time.
+ * LZ4 块压缩器。
  *
- * <p>This class is copied and modified from {@link net.jpountz.lz4.LZ4BlockOutputStream}.
+ * <p>将数据编码为 LZ4 格式(不兼容 LZ4 Frame 格式)。它从外部提供的字节数组读取和写入数据,
+ * 从而减少了复制时间。
+ *
+ * <p>该类从 {@link net.jpountz.lz4.LZ4BlockOutputStream} 复制并修改而来。
+ *
+ * <p>特点:
+ * <ul>
+ *   <li>使用 LZ4 快速压缩模式</li>
+ *   <li>在数据前添加8字节头部(压缩长度和原始长度)</li>
+ *   <li>零拷贝设计,直接使用外部缓冲区</li>
+ * </ul>
  */
 public class Lz4BlockCompressor implements BlockCompressor {
 
+    /** LZ4 压缩器实例 */
     private final LZ4Compressor compressor;
 
+    /**
+     * 创建 LZ4 块压缩器。
+     *
+     * <p>使用 LZ4 最快的压缩模式。
+     */
     public Lz4BlockCompressor() {
         this.compressor = LZ4Factory.fastestInstance().fastCompressor();
     }

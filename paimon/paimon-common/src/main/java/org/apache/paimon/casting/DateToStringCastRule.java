@@ -26,7 +26,32 @@ import org.apache.paimon.utils.DateTimeUtils;
 
 import static org.apache.paimon.types.VarCharType.STRING_TYPE;
 
-/** {@link DataTypeRoot#DATE} to {@link DataTypeFamily#CHARACTER_STRING} cast rule. */
+/**
+ * {@link DataTypeRoot#DATE} 到 {@link DataTypeFamily#CHARACTER_STRING} 的类型转换规则。
+ *
+ * <p>功能说明: 将日期值格式化为字符串表示
+ *
+ * <p>转换语义:
+ *
+ * <ul>
+ *   <li>格式化规则: 使用 ISO-8601 格式 'yyyy-MM-dd'
+ *   <li>日期值: 表示自 Unix 纪元(1970-01-01)以来的天数
+ *   <li>输出格式: 固定为10字符的日期字符串
+ * </ul>
+ *
+ * <p>转换示例:
+ *
+ * <pre>
+ * DATE '2024-01-15' -> STRING '2024-01-15'
+ * DATE '1970-01-01' (值为0) -> STRING '1970-01-01'
+ * DATE '2024-12-31' -> STRING '2024-12-31'
+ * DATE '1969-12-31' (值为-1) -> STRING '1969-12-31'
+ * </pre>
+ *
+ * <p>NULL 值处理: 输入为 NULL 时,输出也为 NULL
+ *
+ * <p>SQL 标准兼容性: 符合 SQL:2016 标准中日期到字符串的显式转换规则
+ */
 class DateToStringCastRule extends AbstractCastRule<Integer, BinaryString> {
 
     static final DateToStringCastRule INSTANCE = new DateToStringCastRule();

@@ -22,11 +22,25 @@ import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.DataTypeFamily;
 
-/** {@link DataTypeFamily#BINARY_STRING} to {@link DataTypeFamily#CHARACTER_STRING} cast rule. */
+/**
+ * 二进制类型到字符串类型的转换规则。
+ *
+ * <p>将 {@link DataTypeFamily#BINARY_STRING} 转换为 {@link DataTypeFamily#CHARACTER_STRING}。
+ *
+ * <p>转换策略: 将字节数组解释为 UTF-8 编码的字符串
+ *
+ * <p>示例:
+ *
+ * <pre>{@code
+ * // BINARY [0x68, 0x65, 0x6c, 0x6c, 0x6f] → VARCHAR "hello"
+ * }</pre>
+ */
 public class BinaryToStringCastRule extends AbstractCastRule<byte[], BinaryString> {
 
+    /** 单例实例 */
     static final BinaryToStringCastRule INSTANCE = new BinaryToStringCastRule();
 
+    /** 私有构造函数。 */
     private BinaryToStringCastRule() {
         super(
                 CastRulePredicate.builder()
@@ -35,6 +49,13 @@ public class BinaryToStringCastRule extends AbstractCastRule<byte[], BinaryStrin
                         .build());
     }
 
+    /**
+     * 创建二进制到字符串的转换执行器。
+     *
+     * @param inputType 输入数据类型
+     * @param targetType 目标数据类型
+     * @return 转换执行器
+     */
     @Override
     public CastExecutor<byte[], BinaryString> create(DataType inputType, DataType targetType) {
         return BinaryString::fromBytes;

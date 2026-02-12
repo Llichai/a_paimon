@@ -33,10 +33,57 @@ import static org.apache.paimon.types.DecimalType.MAX_COMPACT_PRECISION;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * An internal data structure representing data of {@link DecimalType}.
+ * {@link DecimalType} 的内部数据结构实现。
  *
- * <p>This data structure is immutable and might store decimal values in a compact representation
- * (as a long value) if values are small enough.
+ * <p>此数据结构是不可变的,对于足够小的值,可能以紧凑表示(作为 long 值)存储十进制值,
+ * 以提高性能和减少内存占用。
+ *
+ * <p><b>存储策略:</b>
+ * Decimal 采用两种存储格式:
+ * <ul>
+ *   <li><b>紧凑格式</b>(precision <= {@value DecimalType#MAX_COMPACT_PRECISION}):
+ *       使用 long 存储未缩放的值,高效且内存紧凑。
+ *       例如: 123.45(precision=5, scale=2) 存储为 long 值 12345
+ *   </li>
+ *   <li><b>非紧凑格式</b>(precision > {@value DecimalType#MAX_COMPACT_PRECISION}):
+ *       使用 {@link BigDecimal} 存储完整精度的值。
+ *       用于处理超过 long 范围的大数值
+ *   </li>
+ * </ul>
+ *
+ * <p><b>精度和标度:</b>
+ * <ul>
+ *   <li>精度(precision): 数值的总位数(不包括符号和小数点)</li>
+ *   <li>标度(scale): 小数点后的位数</li>
+ * </ul>
+ * 例如: 123.45 的 precision=5, scale=2
+ *
+ * <p><b>字段语义:</b>
+ * <ul>
+ *   <li>{@code precision} 和 {@code scale}: 表示 SQL decimal 类型的精度和标度</li>
+ *   <li>{@code decimalVal}: 如果设置,表示完整的十进制值(非紧凑格式)</li>
+ *   <li>{@code longVal}: 在紧凑格式中,实际值 = longVal / (10^scale)</li>
+ * </ul>
+ *
+ * <p><b>存储格式选择规则:</b>
+ * <pre>
+ * if (precision > MAX_COMPACT_PRECISION) {
+ *     使用 decimalVal 存储,longVal 未定义
+ * } else {
+ *     使用 (longVal, scale) 存储,decimalVal 可能被缓存
+ * }
+ * </pre>
+ *
+ * <p>注意:(precision, scale) 必须正确设置。此类保证了 Decimal 值的不可变性,
+ * 所有算术操作都会创建新的 Decimal 实例。
+ *
+ * <p>使用场景:
+ * <ul>
+ *   <li>金融计算:需要精确的十进制运算</li>
+ *   <li>货币金额:避免浮点数精度问题</li>
+ *   <li>科学计算:需要任意精度的数值</li>
+ *   <li>数据库交互:对应 SQL DECIMAL/NUMERIC 类型</li>
+ * </ul>
  *
  * @since 0.4.0
  */
@@ -45,9 +92,10 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** Maximum number of decimal digits a Long can represent. (1e18 < Long.MaxValue < 1e19) */
+    /** Long 类型能表示的最大十进制位数。(1e18 < Long.MaxValue < 1e19) */
     static final int MAX_LONG_DIGITS = 18;
 
+    /** 预计算的 10 的幂次方数组,用于快速计算。POW10[i] = 10^i */
     static final long[] POW10 = new long[MAX_COMPACT_PRECISION + 1];
 
     static {
@@ -57,24 +105,35 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
         }
     }
 
-    // The semantics of the fields are as follows:
-    //  - `precision` and `scale` represent the precision and scale of SQL decimal type
-    //  - If `decimalVal` is set, it represents the whole decimal value
-    //  - Otherwise, the decimal value is longVal/(10^scale).
+    // 字段语义说明:
+    //  - `precision` 和 `scale` 表示 SQL decimal 类型的精度和标度
+    //  - 如果设置了 `decimalVal`,它表示完整的十进制值
+    //  - 否则,十进制值为 longVal/(10^scale)。
     //
-    // Note that the (precision, scale) must be correct.
-    // if precision > MAX_COMPACT_PRECISION,
-    //   `decimalVal` represents the value. `longVal` is undefined
-    // otherwise, (longVal, scale) represents the value
-    //   `decimalVal` may be set and cached
+    // 注意:(precision, scale) 必须正确。
+    // 如果 precision > MAX_COMPACT_PRECISION,
+    //   `decimalVal` 表示值,`longVal` 未定义
+    // 否则,(longVal, scale) 表示值
+    //   `decimalVal` 可能被设置和缓存
 
+    /** 精度:未缩放值的位数。 */
     final int precision;
+    /** 标度:小数点后的位数。 */
     final int scale;
 
+    /** 紧凑格式下的长整型值。 */
     final long longVal;
+    /** 非紧凑格式下的 BigDecimal 值,也用作紧凑格式的缓存。 */
     BigDecimal decimalVal;
 
-    // this constructor does not perform any sanity check.
+    /**
+     * 内部构造函数,不执行任何健全性检查。
+     *
+     * @param precision 精度
+     * @param scale 标度
+     * @param longVal 紧凑格式的长整型值
+     * @param decimalVal BigDecimal 值
+     */
     Decimal(int precision, int scale, long longVal, BigDecimal decimalVal) {
         this.precision = precision;
         this.scale = scale;
@@ -83,19 +142,29 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
     }
 
     // ------------------------------------------------------------------------------------------
-    // Public Interfaces
+    // 公共接口
     // ------------------------------------------------------------------------------------------
 
     /**
-     * Returns the <i>precision</i> of this {@link Decimal}.
+     * 返回此 {@link Decimal} 的<i>精度</i>。
      *
-     * <p>The precision is the number of digits in the unscaled value.
+     * <p>精度是未缩放值的位数。
+     * 例如: 123.45 的精度为 5。
+     *
+     * @return 精度
      */
     public int precision() {
         return precision;
     }
 
-    /** Returns the <i>scale</i> of this {@link Decimal}. */
+    /**
+     * 返回此 {@link Decimal} 的<i>标度</i>。
+     *
+     * <p>标度是小数点后的位数。
+     * 例如: 123.45 的标度为 2。
+     *
+     * @return 标度
+     */
     public int scale() {
         return scale;
     }

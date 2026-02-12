@@ -26,9 +26,29 @@ import org.apache.paimon.types.VarCharType;
 
 import javax.annotation.Nullable;
 
-/** Utils for default value. */
+/**
+ * 默认值工具类。
+ *
+ * <p>提供默认值的转换和验证功能,包括:
+ * <ul>
+ *   <li>将字符串默认值转换为目标数据类型
+ *   <li>验证默认值是否有效
+ *   <li>处理带引号的字符串默认值
+ * </ul>
+ */
 public class DefaultValueUtils {
 
+    /**
+     * 将默认值字符串转换为指定的数据类型。
+     *
+     * <p>使用类型转换执行器将字符串类型转换为目标类型。
+     * 如果默认值字符串以单引号包围,会自动去除引号。
+     *
+     * @param dataType 目标数据类型
+     * @param defaultValueStr 默认值字符串
+     * @return 转换后的默认值对象
+     * @throws RuntimeException 如果目标类型不支持默认值转换
+     */
     public static Object convertDefaultValue(DataType dataType, String defaultValueStr) {
         @SuppressWarnings("unchecked")
         CastExecutor<Object, Object> resolve =
@@ -46,6 +66,16 @@ public class DefaultValueUtils {
         return resolve.cast(BinaryString.fromString(defaultValueStr));
     }
 
+    /**
+     * 验证默认值字符串是否有效。
+     *
+     * <p>尝试将默认值字符串转换为指定的数据类型,
+     * 如果转换失败则抛出异常。
+     *
+     * @param dataType 目标数据类型
+     * @param defaultValueStr 默认值字符串,可以为 null
+     * @throws RuntimeException 如果默认值无效或不支持
+     */
     public static void validateDefaultValue(DataType dataType, @Nullable String defaultValueStr) {
         if (defaultValueStr == null) {
             return;

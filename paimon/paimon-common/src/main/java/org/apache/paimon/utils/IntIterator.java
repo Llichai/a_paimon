@@ -25,15 +25,74 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Iterator for ints. */
+/**
+ * 整数迭代器接口。
+ *
+ * <p>用于遍历整数序列，使用 {@link EOFException} 表示序列结束。
+ *
+ * <p>主要特性：
+ * <ul>
+ *   <li>异常表示结束 - 使用 EOFException 而非 hasNext()
+ *   <li>可关闭 - 实现 Closeable 接口用于资源释放
+ *   <li>工具方法 - 提供转换、创建等静态方法
+ * </ul>
+ *
+ * <p>使用模式：
+ * <pre>{@code
+ * try (IntIterator iter = IntFileUtils.readInts(fileIO, path)) {
+ *     while (true) {
+ *         try {
+ *             int value = iter.next();
+ *             // 处理值
+ *         } catch (EOFException e) {
+ *             break;  // 正常结束
+ *         }
+ *     }
+ * }
+ * }</pre>
+ *
+ * <p>工具方法示例：
+ * <pre>{@code
+ * // 从数组创建迭代器
+ * IntIterator iter = IntIterator.create(new int[]{1, 2, 3});
+ *
+ * // 转换为数组
+ * int[] array = IntIterator.toInts(iter);
+ *
+ * // 转换为列表
+ * List<Integer> list = IntIterator.toIntList(iter);
+ * }</pre>
+ *
+ * @see Closeable
+ * @see EOFException
+ */
 public interface IntIterator extends Closeable {
 
+    /**
+     * 返回下一个整数。
+     *
+     * @return 下一个整数值
+     * @throws IOException 如果发生I/O错误
+     * @throws EOFException 如果没有更多元素
+     */
     int next() throws IOException;
 
+    /**
+     * 将迭代器转换为整数数组。
+     *
+     * @param input 输入迭代器
+     * @return 整数数组
+     */
     static int[] toInts(IntIterator input) {
         return toIntList(input).stream().mapToInt(Integer::intValue).toArray();
     }
 
+    /**
+     * 将迭代器转换为整数列表。
+     *
+     * @param input 输入迭代器
+     * @return 整数列表
+     */
     static List<Integer> toIntList(IntIterator input) {
         List<Integer> ints = new ArrayList<>();
         try (IntIterator iterator = input) {
@@ -50,6 +109,12 @@ public interface IntIterator extends Closeable {
         return ints;
     }
 
+    /**
+     * 从整数数组创建迭代器。
+     *
+     * @param ints 整数数组
+     * @return 整数迭代器
+     */
     static IntIterator create(int[] ints) {
         return new IntIterator() {
 

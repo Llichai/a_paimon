@@ -20,12 +20,29 @@ package org.apache.paimon.format;
 
 import org.apache.paimon.fs.Path;
 
-/** A {@link FormatWriter} that can be aware of the file. */
+/**
+ * 可感知文件的格式写入器接口。
+ *
+ * <p>该接口扩展了 {@link FormatWriter}，使写入器能够感知正在写入的文件路径。
+ * 这对于某些需要在文件内部存储路径信息的格式（如 ORC）很有用。
+ */
 public interface FileAwareFormatWriter extends FormatWriter {
 
-    /** Set the path of the file. */
+    /**
+     * 设置文件路径。
+     *
+     * <p>在开始写入之前调用，告知写入器当前正在写入的文件路径。
+     *
+     * @param file 文件路径
+     */
     void setFile(Path file);
 
-    /** Whether to delete the file upon abort. */
+    /**
+     * 返回在中止时是否删除文件。
+     *
+     * <p>某些格式可能在写入失败时需要清理已创建的文件。
+     *
+     * @return 如果在中止时应删除文件返回 true，否则返回 false
+     */
     boolean deleteFileUponAbort();
 }

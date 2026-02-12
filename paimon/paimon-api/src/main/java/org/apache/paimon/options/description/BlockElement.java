@@ -18,5 +18,5 @@
 
 package org.apache.paimon.options.description;
 
-/** Part of description that represents a block e.g. some text, linebreak or a list. */
+/** 块元素接口,表示描述中的一个块元素,如文本、换行符或列表。 */
 public interface BlockElement extends DescriptionElement {}

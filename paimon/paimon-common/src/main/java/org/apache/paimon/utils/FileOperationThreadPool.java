@@ -24,14 +24,37 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.apache.paimon.utils.ThreadPoolUtils.createCachedThreadPool;
 
-/** Thread pool to operate files using {@link FileIO}. */
+/**
+ * 使用 {@link FileIO} 操作文件的线程池。
+ *
+ * <p>提供全局的缓存线程池,用于执行文件 I/O 操作。
+ * 线程池大小可根据需要动态调整。
+ *
+ * <p>特性:
+ * <ul>
+ *   <li>默认线程数为 CPU 核心数
+ *   <li>支持动态扩展线程池大小
+ *   <li>使用缓存线程池,自动回收空闲线程
+ * </ul>
+ */
 public class FileOperationThreadPool {
 
+    /** 线程名称前缀 */
     private static final String THREAD_NAME = "FILE-OPERATION-THREAD-POOL";
 
+    /** 全局执行器服务 */
     private static ThreadPoolExecutor executorService =
             createCachedThreadPool(Runtime.getRuntime().availableProcessors(), THREAD_NAME);
 
+    /**
+     * 获取执行器服务。
+     *
+     * <p>如果请求的线程数大于当前线程池的最大线程数,
+     * 则创建新的线程池替换旧的。
+     *
+     * @param threadNum 请求的线程数
+     * @return 线程池执行器
+     */
     public static synchronized ThreadPoolExecutor getExecutorService(int threadNum) {
         if (threadNum <= executorService.getMaximumPoolSize()) {
             return executorService;

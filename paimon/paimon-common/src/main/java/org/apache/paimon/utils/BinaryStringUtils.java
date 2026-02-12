@@ -37,31 +37,62 @@ import static org.apache.paimon.data.BinaryString.fromString;
 import static org.apache.paimon.types.DataTypeRoot.BINARY;
 import static org.apache.paimon.types.DataTypeRoot.CHAR;
 
-/** Util for {@link BinaryString}. */
+/**
+ * {@link BinaryString} 的工具类。
+ *
+ * <p>提供二进制字符串与各种数据类型之间的转换功能,包括:
+ * <ul>
+ *   <li>字符串到布尔值的转换
+ *   <li>字符串到数值类型(int, long, short, byte, float, double)的转换
+ *   <li>字符串到日期时间类型的转换
+ *   <li>字符串的连接、分割等操作
+ * </ul>
+ */
 public class BinaryStringUtils {
 
+    /** NULL 字符串常量 */
     public static final BinaryString NULL_STRING = fromString("NULL");
+
+    /** TRUE 字符串常量 */
     public static final BinaryString TRUE_STRING = fromString("TRUE");
+
+    /** FALSE 字符串常量 */
     public static final BinaryString FALSE_STRING = fromString("FALSE");
 
+    /** 空字符串数组常量 */
     public static final BinaryString[] EMPTY_STRING_ARRAY = new BinaryString[0];
+    /** 表示 true 的字符串列表 */
     private static final List<BinaryString> TRUE_STRINGS =
             Stream.of("t", "true", "y", "yes", "1")
                     .map(BinaryString::fromString)
                     .collect(Collectors.toList());
 
+    /** 表示 false 的字符串列表 */
     private static final List<BinaryString> FALSE_STRINGS =
             Stream.of("f", "false", "n", "no", "0")
                     .map(BinaryString::fromString)
                     .collect(Collectors.toList());
 
+    /**
+     * 从二进制字符串中获取临时字节数组。
+     *
+     * @param str 二进制字符串
+     * @param sizeInBytes 字节大小
+     * @return 字节数组
+     */
     private static byte[] getTmpBytes(BinaryString str, int sizeInBytes) {
         byte[] bytes = MemorySegmentUtils.allocateReuseBytes(sizeInBytes);
         MemorySegmentUtils.copyToBytes(str.getSegments(), str.getOffset(), bytes, 0, sizeInBytes);
         return bytes;
     }
 
-    /** Parse a {@link BinaryString} to boolean. */
+    /**
+     * 将 {@link BinaryString} 解析为布尔值。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的布尔值
+     * @throws RuntimeException 如果字符串无法解析为布尔值
+     */
     public static boolean toBoolean(BinaryString str) {
         BinaryString lowerCase = str.toLowerCase();
         if (TRUE_STRINGS.contains(lowerCase)) {
@@ -74,14 +105,17 @@ public class BinaryStringUtils {
     }
 
     /**
-     * Parses this BinaryString to Long.
+     * 将 BinaryString 解析为 Long 值。
      *
-     * <p>Note that, in this method we accumulate the result in negative format, and convert it to
-     * positive format at the end, if this string is not started with '-'. This is because min value
-     * is bigger than max value in digits, e.g. Long.MAX_VALUE is '9223372036854775807' and
-     * Long.MIN_VALUE is '-9223372036854775808'.
+     * <p>注意:在此方法中,我们以负数格式累积结果,如果字符串不以 '-' 开头,
+     * 则在最后将其转换为正数格式。这是因为最小值的位数大于最大值,
+     * 例如 Long.MAX_VALUE 是 '9223372036854775807',而 Long.MIN_VALUE 是 '-9223372036854775808'。
      *
-     * <p>This code is mostly copied from LazyLong.parseLong in Hive.
+     * <p>此代码主要复制自 Hive 中的 LazyLong.parseLong。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的 long 值
+     * @throws NumberFormatException 如果字符串无法解析为 long
      */
     public static long toLong(BinaryString str) throws NumberFormatException {
         int sizeInBytes = str.getSizeInBytes();
@@ -159,17 +193,20 @@ public class BinaryStringUtils {
     }
 
     /**
-     * Parses this BinaryString to Int.
+     * 将 BinaryString 解析为 Int 值。
      *
-     * <p>Note that, in this method we accumulate the result in negative format, and convert it to
-     * positive format at the end, if this string is not started with '-'. This is because min value
-     * is bigger than max value in digits, e.g. Integer.MAX_VALUE is '2147483647' and
-     * Integer.MIN_VALUE is '-2147483648'.
+     * <p>注意:在此方法中,我们以负数格式累积结果,如果字符串不以 '-' 开头,
+     * 则在最后将其转换为正数格式。这是因为最小值的位数大于最大值,
+     * 例如 Integer.MAX_VALUE 是 '2147483647',而 Integer.MIN_VALUE 是 '-2147483648'。
      *
-     * <p>This code is mostly copied from LazyInt.parseInt in Hive.
+     * <p>此代码主要复制自 Hive 中的 LazyInt.parseInt。
      *
-     * <p>Note that, this method is almost same as `toLong`, but we leave it duplicated for
-     * performance reasons, like Hive does.
+     * <p>注意:此方法与 `toLong` 几乎相同,但为了性能原因,我们保持它的重复,
+     * 就像 Hive 那样。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的 int 值
+     * @throws NumberFormatException 如果字符串无法解析为 int
      */
     public static int toInt(BinaryString str) throws NumberFormatException {
         int sizeInBytes = str.getSizeInBytes();
@@ -246,6 +283,13 @@ public class BinaryStringUtils {
         return result;
     }
 
+    /**
+     * 将 BinaryString 解析为 Short 值。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的 short 值
+     * @throws NumberFormatException 如果字符串无法解析为 short 或溢出
+     */
     public static short toShort(BinaryString str) throws NumberFormatException {
         int intValue = toInt(str);
         short result = (short) intValue;
@@ -255,6 +299,13 @@ public class BinaryStringUtils {
         throw numberFormatExceptionFor(str, "Overflow.");
     }
 
+    /**
+     * 将 BinaryString 解析为 Byte 值。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的 byte 值
+     * @throws NumberFormatException 如果字符串无法解析为 byte 或溢出
+     */
     public static byte toByte(BinaryString str) throws NumberFormatException {
         int intValue = toInt(str);
         byte result = (byte) intValue;
@@ -264,19 +315,47 @@ public class BinaryStringUtils {
         throw numberFormatExceptionFor(str, "Overflow.");
     }
 
+    /**
+     * 将 BinaryString 解析为 Double 值。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的 double 值
+     * @throws NumberFormatException 如果字符串无法解析为 double
+     */
     public static double toDouble(BinaryString str) throws NumberFormatException {
         return Double.parseDouble(str.toString());
     }
 
+    /**
+     * 将 BinaryString 解析为 Float 值。
+     *
+     * @param str 要解析的二进制字符串
+     * @return 解析后的 float 值
+     * @throws NumberFormatException 如果字符串无法解析为 float
+     */
     public static float toFloat(BinaryString str) throws NumberFormatException {
         return Float.parseFloat(str.toString());
     }
 
+    /**
+     * 创建数字格式异常。
+     *
+     * @param input 输入字符串
+     * @param reason 异常原因
+     * @return NumberFormatException 实例
+     */
     private static NumberFormatException numberFormatExceptionFor(
             BinaryString input, String reason) {
         return new NumberFormatException("For input string: '" + input + "'. " + reason);
     }
 
+    /**
+     * 将 BinaryString 转换为日期(天数)。
+     *
+     * @param input 输入字符串
+     * @return 日期值(从纪元开始的天数)
+     * @throws DateTimeException 如果无法解析日期
+     */
     public static int toDate(BinaryString input) throws DateTimeException {
         String str = input.toString();
         if (StringUtils.isNumeric(str)) {
@@ -291,6 +370,13 @@ public class BinaryStringUtils {
         return date;
     }
 
+    /**
+     * 将 BinaryString 转换为时间(毫秒)。
+     *
+     * @param input 输入字符串
+     * @return 时间值(从午夜开始的毫秒数)
+     * @throws DateTimeException 如果无法解析时间
+     */
     public static int toTime(BinaryString input) throws DateTimeException {
         String str = input.toString();
         if (StringUtils.isNumeric(str)) {
@@ -305,7 +391,14 @@ public class BinaryStringUtils {
         return date;
     }
 
-    /** Used by {@code CAST(x as TIMESTAMP)}. */
+    /**
+     * 用于 {@code CAST(x as TIMESTAMP)} 操作。
+     *
+     * @param input 输入字符串
+     * @param precision 时间戳精度
+     * @return Timestamp 实例
+     * @throws DateTimeException 如果无法解析时间戳
+     */
     public static Timestamp toTimestamp(BinaryString input, int precision)
             throws DateTimeException {
         if (StringUtils.isNumeric(input.toString())) {
@@ -315,32 +408,46 @@ public class BinaryStringUtils {
         return DateTimeUtils.parseTimestampData(input.toString(), precision);
     }
 
-    /** Used by {@code CAST(x as TIMESTAMP_LTZ)}. */
+    /**
+     * 用于 {@code CAST(x as TIMESTAMP_LTZ)} 操作。
+     *
+     * @param input 输入字符串
+     * @param precision 时间戳精度
+     * @param timeZone 时区
+     * @return Timestamp 实例
+     * @throws DateTimeException 如果无法解析时间戳
+     */
     public static Timestamp toTimestamp(BinaryString input, int precision, TimeZone timeZone)
             throws DateTimeException {
         return DateTimeUtils.parseTimestampData(input.toString(), precision, timeZone);
     }
 
-    // Helper method to convert epoch to Timestamp with the provided precision.
+    /**
+     * 将纪元毫秒转换为具有指定精度的时间戳的辅助方法。
+     *
+     * @param epoch 纪元值
+     * @param precision 精度(0=秒, 3=毫秒, 6=微秒, 9=纳秒)
+     * @return Timestamp 实例
+     */
     private static Timestamp fromMillisToTimestamp(long epoch, int precision) {
-        // Calculate milliseconds and nanoseconds from epoch based on precision
+        // 根据精度从纪元计算毫秒和纳秒
         long millis;
         int nanosOfMillis;
 
         switch (precision) {
-            case 0: // seconds
+            case 0: // 秒
                 millis = epoch * 1000;
                 nanosOfMillis = 0;
                 break;
-            case 3: // milliseconds
+            case 3: // 毫秒
                 millis = epoch;
                 nanosOfMillis = 0;
                 break;
-            case 6: // microseconds
+            case 6: // 微秒
                 millis = epoch / 1000;
                 nanosOfMillis = (int) ((epoch % 1000) * 1000);
                 break;
-            case 9: // nanoseconds
+            case 9: // 纳秒
                 millis = epoch / 1_000_000;
                 nanosOfMillis = (int) (epoch % 1_000_000);
                 break;
@@ -348,9 +455,9 @@ public class BinaryStringUtils {
                 throw new RuntimeException("Unsupported precision: " + precision);
         }
 
-        // If nanoseconds is negative, remove a millisecond
-        // and calculate the nanosecond offset forwards instead
-        // as nanoseconds should always be a positive offset on top of the milliseconds.
+        // 如果纳秒为负数,则减去一毫秒
+        // 并向前计算纳秒偏移量
+        // 因为纳秒应该始终是毫秒之上的正偏移量
         if (nanosOfMillis < 0) {
             nanosOfMillis = 1000000 + nanosOfMillis;
             millis -= 1;
@@ -359,6 +466,13 @@ public class BinaryStringUtils {
         return Timestamp.fromEpochMillis(millis, nanosOfMillis);
     }
 
+    /**
+     * 将字符串数据转换为字符类型(CHAR/VARCHAR)。
+     *
+     * @param strData 字符串数据
+     * @param type 目标数据类型
+     * @return 转换后的字符串
+     */
     public static BinaryString toCharacterString(BinaryString strData, DataType type) {
         final boolean targetCharType = type.getTypeRoot() == CHAR;
         final int targetLength = DataTypeChecks.getLength(type);
@@ -372,6 +486,13 @@ public class BinaryStringUtils {
         return strData;
     }
 
+    /**
+     * 将字节数组转换为二进制字符串类型(BINARY/VARBINARY)。
+     *
+     * @param byteArrayTerm 字节数组
+     * @param type 目标数据类型
+     * @return 转换后的字节数组
+     */
     public static byte[] toBinaryString(byte[] byteArrayTerm, DataType type) {
         final boolean targetBinaryType = type.getTypeRoot() == BINARY;
         final int targetLength = DataTypeChecks.getLength(type);
@@ -390,15 +511,25 @@ public class BinaryStringUtils {
     }
 
     /**
-     * Concatenates input strings together into a single string. Returns NULL if any argument is
-     * NULL.
+     * 将输入字符串连接成单个字符串。
+     *
+     * <p>如果任何参数为 NULL,则返回 NULL。
+     *
+     * @param inputs 要连接的字符串数组
+     * @return 连接后的字符串,如果任何输入为 null 则返回 null
      */
     public static BinaryString concat(BinaryString... inputs) {
         return concat(Arrays.asList(inputs));
     }
 
+    /**
+     * 将输入字符串连接成单个字符串。
+     *
+     * @param inputs 要连接的字符串可迭代对象
+     * @return 连接后的字符串,如果任何输入为 null 则返回 null
+     */
     public static BinaryString concat(Iterable<BinaryString> inputs) {
-        // Compute the total length of the result.
+        // 计算结果的总长度
         int totalLength = 0;
         for (BinaryString input : inputs) {
             if (input == null) {
@@ -408,7 +539,7 @@ public class BinaryStringUtils {
             totalLength += input.getSizeInBytes();
         }
 
-        // Allocate a new byte array, and copy the inputs one by one into it.
+        // 分配新的字节数组,并将输入逐个复制到其中
         final byte[] result = new byte[totalLength];
         int offset = 0;
         for (BinaryString input : inputs) {
@@ -422,6 +553,13 @@ public class BinaryStringUtils {
         return BinaryString.fromBytes(result);
     }
 
+    /**
+     * 使用完整分隔符分割字符串,保留所有标记(包括空字符串)。
+     *
+     * @param str 要分割的字符串
+     * @param delimiter 分隔符
+     * @return 分割后的字符串数组
+     */
     public static BinaryString[] splitByWholeSeparatorPreserveAllTokens(
             BinaryString str, BinaryString delimiter) {
         int sizeInBytes = str.getSizeInBytes();
@@ -433,7 +571,7 @@ public class BinaryStringUtils {
         }
 
         if (delimiter == null || BinaryString.EMPTY_UTF8.equals(delimiter)) {
-            // Split on whitespace.
+            // 以空白字符分割
             return splitByWholeSeparatorPreserveAllTokens(str, fromString(" "));
         }
 
@@ -458,20 +596,20 @@ public class BinaryStringUtils {
             if (end > -1) {
                 if (end > beg) {
 
-                    // The following is OK, because String.substring( beg, end ) excludes
-                    // the character at the position 'end'.
+                    // 以下代码是可以的,因为 String.substring(beg, end)
+                    // 排除了位置 'end' 处的字符
                     substrings.add(BinaryString.fromAddress(segments, offset + beg, end - beg));
 
-                    // Set the starting point for the next search.
-                    // The following is equivalent to beg = end + (separatorLength - 1) + 1,
-                    // which is the right calculation:
+                    // 设置下一次搜索的起点
+                    // 以下等同于 beg = end + (separatorLength - 1) + 1,
+                    // 这是正确的计算:
                 } else {
-                    // We found a consecutive occurrence of the separator.
+                    // 我们找到了分隔符的连续出现
                     substrings.add(BinaryString.EMPTY_UTF8);
                 }
                 beg = end + sepSize;
             } else {
-                // String.substring( beg ) goes from 'beg' to the end of the String.
+                // String.substring(beg) 从 'beg' 到字符串末尾
                 substrings.add(BinaryString.fromAddress(segments, offset + beg, sizeInBytes - beg));
                 end = sizeInBytes;
             }

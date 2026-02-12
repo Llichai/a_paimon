@@ -21,22 +21,20 @@ package org.apache.paimon.options.description;
 import org.apache.paimon.options.ConfigOption;
 
 /**
- * Describe enum constants used in {@link ConfigOption}s.
+ * 用于描述 {@link ConfigOption} 中使用的枚举常量。
  *
- * <p>For enums used as config options, this interface can be implemented to provide a {@link
- * Description} for each enum constant. This will be used when generating documentation for config
- * options to include a list of available values alongside their respective descriptions.
+ * <p>对于用作配置选项的枚举,可以实现此接口为每个枚举常量提供 {@link Description}。
+ * 这将在生成配置选项的文档时使用,以在文档中包含可用值的列表及其各自的描述。
  *
- * <p>More precisely, only an {@link InlineElement} can be returned as block elements cannot be
- * nested into a list.
+ * <p>更准确地说,只有 {@link InlineElement} 可以作为块元素不能嵌套到列表中返回。
  */
 public interface DescribedEnum {
 
     /**
-     * Returns the description for the enum constant.
+     * 返回枚举常量的描述。
      *
-     * <p>If you want to include links or code blocks, use {@link
-     * TextElement#wrap(InlineElement...)} to wrap multiple inline elements into a single one.
+     * <p>如果要包含链接或代码块,请使用 {@link TextElement#wrap(InlineElement...)}
+     * 将多个内联元素包装为单个元素。
      */
     InlineElement getDescription();
 }

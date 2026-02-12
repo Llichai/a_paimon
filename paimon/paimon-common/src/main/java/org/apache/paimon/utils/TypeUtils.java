@@ -58,11 +58,48 @@ import static org.apache.paimon.types.DataTypeChecks.getNestedTypes;
 import static org.apache.paimon.types.DataTypeFamily.BINARY_STRING;
 import static org.apache.paimon.types.DataTypeFamily.CHARACTER_STRING;
 
-/** Type related helper functions. */
+/**
+ * 类型相关工具类。
+ *
+ * <p>提供数据类型操作的辅助方法，包括类型转换、类型投影、类型判断等功能。
+ *
+ * <p>主要功能：
+ * <ul>
+ *   <li>RowType 操作 - 连接、投影行类型
+ *   <li>类型转换 - 从字符串转换为各种数据类型
+ *   <li>类型判断 - 判断是否为原始类型、基本类型、包装类型
+ *   <li>类型兼容性 - 检查两个类型是否可互操作
+ *   <li>CDC 值处理 - 支持 CDC（变更数据捕获）格式的值转换
+ * </ul>
+ *
+ * <p>支持的类型转换：
+ * <ul>
+ *   <li>基本类型 - BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, FLOAT, DOUBLE
+ *   <li>字符串类型 - CHAR, VARCHAR
+ *   <li>二进制类型 - BINARY, VARBINARY
+ *   <li>数值类型 - DECIMAL
+ *   <li>时间类型 - DATE, TIME, TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE
+ *   <li>复杂类型 - ARRAY, MAP, ROW
+ * </ul>
+ *
+ * @see DataType
+ * @see RowType
+ */
 public class TypeUtils {
+    /** JSON 对象映射器，用于解析 JSON 格式的复杂类型数据。 */
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private static final Logger LOG = LoggerFactory.getLogger(TypeUtils.class);
 
+    /**
+     * 连接两个 RowType。
+     *
+     * <p>将右侧 RowType 的所有字段追加到左侧 RowType 之后。
+     *
+     * @param left 左侧行类型
+     * @param right 右侧行类型
+     * @return 连接后的行类型
+     */
     public static RowType concat(RowType left, RowType right) {
         RowType.Builder builder = RowType.builder();
         List<DataField> fields = new ArrayList<>(left.getFields());
@@ -73,12 +110,30 @@ public class TypeUtils {
         return builder.build();
     }
 
+    /**
+     * 根据映射投影 RowType。
+     *
+     * <p>根据字段索引映射创建新的 RowType。
+     *
+     * @param inputType 输入行类型
+     * @param mapping 字段索引映射数组
+     * @return 投影后的行类型
+     */
     public static RowType project(RowType inputType, int[] mapping) {
         List<DataField> fields = inputType.getFields();
         return new RowType(
                 Arrays.stream(mapping).mapToObj(fields::get).collect(Collectors.toList()));
     }
 
+    /**
+     * 根据字段名投影 RowType。
+     *
+     * <p>根据字段名列表创建新的 RowType。
+     *
+     * @param inputType 输入行类型
+     * @param names 字段名列表
+     * @return 投影后的行类型
+     */
     public static RowType project(RowType inputType, List<String> names) {
         List<DataField> fields = inputType.getFields();
         List<String> fieldNames = fields.stream().map(DataField::name).collect(Collectors.toList());
@@ -88,14 +143,47 @@ public class TypeUtils {
                         .collect(Collectors.toList()));
     }
 
+    /**
+     * 从字符串转换为指定类型。
+     *
+     * @param s 字符串值
+     * @param type 目标数据类型
+     * @return 转换后的对象
+     */
     public static Object castFromString(String s, DataType type) {
         return castFromStringInternal(s, type, false);
     }
 
+    /**
+     * 从 CDC 值字符串转换为指定类型。
+     *
+     * <p>CDC（变更数据捕获）格式的值转换，特殊处理二进制类型（Base64 编码）。
+     *
+     * @param s CDC 值字符串
+     * @param type 目标数据类型
+     * @return 转换后的对象
+     */
     public static Object castFromCdcValueString(String s, DataType type) {
         return castFromStringInternal(s, type, true);
     }
 
+    /**
+     * 从字符串转换为指定类型的内部实现。
+     *
+     * <p>支持所有 Paimon 数据类型的转换：
+     * <ul>
+     *   <li>字符串类型 - CHAR, VARCHAR
+     *   <li>数值类型 - BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, FLOAT, DOUBLE, DECIMAL
+     *   <li>二进制类型 - BINARY, VARBINARY
+     *   <li>时间类型 - DATE, TIME, TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE
+     *   <li>复杂类型 - ARRAY, MAP, ROW（使用 JSON 格式）
+     * </ul>
+     *
+     * @param s 字符串值
+     * @param type 目标数据类型
+     * @param isCdcValue 是否为 CDC 值格式
+     * @return 转换后的对象
+     */
     public static Object castFromStringInternal(String s, DataType type, boolean isCdcValue) {
         BinaryString str = BinaryString.fromString(s);
         switch (type.getTypeRoot()) {
@@ -294,10 +382,24 @@ public class TypeUtils {
         }
     }
 
+    /**
+     * 判断数据类型是否为原始类型。
+     *
+     * @param type 数据类型
+     * @return 如果是原始类型则返回 true
+     */
     public static boolean isPrimitive(DataType type) {
         return isPrimitive(type.getTypeRoot());
     }
 
+    /**
+     * 判断数据类型根是否为原始类型。
+     *
+     * <p>原始类型包括：BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, FLOAT, DOUBLE。
+     *
+     * @param root 数据类型根
+     * @return 如果是原始类型则返回 true
+     */
     public static boolean isPrimitive(DataTypeRoot root) {
         switch (root) {
             case BOOLEAN:
@@ -314,8 +416,25 @@ public class TypeUtils {
     }
 
     /**
-     * Can the two types operate with each other. Such as: 1.CodeGen: equal, cast, assignment.
-     * 2.Join keys.
+     * 检查两个类型是否可以互操作。
+     *
+     * <p>可互操作的场景包括：
+     * <ul>
+     *   <li>代码生成 - 相等比较、类型转换、赋值
+     *   <li>Join 键 - 连接操作的键类型匹配
+     * </ul>
+     *
+     * <p>兼容性规则：
+     * <ul>
+     *   <li>字符串类型 - CHARACTER_STRING 族内可互操作
+     *   <li>二进制字符串 - BINARY_STRING 族内可互操作
+     *   <li>复杂类型 - 递归检查嵌套类型的兼容性
+     *   <li>其他类型 - 必须类型根相同且可空性兼容
+     * </ul>
+     *
+     * @param t1 第一个数据类型
+     * @param t2 第二个数据类型
+     * @return 如果两个类型可以互操作则返回 true
      */
     public static boolean isInteroperable(DataType t1, DataType t2) {
         if (t1.getTypeRoot().getFamilies().contains(CHARACTER_STRING)
@@ -352,11 +471,27 @@ public class TypeUtils {
         }
     }
 
+    /**
+     * 判断对象是否为基本类型。
+     *
+     * <p>基本类型包括：原始类型、包装类型和 String 类型。
+     *
+     * @param obj 要判断的对象
+     * @return 如果是基本类型则返回 true
+     */
     public static boolean isBasicType(Object obj) {
         Class<?> clazz = obj.getClass();
         return clazz.isPrimitive() || isWrapperType(clazz) || clazz.equals(String.class);
     }
 
+    /**
+     * 判断类是否为包装类型。
+     *
+     * <p>包装类型包括：Boolean, Character, Byte, Short, Integer, Long, Float, Double。
+     *
+     * @param clazz 要判断的类
+     * @return 如果是包装类型则返回 true
+     */
     private static boolean isWrapperType(Class<?> clazz) {
         return clazz.equals(Boolean.class)
                 || clazz.equals(Character.class)

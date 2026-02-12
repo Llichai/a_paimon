@@ -20,16 +20,26 @@ package org.apache.paimon.utils;
 
 import java.io.IOException;
 
-/** A bi function with {@link IOException}. */
+/**
+ * 可抛出 {@link IOException} 的二元函数接口。
+ *
+ * <p>这是一个函数式接口,其函数方法是 {@link #apply(Object, Object)}。
+ * 与标准的 BiFunction 不同,此接口允许抛出 {@link IOException}。
+ *
+ * @param <T> 函数的第一个参数类型
+ * @param <U> 函数的第二个参数类型
+ * @param <R> 函数的返回值类型
+ */
 @FunctionalInterface
 public interface BiFunctionWithIOE<T, U, R> {
 
     /**
-     * Applies this function to the given arguments.
+     * 将此函数应用于给定的参数。
      *
-     * @param t the first function argument
-     * @param u the second function argument
-     * @return the function result
+     * @param t 第一个函数参数
+     * @param u 第二个函数参数
+     * @return 函数执行结果
+     * @throws IOException 如果发生 I/O 错误
      */
     R apply(T t, U u) throws IOException;
 }

@@ -25,9 +25,38 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.function.Function;
 
-/** A {@link RecordReader.RecordIterator} to support returning the record's score. */
+/**
+ * 支持返回记录评分的记录迭代器。
+ *
+ * <p>该接口扩展了 {@link RecordReader.RecordIterator},增加了对记录评分的跟踪能力。
+ *
+ * <h2>核心功能</h2>
+ *
+ * <ul>
+ *   <li>评分跟踪:记录当前返回记录的评分值
+ *   <li>支持转换和过滤:保留评分信息
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ *
+ * <ul>
+ *   <li>相似度搜索:基于向量相似度的检索
+ *   <li>排序结果:根据评分排序返回记录
+ *   <li>阈值过滤:只返回评分超过阈值的记录
+ *   <li>Top-K查询:获取评分最高的K条记录
+ * </ul>
+ *
+ * <h2>线程安全性</h2>
+ *
+ * <p>该接口的实现通常不是线程安全的,需要外部同步。
+ */
 public interface ScoreRecordIterator<T> extends RecordReader.RecordIterator<T> {
 
+    /**
+     * 获取最近返回记录的评分。
+     *
+     * @return 评分值,通常在0.0到1.0之间
+     */
     float returnedScore();
 
     @Override

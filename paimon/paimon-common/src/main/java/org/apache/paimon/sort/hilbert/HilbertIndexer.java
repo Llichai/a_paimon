@@ -61,7 +61,73 @@ import java.util.function.Function;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Hilbert indexer for responsibility to generate hilbert-index. */
+/**
+ * Hilbert 曲线索引器。
+ *
+ * <p>该类负责生成 Hilbert 曲线索引，用于多维数据的空间排序。Hilbert 曲线是一种空间填充曲线，
+ * 可以将多维空间中的点映射到一维线性空间，同时保持较好的空间局部性。
+ *
+ * <h2>Hilbert 曲线原理</h2>
+ * <p>Hilbert 曲线具有以下特性：
+ * <ul>
+ *   <li><b>连续性</b>：曲线是连续的，相邻的点在一维空间中也相邻</li>
+ *   <li><b>递归构造</b>：通过递归细分空间构建</li>
+ *   <li><b>空间局部性</b>：比 Z-Order 具有更好的空间局部性</li>
+ *   <li><b>多维支持</b>：支持任意维度的数据排序</li>
+ * </ul>
+ *
+ * <h2>应用场景</h2>
+ * <ul>
+ *   <li><b>数据聚类</b>：将空间上接近的数据聚集在一起存储</li>
+ *   <li><b>范围查询优化</b>：提高多维范围查询的性能</li>
+ *   <li><b>数据分区</b>：用于数据的均匀分区</li>
+ *   <li><b>索引构建</b>：构建多维索引结构</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 1. 创建 Hilbert 索引器
+ * RowType rowType = RowType.of(
+ *     DataTypes.INT(),
+ *     DataTypes.INT()
+ * );
+ * List<String> orderColumns = Arrays.asList("col1", "col2");
+ * HilbertIndexer indexer = new HilbertIndexer(rowType, orderColumns);
+ *
+ * // 2. 初始化索引器
+ * indexer.open();
+ *
+ * // 3. 为行生成索引
+ * InternalRow row = ...;
+ * byte[] indexBytes = indexer.index(row);
+ *
+ * // 4. 使用索引进行排序
+ * List<InternalRow> rows = ...;
+ * rows.sort((r1, r2) -> {
+ *     byte[] idx1 = indexer.index(r1);
+ *     byte[] idx2 = indexer.index(r2);
+ *     return Arrays.compare(idx1, idx2);
+ * });
+ * }</pre>
+ *
+ * <h2>实现细节</h2>
+ * <ul>
+ *   <li><b>字段处理</b>：使用 TypeVisitor 为每个字段生成处理函数</li>
+ *   <li><b>值映射</b>：将各种数据类型映射为 Long 值</li>
+ *   <li><b>NULL 处理</b>：NULL 值映射为 Long.MAX_VALUE</li>
+ *   <li><b>位数</b>：使用 63 位精度生成索引</li>
+ * </ul>
+ *
+ * <h2>性能考虑</h2>
+ * <ul>
+ *   <li>至少需要两个排序列</li>
+ *   <li>不支持复杂类型（Array、Map、Row）</li>
+ *   <li>字符串和二进制类型转换为 Long 可能损失精度</li>
+ *   <li>适合数值型数据的多维排序</li>
+ * </ul>
+ *
+ * @see org.davidmoten.hilbert.HilbertCurve
+ */
 public class HilbertIndexer implements Serializable {
 
     private static final long PRIMITIVE_EMPTY = Long.MAX_VALUE;
@@ -118,7 +184,31 @@ public class HilbertIndexer implements Serializable {
         return new RowProcessor(type.accept(new TypeVisitor(index)));
     }
 
-    /** Type Visitor to generate function map from row column to hilbert-index. */
+    /**
+     * 数据类型访问者。
+     *
+     * <p>该访问者为不同的数据类型生成相应的 Hilbert 索引处理函数。每个数据类型都有特定的转换逻辑，
+     * 将原始值转换为用于 Hilbert 曲线计算的 Long 值。
+     *
+     * <h3>支持的类型</h3>
+     * <ul>
+     *   <li><b>数值类型</b>：TINYINT, SMALLINT, INT, BIGINT, FLOAT, DOUBLE, DECIMAL</li>
+     *   <li><b>字符串类型</b>：CHAR, VARCHAR - 转换为字节后再转 Long</li>
+     *   <li><b>二进制类型</b>：BINARY, VARBINARY - 直接转换字节为 Long</li>
+     *   <li><b>时间类型</b>：DATE, TIME, TIMESTAMP, LOCAL_ZONED_TIMESTAMP</li>
+     *   <li><b>布尔类型</b>：BOOLEAN - true 映射为 PRIMITIVE_EMPTY，false 为 0</li>
+     * </ul>
+     *
+     * <h3>不支持的类型</h3>
+     * <ul>
+     *   <li>ARRAY - 数组类型</li>
+     *   <li>MAP - 映射类型</li>
+     *   <li>ROW - 行类型</li>
+     *   <li>MULTISET - 多集类型</li>
+     *   <li>VARIANT - 变体类型</li>
+     *   <li>BLOB - 大对象类型</li>
+     * </ul>
+     */
     public static class TypeVisitor implements DataTypeVisitor<HProcessFunction>, Serializable {
 
         private final int fieldIndex;
@@ -292,7 +382,12 @@ public class HilbertIndexer implements Serializable {
         }
     }
 
-    /** Be used as converting row field record to devoted bytes. */
+    /**
+     * 行处理器。
+     *
+     * <p>用于将行字段转换为 Hilbert 索引计算所需的字节表示。
+     * 每个处理器封装了特定字段的转换逻辑。
+     */
     public static class RowProcessor implements Serializable {
         private final HProcessFunction process;
 
@@ -314,6 +409,10 @@ public class HilbertIndexer implements Serializable {
         return ConvertBinaryUtil.paddingToNByte(index.toByteArray(), BITS_NUM);
     }
 
-    /** Process function interface. */
+    /**
+     * Hilbert 索引处理函数接口。
+     *
+     * <p>该函数接口定义了从行数据提取并转换为 Long 值的操作，用于后续的 Hilbert 曲线计算。
+     */
     public interface HProcessFunction extends Function<InternalRow, Long>, Serializable {}
 }

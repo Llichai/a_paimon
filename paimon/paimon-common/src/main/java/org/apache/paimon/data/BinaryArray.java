@@ -29,16 +29,59 @@ import java.lang.reflect.Array;
 import static org.apache.paimon.memory.MemorySegment.UNSAFE;
 
 /**
- * A binary implementation of {@link InternalArray} which is backed by {@link MemorySegment}s.
+ * {@link InternalArray} 的二进制实现,基于 {@link MemorySegment} 支持。
  *
- * <p>For fields that hold fixed-length primitive types, such as long, double or int, they are
- * stored compacted in bytes, just like the original java array.
+ * <p>对于保存固定长度原始类型的字段(如 long、double 或 int),
+ * 它们以字节紧凑存储,就像原始 Java 数组一样。
  *
- * <p>The binary layout of {@link BinaryArray}:
+ * <p><b>{@link BinaryArray} 的二进制布局:</b>
  *
  * <pre>
- * [size(int)] + [null bits(4-byte word boundaries)] + [values or offset&length] + [variable length part].
+ * +--------+-------------------+-------------------+-------------------+
+ * | size   | null bit set      | values or         | variable length   |
+ * | (int)  | (4-byte aligned)  | offset&length     | part              |
+ * +--------+-------------------+-------------------+-------------------+
+ * | 4 bytes| 可变长度          | 每个元素 1-8 字节  | 可变长度          |
+ * +--------+-------------------+-------------------+-------------------+
  * </pre>
+ *
+ * <p><b>内存布局详解:</b>
+ * <ol>
+ *   <li><b>size(4字节)</b>: 数组的元素数量</li>
+ *   <li><b>null bit set</b>: 空值位图,每个元素占1位,按4字节边界对齐
+ *       <br>大小 = ((numElements + 31) / 32) * 4 字节</li>
+ *   <li><b>values or offset&length</b>: 固定长度部分
+ *       <ul>
+ *         <li>原始类型(boolean, byte, int等): 直接存储值</li>
+ *         <li>可变长度类型(String, Array等): 存储偏移量(4字节) + 长度(4字节)</li>
+ *       </ul>
+ *   </li>
+ *   <li><b>variable length part</b>: 可变长度数据的实际内容</li>
+ * </ol>
+ *
+ * <p><b>性能优化特性:</b>
+ * <ul>
+ *   <li>紧凑存储: 原始类型数组与 Java 原生数组具有相同的内存布局</li>
+ *   <li>零拷贝: 直接操作内存段,避免对象创建</li>
+ *   <li>缓存友好: 连续的内存布局提高访问性能</li>
+ *   <li>高效序列化: 内存布局即序列化格式</li>
+ * </ul>
+ *
+ * <p><b>固定长度部分大小(按类型):</b>
+ * <ul>
+ *   <li>boolean, byte: 1 字节</li>
+ *   <li>short: 2 字节</li>
+ *   <li>int, float: 4 字节</li>
+ *   <li>long, double, String, Decimal等: 8 字节</li>
+ * </ul>
+ *
+ * <p>使用场景:
+ * <ul>
+ *   <li>高性能数组处理:需要频繁序列化/反序列化</li>
+ *   <li>大数据集:减少内存占用和 GC 压力</li>
+ *   <li>列式存储:向量化执行</li>
+ *   <li>网络传输:直接发送内存段</li>
+ * </ul>
  *
  * @since 0.4.0
  */
@@ -47,23 +90,43 @@ public final class BinaryArray extends BinarySection implements InternalArray, D
 
     private static final long serialVersionUID = 1L;
 
-    /** Offset for Arrays. */
+    /** 数组的基础偏移量(用于 UNSAFE 操作)。 */
     private static final int BYTE_ARRAY_BASE_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
 
+    /** boolean 数组的基础偏移量。 */
     private static final int BOOLEAN_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(boolean[].class);
+    /** short 数组的基础偏移量。 */
     private static final int SHORT_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(short[].class);
+    /** int 数组的基础偏移量。 */
     private static final int INT_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(int[].class);
+    /** long 数组的基础偏移量。 */
     private static final int LONG_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(long[].class);
+    /** float 数组的基础偏移量。 */
     private static final int FLOAT_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(float[].class);
+    /** double 数组的基础偏移量。 */
     private static final int DOUBLE_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(double[].class);
 
+    /**
+     * 计算数组头部所需的字节数。
+     *
+     * <p>头部包含: size(4字节) + null bit set
+     * <br>null bit set 按4字节边界对齐: ((numFields + 31) / 32) * 4
+     *
+     * @param numFields 数组元素数量
+     * @return 头部字节数
+     */
     public static int calculateHeaderInBytes(int numFields) {
         return 4 + ((numFields + 31) / 32) * 4;
     }
 
     /**
-     * It store real value when type is primitive. It store the length and offset of variable-length
-     * part when type is string, map, etc.
+     * 计算固定长度部分每个元素的大小。
+     *
+     * <p>对于原始类型,存储实际值。
+     * 对于可变长度类型(如 string、map 等),存储长度和偏移量。
+     *
+     * @param type 元素类型
+     * @return 固定长度部分的字节数
      */
     public static int calculateFixLengthPartSize(DataType type) {
         // ordered by type root definition

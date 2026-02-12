@@ -22,17 +22,44 @@ import org.apache.paimon.data.columnar.writable.WritableIntVector;
 
 import java.util.Arrays;
 
-/** This class represents a nullable int column vector. */
+/**
+ * 堆整数列向量实现类。
+ *
+ * <p>这个类表示一个可空的整数列向量，用于在列式存储中高效地存储和访问整数类型的数据（INT）。
+ * 它使用 32 位 int 数组作为底层存储，支持字典编码和多种批量操作。
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * HeapIntVector vector = new HeapIntVector(1000);
+ * vector.setInt(0, 42);
+ * vector.setInts(10, 5, 100);  // 从索引10开始设置5个100
+ * vector.appendInt(200);
+ * int value = vector.getInt(0);
+ * }</pre>
+ *
+ * <h2>性能特点</h2>
+ * <ul>
+ *   <li><b>内存效率</b>: 每个整数值占用4字节</li>
+ *   <li><b>字典压缩</b>: 对于重复值多的数据，支持字典编码</li>
+ *   <li><b>批量操作</b>: 支持从二进制数据和数组批量设置，利用 UNSAFE 和 System.arraycopy 优化</li>
+ * </ul>
+ *
+ * @see AbstractHeapVector 堆向量的基类
+ * @see WritableIntVector 可写整数向量接口
+ */
 public class HeapIntVector extends AbstractHeapVector implements WritableIntVector {
 
     private static final long serialVersionUID = -2749499358889718254L;
 
+    /** 存储整数值的数组。 */
     public int[] vector;
 
     /**
-     * Don't use this except for testing purposes.
+     * 构造一个堆整数列向量。
      *
-     * @param len the number of rows
+     * <p>注意: 除了测试目的外，不要直接使用此构造函数。
+     *
+     * @param len 向量的容量
      */
     public HeapIntVector(int len) {
         super(len);

@@ -27,19 +27,68 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonGet
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
-/** Request for creating table. */
+/**
+ * 创建表请求。
+ *
+ * <p>用于向 REST 服务器发送创建表的请求,包含表标识符和完整的表 Schema。
+ *
+ * <p>JSON 序列化格式:
+ *
+ * <pre>{@code
+ * {
+ *   "identifier": {
+ *     "database": "my_db",
+ *     "table": "my_table"
+ *   },
+ *   "schema": {
+ *     "fields": [
+ *       {"id": 0, "name": "id", "type": "BIGINT"},
+ *       {"id": 1, "name": "name", "type": "STRING"}
+ *     ],
+ *     "partitionKeys": ["dt"],
+ *     "primaryKeys": ["id"],
+ *     "options": {
+ *       "bucket": "4"
+ *     }
+ *   }
+ * }
+ * }</pre>
+ *
+ * <p>示例: 创建分区表
+ *
+ * <pre>{@code
+ * Identifier identifier = Identifier.create("my_db", "users");
+ * Schema schema = Schema.newBuilder()
+ *     .column("id", DataTypes.BIGINT())
+ *     .column("name", DataTypes.STRING())
+ *     .column("dt", DataTypes.STRING())
+ *     .partitionKeys("dt")
+ *     .primaryKey("id")
+ *     .option("bucket", "4")
+ *     .build();
+ * CreateTableRequest request = new CreateTableRequest(identifier, schema);
+ * }</pre>
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateTableRequest implements RESTRequest {
 
     private static final String FIELD_IDENTIFIER = "identifier";
     private static final String FIELD_SCHEMA = "schema";
 
+    /** 表标识符(包含数据库名和表名)。 */
     @JsonProperty(FIELD_IDENTIFIER)
     private final Identifier identifier;
 
+    /** 表 Schema 定义。 */
     @JsonProperty(FIELD_SCHEMA)
     private final Schema schema;
 
+    /**
+     * 构造函数。
+     *
+     * @param identifier 表标识符
+     * @param schema 表 Schema 定义
+     */
     @JsonCreator
     public CreateTableRequest(
             @JsonProperty(FIELD_IDENTIFIER) Identifier identifier,
@@ -48,11 +97,21 @@ public class CreateTableRequest implements RESTRequest {
         this.identifier = identifier;
     }
 
+    /**
+     * 获取表标识符。
+     *
+     * @return 表标识符
+     */
     @JsonGetter(FIELD_IDENTIFIER)
     public Identifier getIdentifier() {
         return identifier;
     }
 
+    /**
+     * 获取表 Schema 定义。
+     *
+     * @return Schema 对象
+     */
     @JsonGetter(FIELD_SCHEMA)
     public Schema getSchema() {
         return schema;

@@ -22,8 +22,37 @@ import java.io.Serializable;
 import java.util.function.Predicate;
 
 /**
- * This interface is basically Java's {@link Predicate} interface enhanced with the {@link
- * Serializable}.
+ * 可序列化的 Predicate 接口。
+ *
+ * <p>这是 Java {@link Predicate} 接口的可序列化版本,增加了 {@link Serializable} 支持。
+ *
+ * <p>主要用途:
+ * <ul>
+ *   <li>分布式过滤 - 在分布式环境中传递过滤逻辑
+ *   <li>状态序列化 - 支持谓词状态的序列化和恢复
+ *   <li>Lambda 序列化 - 支持 Lambda 表达式的序列化
+ *   <li>远程执行 - 在远程节点上执行过滤条件
+ * </ul>
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * // 定义可序列化的过滤条件
+ * SerializablePredicate<Integer> isPositive = x -> x > 0;
+ *
+ * // 可以序列化并传输到远程节点
+ * List<Integer> numbers = Arrays.asList(-1, 0, 1, 2, 3);
+ * List<Integer> positive = numbers.stream()
+ *     .filter(isPositive)
+ *     .collect(Collectors.toList());
+ *
+ * // 组合多个谓词
+ * SerializablePredicate<Integer> isEven = x -> x % 2 == 0;
+ * SerializablePredicate<Integer> isPositiveEven = isPositive.and(isEven);
+ * }</pre>
+ *
+ * @param <T> 被测试元素的类型
+ * @see Predicate
+ * @see Serializable
  */
 @FunctionalInterface
 public interface SerializablePredicate<T> extends Predicate<T>, Serializable {}

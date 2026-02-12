@@ -29,9 +29,51 @@ import java.util.function.Function;
 
 /**
  * {@link DataTypeRoot#TIMESTAMP_WITHOUT_TIME_ZONE}/{@link
- * DataTypeRoot#TIMESTAMP_WITH_LOCAL_TIME_ZONE} to {@link
+ * DataTypeRoot#TIMESTAMP_WITH_LOCAL_TIME_ZONE} 到 {@link
  * DataTypeRoot#TIMESTAMP_WITHOUT_TIME_ZONE}/{@link DataTypeRoot#TIMESTAMP_WITH_LOCAL_TIME_ZONE}
- * cast rule. Check and adjust if there is the precision changes.
+ * 的类型转换规则。检查并调整精度变化。
+ *
+ * <p>功能说明:
+ *
+ * <ul>
+ *   <li>时间戳类型之间的转换(带时区 ↔ 不带时区)
+ *   <li>时间戳精度的调整(如从微秒精度转为毫秒精度)
+ * </ul>
+ *
+ * <p>转换语义:
+ *
+ * <ul>
+ *   <li>时区转换:
+ *       <ul>
+ *         <li>TIMESTAMP_WITHOUT_TIME_ZONE -> TIMESTAMP_WITH_LOCAL_TIME_ZONE: 将 UTC 时间戳转换为本地时区
+ *         <li>TIMESTAMP_WITH_LOCAL_TIME_ZONE -> TIMESTAMP_WITHOUT_TIME_ZONE: 将本地时区时间戳转换为 UTC
+ *         <li>相同类型转换: 保持原值不变
+ *       </ul>
+ *   <li>精度调整:
+ *       <ul>
+ *         <li>精度相同或目标精度更高: 保持原值
+ *         <li>目标精度更低: 截断(truncate)到目标精度
+ *       </ul>
+ * </ul>
+ *
+ * <p>转换示例:
+ *
+ * <pre>
+ * // 时区转换
+ * TIMESTAMP '2024-01-15 14:30:45.123' (UTC)
+ *   -> TIMESTAMP_WITH_LOCAL_TIME_ZONE '2024-01-15 22:30:45.123 +08:00' (Asia/Shanghai)
+ *
+ * // 精度调整
+ * TIMESTAMP(9) '2024-01-15 14:30:45.123456789' -> TIMESTAMP(3) '2024-01-15 14:30:45.123'
+ * TIMESTAMP(3) '2024-01-15 14:30:45.123' -> TIMESTAMP(6) '2024-01-15 14:30:45.123000'
+ * TIMESTAMP(6) '2024-01-15 14:30:45.123999' -> TIMESTAMP(3) '2024-01-15 14:30:45.123'
+ * </pre>
+ *
+ * <p>精度损失: 当目标精度低于输入精度时,会发生精度截断,例如微秒级精度转为毫秒级精度
+ *
+ * <p>NULL 值处理: 输入为 NULL 时,输出也为 NULL
+ *
+ * <p>SQL 标准兼容性: 符合 SQL:2016 标准中时间戳类型转换规则
  */
 class TimestampToTimestampCastRule extends AbstractCastRule<Timestamp, Timestamp> {
 

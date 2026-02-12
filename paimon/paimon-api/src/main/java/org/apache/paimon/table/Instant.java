@@ -28,7 +28,24 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonTyp
 
 import java.io.Serializable;
 
-/** table rollback instant. */
+/**
+ * 表回滚时间点。
+ *
+ * <p>定义了表回滚操作的目标时间点，支持两种类型:
+ * <ul>
+ *   <li>快照时间点 (SnapshotInstant): 回滚到指定的快照 ID
+ *   <li>标签时间点 (TagInstant): 回滚到指定的标签名称
+ * </ul>
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * // 回滚到快照 ID 100
+ * Instant instant1 = Instant.snapshot(100L);
+ *
+ * // 回滚到标签 "v1.0"
+ * Instant instant2 = Instant.tag("v1.0");
+ * }</pre>
+ */
 @Public
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -40,20 +57,37 @@ import java.io.Serializable;
 })
 public interface Instant extends Serializable {
 
+    /**
+     * 创建快照时间点。
+     *
+     * @param snapshotId 快照 ID
+     * @return 快照时间点实例
+     */
     static Instant snapshot(Long snapshotId) {
         return new SnapshotInstant(snapshotId);
     }
 
+    /**
+     * 创建标签时间点。
+     *
+     * @param tagName 标签名称
+     * @return 标签时间点实例
+     */
     static Instant tag(String tagName) {
         return new TagInstant(tagName);
     }
 
-    /** snapshot instant for table rollback. */
+    /**
+     * 快照时间点，用于表回滚到指定快照。
+     *
+     * <p>通过快照 ID 来标识回滚目标，适用于精确控制回滚版本的场景。
+     */
     final class SnapshotInstant implements Instant {
 
         private static final long serialVersionUID = 1L;
         private static final String FIELD_SNAPSHOT_ID = "snapshotId";
 
+        /** 目标快照 ID。 */
         @JsonProperty(FIELD_SNAPSHOT_ID)
         private final long snapshotId;
 
@@ -62,18 +96,28 @@ public interface Instant extends Serializable {
             this.snapshotId = snapshotId;
         }
 
+        /**
+         * 获取快照 ID。
+         *
+         * @return 快照 ID
+         */
         @JsonGetter(FIELD_SNAPSHOT_ID)
         public long getSnapshotId() {
             return snapshotId;
         }
     }
 
-    /** tag instant for table rollback. */
+    /**
+     * 标签时间点，用于表回滚到指定标签。
+     *
+     * <p>通过标签名称来标识回滚目标，适用于回滚到预定义的重要版本的场景。
+     */
     final class TagInstant implements Instant {
 
         private static final long serialVersionUID = 1L;
         private static final String FIELD_TAG_NAME = "tagName";
 
+        /** 目标标签名称。 */
         @JsonProperty(FIELD_TAG_NAME)
         private final String tagName;
 
@@ -82,16 +126,30 @@ public interface Instant extends Serializable {
             this.tagName = tagName;
         }
 
+        /**
+         * 获取标签名称。
+         *
+         * @return 标签名称
+         */
         @JsonGetter(FIELD_TAG_NAME)
         public String getTagName() {
             return tagName;
         }
     }
 
-    /** Types for table rollback： identify for table rollback. */
+    /**
+     * 表回滚类型标识。
+     *
+     * <p>用于 JSON 序列化/反序列化时区分不同的时间点类型。
+     */
     class Types {
+        /** 类型字段名。 */
         public static final String FIELD_TYPE = "type";
+
+        /** 快照类型标识。 */
         public static final String SNAPSHOT = "snapshot";
+
+        /** 标签类型标识。 */
         public static final String TAG = "tag";
 
         private Types() {}

@@ -33,8 +33,51 @@ import org.apache.paimon.types.RowKind;
 import java.io.Serializable;
 
 /**
- * Columnar row to support access to vector column data. It is a row view in {@link
- * VectorizedColumnBatch}.
+ * 列式行,用于访问向量化列数据的行视图。
+ *
+ * <p>这是 {@link VectorizedColumnBatch} 中的行视图,提供了一种以行为单位访问列式存储数据的方式。
+ * 本质上是一个指向列批次中特定行的游标,通过委托给底层的列向量来获取字段值。
+ *
+ * <h2>设计模式</h2>
+ * <ul>
+ *   <li><b>外观模式(Facade Pattern):</b> 为列式存储提供行式访问接口
+ *   <li><b>游标模式(Cursor Pattern):</b> 通过 rowId 指向列批次中的当前行
+ *   <li><b>委托模式(Delegation Pattern):</b> 所有数据访问委托给底层的 VectorizedColumnBatch
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ * <ul>
+ *   <li>从列式存储读取数据后,需要以行为单位处理
+ *   <li>迭代列批次中的所有行(配合 {@link ColumnarRowIterator} 使用)
+ *   <li>将列式数据转换为行式处理逻辑所需的格式
+ * </ul>
+ *
+ * <h2>工作原理</h2>
+ * <pre>
+ * VectorizedColumnBatch (列式存储):
+ *   col0: [v0, v1, v2, v3]
+ *   col1: [v0, v1, v2, v3]
+ *   col2: [v0, v1, v2, v3]
+ *
+ * ColumnarRow (行视图, rowId=1):
+ *   row1: [col0[1], col1[1], col2[1]]  => [v1, v1, v1]
+ * </pre>
+ *
+ * <h2>特性</h2>
+ * <ul>
+ *   <li><b>只读性:</b> 此类是只读的,所有 setter 方法都会抛出 UnsupportedOperationException
+ *   <li><b>可重用性:</b> 通过 {@link #setRowId(int)} 可以复用同一个对象访问不同行
+ *   <li><b>轻量级:</b> 不复制数据,只维护对列批次的引用和行索引
+ *   <li><b>可序列化:</b> 支持序列化,可用于分布式计算框架
+ * </ul>
+ *
+ * <p><b>注意:</b> 此类不支持 {@link #equals(Object)} 和 {@link #hashCode()},
+ * 因为比较和哈希操作应该针对实际的字段值进行,而不是行视图对象本身。
+ *
+ * @see VectorizedColumnBatch 列批次
+ * @see ColumnarRowIterator 列式行迭代器
+ * @see ColumnarArray 列式数组视图
+ * @see InternalRow 内部行接口
  */
 public final class ColumnarRow implements InternalRow, DataSetters, Serializable {
 

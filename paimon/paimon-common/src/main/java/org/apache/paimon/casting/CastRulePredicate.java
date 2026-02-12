@@ -27,35 +27,61 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * In order to apply a {@link CastRule}, the runtime checks if a particular rule matches the tuple
- * of input and target type using this class. In particular, a rule is applied if:
+ * 类型转换规则谓词。
+ *
+ * <p>为了应用一个 {@link CastRule},运行时需要检查该规则是否匹配输入类型和目标类型的组合。该类定义了匹配条件。
+ *
+ * <p>规则匹配逻辑: 当满足以下任一条件时,规则被应用:
  *
  * <ol>
- *   <li>{@link #getTargetTypeRoots()} includes the {@link DataTypeRoot} of target type and either
+ *   <li>{@link #getTargetTypeRoots()} 包含目标类型的 {@link DataTypeRoot},且满足以下任一条件:
  *       <ol>
- *         <li>{@link #getInputTypeRoots()} includes the {@link DataTypeRoot} of input type or
- *         <li>{@link #getInputTypeFamilies()} includes one of the {@link DataTypeFamily} of input
- *             type
+ *         <li>{@link #getInputTypeRoots()} 包含输入类型的 {@link DataTypeRoot},或
+ *         <li>{@link #getInputTypeFamilies()} 包含输入类型的某个 {@link DataTypeFamily}
  *       </ol>
- *   <li>Or {@link #getTargetTypeFamilies()} includes one of the {@link DataTypeFamily} of target
- *       type and either
+ *   <li>{@link #getTargetTypeFamilies()} 包含目标类型的某个 {@link DataTypeFamily},且满足以下任一条件:
  *       <ol>
- *         <li>{@link #getInputTypeRoots()} includes the {@link DataTypeRoot} of input type or
- *         <li>{@link #getInputTypeFamilies()} includes one of the {@link DataTypeFamily} of input
- *             type
+ *         <li>{@link #getInputTypeRoots()} 包含输入类型的 {@link DataTypeRoot},或
+ *         <li>{@link #getInputTypeFamilies()} 包含输入类型的某个 {@link DataTypeFamily}
  *       </ol>
  * </ol>
+ *
+ * <p>示例:
+ *
+ * <pre>{@code
+ * // 定义一个从所有数值类型到字符串的转换规则谓词
+ * CastRulePredicate predicate = CastRulePredicate.builder()
+ *     .input(DataTypeFamily.NUMERIC)  // 输入: 所有数值类型
+ *     .target(DataTypeRoot.VARCHAR)   // 目标: 字符串类型
+ *     .build();
+ * }</pre>
+ *
+ * <p>设计目的: 通过组合类型根(精确类型)和类型族(类型分组)来灵活定义规则的适用范围。
  */
 public class CastRulePredicate {
 
+    /** 精确的目标类型集合(如 VARCHAR(20)) */
     private final Set<DataType> targetTypes;
 
+    /** 输入类型根集合(如 INTEGER、BIGINT 等) */
     private final Set<DataTypeRoot> inputTypeRoots;
+    /** 目标类型根集合(如 VARCHAR、CHAR 等) */
     private final Set<DataTypeRoot> targetTypeRoots;
 
+    /** 输入类型族集合(如 NUMERIC、CHARACTER_STRING 等) */
     private final Set<DataTypeFamily> inputTypeFamilies;
+    /** 目标类型族集合(如 NUMERIC、CHARACTER_STRING 等) */
     private final Set<DataTypeFamily> targetTypeFamilies;
 
+    /**
+     * 私有构造函数,使用 Builder 模式创建实例。
+     *
+     * @param targetTypes 精确的目标类型集合
+     * @param inputTypeRoots 输入类型根集合
+     * @param targetTypeRoots 目标类型根集合
+     * @param inputTypeFamilies 输入类型族集合
+     * @param targetTypeFamilies 目标类型族集合
+     */
     private CastRulePredicate(
             Set<DataType> targetTypes,
             Set<DataTypeRoot> inputTypeRoots,
@@ -69,64 +95,125 @@ public class CastRulePredicate {
         this.targetTypeFamilies = targetTypeFamilies;
     }
 
+    /** 获取精确的目标类型集合。 */
     public Set<DataType> getTargetTypes() {
         return targetTypes;
     }
 
+    /** 获取输入类型根集合。 */
     public Set<DataTypeRoot> getInputTypeRoots() {
         return inputTypeRoots;
     }
 
+    /** 获取目标类型根集合。 */
     public Set<DataTypeRoot> getTargetTypeRoots() {
         return targetTypeRoots;
     }
 
+    /** 获取输入类型族集合。 */
     public Set<DataTypeFamily> getInputTypeFamilies() {
         return inputTypeFamilies;
     }
 
+    /** 获取目标类型族集合。 */
     public Set<DataTypeFamily> getTargetTypeFamilies() {
         return targetTypeFamilies;
     }
 
+    /**
+     * 创建 Builder 实例。
+     *
+     * @return Builder 实例
+     */
     public static Builder builder() {
         return new Builder();
     }
 
-    /** Builder for the {@link CastRulePredicate}. */
+    /**
+     * {@link CastRulePredicate} 的构建器。
+     *
+     * <p>使用示例:
+     *
+     * <pre>{@code
+     * CastRulePredicate predicate = CastRulePredicate.builder()
+     *     .input(DataTypeFamily.NUMERIC)
+     *     .target(DataTypeRoot.VARCHAR)
+     *     .build();
+     * }</pre>
+     */
     public static class Builder {
+        /** 输入类型根集合 */
         private final Set<DataTypeRoot> inputTypeRoots = new HashSet<>();
+        /** 目标类型根集合 */
         private final Set<DataTypeRoot> targetTypeRoots = new HashSet<>();
+        /** 精确的目标类型集合 */
         private final Set<DataType> targetTypes = new HashSet<>();
 
+        /** 输入类型族集合 */
         private final Set<DataTypeFamily> inputTypeFamilies = new HashSet<>();
+        /** 目标类型族集合 */
         private final Set<DataTypeFamily> targetTypeFamilies = new HashSet<>();
 
+        /**
+         * 添加输入类型根。
+         *
+         * @param inputTypeRoot 输入类型根(如 DataTypeRoot.INTEGER)
+         * @return this,支持链式调用
+         */
         public Builder input(DataTypeRoot inputTypeRoot) {
             inputTypeRoots.add(inputTypeRoot);
             return this;
         }
 
+        /**
+         * 添加目标类型根。
+         *
+         * @param outputTypeRoot 目标类型根(如 DataTypeRoot.VARCHAR)
+         * @return this,支持链式调用
+         */
         public Builder target(DataTypeRoot outputTypeRoot) {
             targetTypeRoots.add(outputTypeRoot);
             return this;
         }
 
+        /**
+         * 添加精确的目标类型。
+         *
+         * @param outputType 目标类型(如 DataTypes.VARCHAR(100))
+         * @return this,支持链式调用
+         */
         public Builder target(DataType outputType) {
             targetTypes.add(outputType);
             return this;
         }
 
+        /**
+         * 添加输入类型族。
+         *
+         * @param inputTypeFamily 输入类型族(如 DataTypeFamily.NUMERIC)
+         * @return this,支持链式调用
+         */
         public Builder input(DataTypeFamily inputTypeFamily) {
             inputTypeFamilies.add(inputTypeFamily);
             return this;
         }
 
+        /**
+         * 添加目标类型族。
+         *
+         * @param outputTypeFamily 目标类型族(如 DataTypeFamily.CHARACTER_STRING)
+         * @return this,支持链式调用
+         */
         public Builder target(DataTypeFamily outputTypeFamily) {
             targetTypeFamilies.add(outputTypeFamily);
             return this;
         }
 
+        /**
+         * 构建 CastRulePredicate 实例。
+         *
+         * @return 不可变的 CastRulePredicate 实例
+         */
         public CastRulePredicate build() {
             return new CastRulePredicate(
                     Collections.unmodifiableSet(targetTypes),

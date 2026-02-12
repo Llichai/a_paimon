@@ -25,7 +25,19 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing function details. */
+/**
+ * 列出函数详情响应对象。
+ *
+ * <p>该类表示列出函数详细信息的分页响应,包含完整的函数元数据。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>functionDetails - 函数详细信息列表
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListFunctionDetailsResponse implements PagedResponse<GetFunctionResponse> {
 

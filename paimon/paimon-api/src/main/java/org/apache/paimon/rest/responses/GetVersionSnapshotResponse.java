@@ -26,7 +26,24 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonGet
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
-/** Response for table snapshot by a version. */
+/**
+ * 获取版本快照响应对象。
+ *
+ * <p>该类表示通过版本号获取表快照信息的响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>snapshot - 指定版本的快照对象
+ * </ul>
+ *
+ * <p>与 {@link GetTableSnapshotResponse} 的区别在于获取方式:
+ * <ul>
+ *   <li>GetTableSnapshotResponse - 获取当前快照
+ *   <li>GetVersionSnapshotResponse - 获取特定版本的历史快照
+ * </ul>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetVersionSnapshotResponse implements RESTResponse {
 

@@ -24,11 +24,29 @@ import java.io.Serializable;
 import java.util.Comparator;
 
 /**
- * Record comparator for {@code BinaryInMemorySortBuffer}. For performance, subclasses are usually
- * implemented through CodeGenerator. A new interface for helping JVM inline.
+ * 记录比较器。
+ *
+ * <p>用于 {@code BinaryInMemorySortBuffer} 的记录比较。该接口继承了标准的 {@link Comparator} 接口,
+ * 专门用于比较 {@link InternalRow} 对象。
+ *
+ * <p>为了性能考虑,该接口的子类通常通过 CodeGenerator 动态生成。这是一个帮助 JVM 内联优化的新接口。
+ *
+ * <p>主要用途:
+ * <ul>
+ *   <li>内存排序缓冲区中的记录排序</li>
+ *   <li>多字段排序</li>
+ *   <li>支持升序和降序排序</li>
+ * </ul>
  */
 public interface RecordComparator extends Comparator<InternalRow>, Serializable {
 
+    /**
+     * 比较两个记录。
+     *
+     * @param o1 第一个记录
+     * @param o2 第二个记录
+     * @return 比较结果: 负数表示 o1 < o2, 0 表示 o1 == o2, 正数表示 o1 > o2
+     */
     @Override
     int compare(InternalRow o1, InternalRow o2);
 }

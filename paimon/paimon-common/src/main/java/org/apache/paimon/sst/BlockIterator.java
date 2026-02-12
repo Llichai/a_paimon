@@ -25,13 +25,27 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-/** An {@link Iterator} for a block. */
+/**
+ * 块迭代器。
+ *
+ * <p>用于迭代块中的键值对,支持二分查找定位到指定的键。
+ */
 public class BlockIterator implements Iterator<Map.Entry<MemorySlice, MemorySlice>> {
 
+    /** 块读取器 */
     private final BlockReader reader;
+
+    /** 输入流 */
     private final MemorySliceInput input;
+
+    /** 预读的条目 */
     private BlockEntry polled;
 
+    /**
+     * 构造块迭代器。
+     *
+     * @param reader 块读取器
+     */
     public BlockIterator(BlockReader reader) {
         this.reader = reader;
         this.input = reader.blockInput();
@@ -62,6 +76,14 @@ public class BlockIterator implements Iterator<Map.Entry<MemorySlice, MemorySlic
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * 定位到指定的键。
+     *
+     * <p>使用二分查找在块中查找指定的键。
+     *
+     * @param targetKey 目标键
+     * @return 如果找到返回 true,否则定位到大于等于目标键的第一个位置并返回 false
+     */
     public boolean seekTo(MemorySlice targetKey) {
         int left = 0;
         int right = reader.recordCount() - 1;

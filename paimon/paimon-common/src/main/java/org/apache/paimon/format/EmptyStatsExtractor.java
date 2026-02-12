@@ -24,14 +24,36 @@ import org.apache.paimon.utils.Pair;
 
 import java.io.IOException;
 
-/** An extractor that extracts no stats. */
+/**
+ * 空的统计信息提取器，不提取任何统计信息。
+ *
+ * <p>该提取器用于不支持统计信息提取的文件格式，或者在不需要统计信息的场景下使用。
+ */
 public class EmptyStatsExtractor implements SimpleStatsExtractor {
 
+    /**
+     * 提取统计信息，返回空数组。
+     *
+     * @param fileIO 文件 I/O 操作对象（未使用）
+     * @param path 文件路径（未使用）
+     * @param length 文件长度（未使用）
+     * @return 空的统计信息数组
+     * @throws IOException 理论上不会抛出异常
+     */
     @Override
     public SimpleColStats[] extract(FileIO fileIO, Path path, long length) throws IOException {
         return new SimpleColStats[0];
     }
 
+    /**
+     * 提取统计信息和文件信息，不支持此操作。
+     *
+     * @param fileIO 文件 I/O 操作对象
+     * @param path 文件路径
+     * @param length 文件长度
+     * @return 不返回
+     * @throws UnsupportedOperationException 总是抛出此异常
+     */
     @Override
     public Pair<SimpleColStats[], FileInfo> extractWithFileInfo(
             FileIO fileIO, Path path, long length) throws IOException {

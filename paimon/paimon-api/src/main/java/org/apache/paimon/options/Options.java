@@ -38,7 +38,32 @@ import static org.apache.paimon.options.OptionsUtils.convertToPropertiesPrefixed
 import static org.apache.paimon.options.OptionsUtils.removePrefixMap;
 
 /**
- * Options which stores key/value pairs.
+ * 配置选项类,用于存储键值对。
+ *
+ * <p>该类是线程安全的,提供了类型安全的配置访问方法。
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 创建配置对象
+ * Options options = new Options();
+ *
+ * // 添加配置项
+ * options.setString("key1", "value1");
+ * options.set("parallelism", 4);
+ *
+ * // 通过 ConfigOption 访问配置
+ * ConfigOption<Integer> parallelismOption = ConfigOptions
+ *     .key("parallelism")
+ *     .intType()
+ *     .defaultValue(1);
+ *
+ * int parallelism = options.get(parallelismOption); // 返回 4
+ *
+ * // 从 Map 创建
+ * Map<String, String> map = new HashMap<>();
+ * map.put("key", "value");
+ * Options opts = Options.fromMap(map);
+ * }</pre>
  *
  * @since 0.4.0
  */
@@ -48,64 +73,119 @@ public class Options implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** Stores the concrete key/value pairs of this configuration object. */
+    /** 存储具体键值对的映射 */
     private final HashMap<String, String> data;
 
-    /** Creates a new empty configuration. */
+    /** 创建一个新的空配置对象。 */
     public Options() {
         this.data = new HashMap<>();
     }
 
-    /** Creates a new configuration that is initialized with the options of the given map. */
+    /**
+     * 创建一个新的配置对象,使用给定 Map 的选项进行初始化。
+     *
+     * @param map 初始配置键值对
+     */
     public Options(Map<String, String> map) {
         this();
         map.forEach(this::setString);
     }
 
-    /** Creates a new configuration that is initialized with the options of the given two maps. */
+    /**
+     * 创建一个新的配置对象,使用给定两个 Map 的选项进行初始化。
+     *
+     * @param map1 第一个配置键值对 Map
+     * @param map2 第二个配置键值对 Map
+     */
     public Options(Map<String, String> map1, Map<String, String> map2) {
         this();
         map1.forEach(this::setString);
         map2.forEach(this::setString);
     }
 
+    /**
+     * 创建一个新的配置对象,使用给定可迭代对象的条目进行初始化。
+     *
+     * @param map 配置键值对的可迭代对象
+     */
     public Options(Iterable<Map.Entry<String, String>> map) {
         this();
         map.forEach(entry -> setString(entry.getKey(), entry.getValue()));
     }
 
+    /**
+     * 从 Map 创建 Options 对象。
+     *
+     * @param map 配置键值对 Map
+     * @return Options 实例
+     */
     public static Options fromMap(Map<String, String> map) {
         return new Options(map);
     }
 
     /**
-     * Adds the given key/value pair to the configuration object.
+     * 向配置对象添加给定的键值对。
      *
-     * @param key the key of the key/value pair to be added
-     * @param value the value of the key/value pair to be added
+     * @param key 要添加的键
+     * @param value 要添加的值
      */
     public synchronized void setString(String key, String value) {
         data.put(key, value);
     }
 
+    /**
+     * 设置键值对。
+     *
+     * @param key 键
+     * @param value 值
+     */
     public synchronized void set(String key, String value) {
         data.put(key, value);
     }
 
+    /**
+     * 使用 ConfigOption 设置配置值。
+     *
+     * @param option 配置选项
+     * @param value 配置值
+     * @param <T> 值的类型
+     * @return 当前 Options 对象,用于链式调用
+     */
     public synchronized <T> Options set(ConfigOption<T> option, T value) {
         final boolean canBePrefixMap = OptionsUtils.canBePrefixMap(option);
         setValueInternal(option.key(), value, canBePrefixMap);
         return this;
     }
 
+    /**
+     * 获取配置选项的值,如果未设置则返回默认值。
+     *
+     * @param option 配置选项
+     * @param <T> 值的类型
+     * @return 配置值或默认值
+     */
     public synchronized <T> T get(ConfigOption<T> option) {
         return getOptional(option).orElseGet(option::defaultValue);
     }
 
+    /**
+     * 获取指定键的字符串值。
+     *
+     * @param key 键
+     * @return 对应的值,如果不存在返回 null
+     */
     public synchronized String get(String key) {
         return data.get(key);
     }
 
+    /**
+     * 获取配置选项的 Optional 值。
+     *
+     * @param option 配置选项
+     * @param <T> 值的类型
+     * @return Optional 包装的配置值
+     * @throws IllegalArgumentException 如果无法解析值
+     */
     public synchronized <T> Optional<T> getOptional(ConfigOption<T> option) {
         Optional<Object> rawValue = getRawValueFromOption(option);
         Class<?> clazz = option.getClazz();
@@ -122,11 +202,10 @@ public class Options implements Serializable {
     }
 
     /**
-     * Checks whether there is an entry for the given config option.
+     * 检查是否存在给定配置选项的条目。
      *
-     * @param configOption The configuration option
-     * @return <tt>true</tt> if a valid (current or deprecated) key of the config option is stored,
-     *     <tt>false</tt> otherwise
+     * @param configOption 配置选项
+     * @return 如果存储了有效的(当前或废弃的)键,返回 true,否则返回 false
      */
     public synchronized boolean contains(ConfigOption<?> configOption) {
         synchronized (this.data) {
@@ -142,59 +221,143 @@ public class Options implements Serializable {
         }
     }
 
+    /**
+     * 获取所有键的集合。
+     *
+     * @return 键的集合
+     */
     public synchronized Set<String> keySet() {
         return data.keySet();
     }
 
+    /**
+     * 将配置转换为 Map。
+     *
+     * @return 键值对 Map
+     */
     public synchronized Map<String, String> toMap() {
         return data;
     }
 
+    /**
+     * 删除指定前缀,返回新的 Options 对象。
+     *
+     * @param prefix 要删除的前缀
+     * @return 新的 Options 对象
+     */
     public synchronized Options removePrefix(String prefix) {
         return new Options(convertToPropertiesPrefixKey(data, prefix));
     }
 
+    /**
+     * 删除指定键的配置项。
+     *
+     * @param key 要删除的键
+     * @return 被删除的值,如果不存在返回 null
+     */
     public synchronized String remove(String key) {
         return data.remove(key);
     }
 
+    /**
+     * 删除指定配置选项的配置项。
+     *
+     * @param option 要删除的配置选项
+     */
     public synchronized void remove(ConfigOption<?> option) {
         data.remove(option.key());
     }
 
+    /**
+     * 检查是否包含指定键。
+     *
+     * @param key 要检查的键
+     * @return 如果包含返回 true,否则返回 false
+     */
     public synchronized boolean containsKey(String key) {
         return data.containsKey(key);
     }
 
-    /** Adds all entries in these options to the given {@link Properties}. */
+    /**
+     * 将此配置中的所有条目添加到给定的 {@link Properties}。
+     *
+     * @param props 目标 Properties 对象
+     */
     public synchronized void addAllToProperties(Properties props) {
         props.putAll(this.data);
     }
 
+    /**
+     * 获取字符串类型配置选项的值。
+     *
+     * @param option 配置选项
+     * @return 配置值
+     */
     public synchronized String getString(ConfigOption<String> option) {
         return get(option);
     }
 
+    /**
+     * 获取布尔值,如果不存在返回默认值。
+     *
+     * @param key 键
+     * @param defaultValue 默认值
+     * @return 配置值或默认值
+     */
     public synchronized boolean getBoolean(String key, boolean defaultValue) {
         return getRawValue(key).map(OptionsUtils::convertToBoolean).orElse(defaultValue);
     }
 
+    /**
+     * 获取整数值,如果不存在返回默认值。
+     *
+     * @param key 键
+     * @param defaultValue 默认值
+     * @return 配置值或默认值
+     */
     public synchronized int getInteger(String key, int defaultValue) {
         return getRawValue(key).map(OptionsUtils::convertToInt).orElse(defaultValue);
     }
 
+    /**
+     * 获取双精度浮点数值,如果不存在返回默认值。
+     *
+     * @param key 键
+     * @param defaultValue 默认值
+     * @return 配置值或默认值
+     */
     public synchronized double getDouble(String key, double defaultValue) {
         return getRawValue(key).map(OptionsUtils::convertToDouble).orElse(defaultValue);
     }
 
+    /**
+     * 获取字符串值,如果不存在返回默认值。
+     *
+     * @param key 键
+     * @param defaultValue 默认值
+     * @return 配置值或默认值
+     */
     public synchronized String getString(String key, String defaultValue) {
         return getRawValue(key).map(OptionsUtils::convertToString).orElse(defaultValue);
     }
 
+    /**
+     * 设置整数值。
+     *
+     * @param key 键
+     * @param value 值
+     */
     public synchronized void setInteger(String key, int value) {
         setValueInternal(key, value);
     }
 
+    /**
+     * 获取长整型值,如果不存在返回默认值。
+     *
+     * @param key 键
+     * @param defaultValue 默认值
+     * @return 配置值或默认值
+     */
     public synchronized long getLong(String key, long defaultValue) {
         return getRawValue(key).map(OptionsUtils::convertToLong).orElse(defaultValue);
     }

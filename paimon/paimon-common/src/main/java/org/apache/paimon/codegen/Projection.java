@@ -21,8 +21,30 @@ package org.apache.paimon.codegen;
 import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.data.InternalRow;
 
-/** Interface for code generated projection, which will map a RowData to another BinaryRowData. */
+/**
+ * 投影接口。
+ *
+ * <p>用于代码生成的投影,可以将一个 RowData 映射到另一个 BinaryRowData。
+ * 投影通常用于字段选择和重排序,是数据处理中的常见操作。
+ *
+ * <p>该接口的实现类通常由代码生成器动态生成,以获得最佳性能。
+ *
+ * <p>典型用途:
+ * <ul>
+ *   <li>字段选择 - 从输入行中选择特定字段</li>
+ *   <li>字段重排序 - 改变字段的顺序</li>
+ *   <li>字段复制 - 复制某些字段</li>
+ * </ul>
+ */
 public interface Projection {
 
+    /**
+     * 应用投影。
+     *
+     * <p>将输入行根据预定义的映射关系转换为输出行。
+     *
+     * @param row 输入行
+     * @return 投影后的二进制行
+     */
     BinaryRow apply(InternalRow row);
 }

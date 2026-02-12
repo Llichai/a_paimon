@@ -35,14 +35,56 @@ import static org.apache.paimon.memory.MemorySegmentUtils.BIT_BYTE_INDEX_MASK;
 import static org.apache.paimon.memory.MemorySegmentUtils.byteIndex;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** A {@link BinaryRow} which is safe avoid core dump. */
+/**
+ * 安全的二进制数组实现，避免核心转储问题。
+ *
+ * <p>这是 {@link BinaryArray} 的安全版本，使用纯 Java 字节数组操作而不是直接内存访问。
+ *
+ * <p><b>设计特点：</b>
+ * <ul>
+ *   <li>使用 byte[] 数组代替 MemorySegment 进行数据存储
+ *   <li>所有数据访问都经过边界检查，避免内存访问错误
+ *   <li>与 BinaryArray 保持相同的二进制格式
+ *   <li>适用于需要高稳定性的场景
+ * </ul>
+ *
+ * <p><b>内存布局：</b>
+ * <pre>
+ * [Size (4 bytes)] [Null Bits] [Element Data (fixed size per element for primitives)]
+ * </pre>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>在限制直接内存访问的环境中运行
+ *   <li>跨越 JNI 边界传递数组数据
+ *   <li>调试和测试，需要更好的错误诊断
+ * </ul>
+ *
+ * @see BinaryArray
+ * @since 1.0
+ */
 public final class SafeBinaryArray implements InternalArray {
 
+    /** 数组元素数量。 */
     private final int size;
+
+    /** 底层字节数组，存储完整的数组数据。 */
     private final byte[] bytes;
+
+    /** 数组数据在 bytes 数组中的起始偏移量。 */
     private final int offset;
+
+    /** 数组元素数据区的起始偏移量。 */
     private final int elementOffset;
 
+    /**
+     * 构造安全二进制数组。
+     *
+     * <p>从 bytes 数组中读取 size，并计算元素数据区的起始偏移量。
+     *
+     * @param bytes 字节数组
+     * @param offset 数组数据起始偏移量
+     */
     public SafeBinaryArray(byte[] bytes, int offset) {
         checkArgument(bytes.length > offset + 4);
         final int size = BytesUtils.getInt(bytes, offset);
@@ -59,6 +101,13 @@ public final class SafeBinaryArray implements InternalArray {
         return size;
     }
 
+    /**
+     * 获取指定位置元素的偏移量。
+     *
+     * @param ordinal 元素索引
+     * @param elementSize 元素大小（字节数）
+     * @return 元素在 bytes 数组中的偏移量
+     */
     private int getElementOffset(int ordinal, int elementSize) {
         return elementOffset + ordinal * elementSize;
     }

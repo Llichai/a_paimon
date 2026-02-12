@@ -23,30 +23,32 @@ import org.apache.paimon.data.InternalRow;
 import java.io.Closeable;
 import java.io.IOException;
 
-/** The writer that writes records. */
+/**
+ * 记录写入器接口。
+ *
+ * <p>该接口定义了向文件格式写入数据行的标准方法，支持批量缓冲和自动刷新。
+ */
 public interface FormatWriter extends Closeable {
 
     /**
-     * Adds an element to the encoder. The encoder may temporarily buffer the element, or
-     * immediately write it to the stream.
+     * 向编码器添加一个元素。编码器可能会临时缓冲该元素，或立即将其写入流中。
      *
-     * <p>It may be that adding this element fills up an internal buffer and causes the encoding and
-     * flushing of a batch of internally buffered elements.
+     * <p>添加此元素可能会填满内部缓冲区，并触发一批内部缓冲元素的编码和刷新操作。
      *
-     * @param element The element to add.
-     * @throws IOException Thrown, if the element cannot be added to the encoder, or if the output
-     *     stream throws an exception.
+     * @param element 要添加的数据行
+     * @throws IOException 如果无法将元素添加到编码器，或输出流抛出异常
      */
     void addElement(InternalRow element) throws IOException;
 
     /**
-     * Check if the writer has reached the <code>targetSize</code>.
+     * 检查写入器是否已达到指定的目标大小。
      *
-     * @param suggestedCheck Whether it needs to be checked, but subclasses can also decide whether
-     *     to check it themselves.
-     * @param targetSize The size of the target.
-     * @return true if the target size was reached, otherwise false.
-     * @throws IOException Thrown if calculating the length fails.
+     * <p>该方法用于判断是否需要滚动到新文件，避免文件过大。
+     *
+     * @param suggestedCheck 是否需要检查的建议，但子类也可以自己决定是否检查
+     * @param targetSize 目标大小（字节）
+     * @return 如果已达到目标大小返回 true，否则返回 false
+     * @throws IOException 如果计算长度失败
      */
     boolean reachTargetSize(boolean suggestedCheck, long targetSize) throws IOException;
 }

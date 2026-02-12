@@ -26,7 +26,35 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonGet
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
-/** Response for getting view. */
+/**
+ * 获取视图响应对象。
+ *
+ * <p>该类表示获取视图详细信息的响应,继承自 {@link AuditRESTResponse}。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>id - 视图唯一标识符
+ *   <li>name - 视图名称
+ *   <li>schema - 视图 Schema,包含查询定义等信息
+ *   <li>审计字段 - owner, createdAt, createdBy, updatedAt, updatedBy
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "id": "view_001",
+ *   "name": "my_view",
+ *   "schema": { ... },
+ *   "owner": "admin",
+ *   "createdAt": 1609459200000,
+ *   "createdBy": "user1",
+ *   "updatedAt": 1609545600000,
+ *   "updatedBy": "user2"
+ * }
+ * </pre>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetViewResponse extends AuditRESTResponse implements RESTResponse {
 

@@ -22,14 +22,21 @@ import org.apache.paimon.io.BundleRecords;
 
 import java.io.IOException;
 
-/** Format write with bundle interface. */
+/**
+ * 支持批量写入的格式写入器接口。
+ *
+ * <p>该接口扩展了 {@link FormatWriter}，增加了直接写入记录束（bundle）的能力。
+ * 批量写入可以提高写入效率，减少序列化开销。
+ */
 public interface BundleFormatWriter extends FormatWriter {
 
     /**
-     * Write a bundle of records directly.
+     * 直接写入一批记录。
      *
-     * @param bundle the records to be written
-     * @throws IOException if exception happens
+     * <p>与逐条调用 {@link FormatWriter#addElement} 相比，批量写入可以更高效地处理数据。
+     *
+     * @param bundle 要写入的记录束
+     * @throws IOException 如果写入过程中发生异常
      */
     void writeBundle(BundleRecords bundle) throws IOException;
 }

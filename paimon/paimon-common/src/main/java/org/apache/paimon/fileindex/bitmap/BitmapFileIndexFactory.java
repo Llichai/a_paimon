@@ -23,16 +23,39 @@ import org.apache.paimon.fileindex.FileIndexerFactory;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.types.DataType;
 
+/**
+ * Bitmap 文件索引工厂。
+ *
+ * <p>用于创建 {@link BitmapFileIndex} 索引实例。
+ *
+ * <p>通过 SPI (Service Provider Interface) 机制加载,标识符为 "bitmap"。
+ *
+ * @see BitmapFileIndex
+ * @see FileIndexerFactory
+ */
 /** Factory to create {@link BitmapFileIndex}. */
 public class BitmapFileIndexFactory implements FileIndexerFactory {
 
+    /** Bitmap 索引的标识符。 */
     public static final String BITMAP_INDEX = "bitmap";
 
+    /**
+     * 获取索引标识符。
+     *
+     * @return "bitmap"
+     */
     @Override
     public String identifier() {
         return BITMAP_INDEX;
     }
 
+    /**
+     * 创建 Bitmap 文件索引。
+     *
+     * @param dataType 数据类型
+     * @param options 配置选项
+     * @return BitmapFileIndex 实例
+     */
     @Override
     public FileIndexer create(DataType dataType, Options options) {
         return new BitmapFileIndex(dataType, options);

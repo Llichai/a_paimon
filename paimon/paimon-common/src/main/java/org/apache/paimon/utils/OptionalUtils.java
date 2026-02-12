@@ -20,8 +20,33 @@ package org.apache.paimon.utils;
 
 import java.util.OptionalLong;
 
-/** Utils for Optional. * */
+/**
+ * Optional 工具类。
+ *
+ * <p>提供 Optional 相关的便利方法,用于处理可空值。
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 将可空的 Long 转换为 OptionalLong
+ * Long value = getValue();
+ * OptionalLong optValue = OptionalUtils.ofNullable(value);
+ *
+ * if (optValue.isPresent()) {
+ *     long v = optValue.getAsLong();
+ * }
+ * }</pre>
+ */
 public class OptionalUtils {
+
+    /**
+     * 将可空的 Long 值转换为 OptionalLong。
+     *
+     * <p>类似于 {@link java.util.Optional#ofNullable(Object)},
+     * 但返回专用的 {@link OptionalLong} 类型,避免装箱开销。
+     *
+     * @param value Long 值,可为 null
+     * @return 如果值为 null 则返回空 OptionalLong,否则返回包含该值的 OptionalLong
+     */
     public static OptionalLong ofNullable(Long value) {
         return value == null ? OptionalLong.empty() : OptionalLong.of(value);
     }

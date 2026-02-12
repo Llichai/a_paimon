@@ -47,12 +47,106 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** {@link FileStoreTable} with privilege checks. */
+/**
+ * 带权限检查的 {@link FileStoreTable} 实现。
+ *
+ * <p>这是一个装饰器模式的实现,在原始FileStoreTable的基础上添加权限检查功能。
+ * 所有涉及表操作的方法都会在执行前进行权限验证。
+ *
+ * <h2>权限检查策略</h2>
+ * <ul>
+ *   <li><b>查询操作</b> - 需要SELECT权限
+ *     <ul>
+ *       <li>newScan() - 创建批量扫描</li>
+ *       <li>newStreamScan() - 创建流式扫描</li>
+ *       <li>newRead() - 创建读取器</li>
+ *       <li>newSnapshotReader() - 创建快照读取器</li>
+ *       <li>statistics() - 获取统计信息</li>
+ *       <li>newLocalTableQuery() - 创建本地查询</li>
+ *       <li>branchManager() - 访问分支管理器(需要同时有INSERT权限)</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>写入操作</b> - 需要INSERT权限
+ *     <ul>
+ *       <li>newWrite() - 创建写入器</li>
+ *       <li>newCommit() - 创建提交器</li>
+ *       <li>newWriteSelector() - 创建写入选择器</li>
+ *       <li>rollbackTo() - 回滚到指定快照或标签</li>
+ *       <li>createTag() - 创建标签</li>
+ *       <li>deleteTag() - 删除标签</li>
+ *       <li>renameTag() - 重命名标签</li>
+ *       <li>createBranch() - 创建分支</li>
+ *       <li>deleteBranch() - 删除分支</li>
+ *       <li>fastForward() - 快进分支</li>
+ *       <li>newExpireSnapshots() - 过期快照</li>
+ *       <li>newExpireChangelog() - 过期变更日志</li>
+ *       <li>tagManager() - 访问标签管理器</li>
+ *       <li>newTagAutoManager() - 创建自动标签管理器</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>读写操作</b> - 需要SELECT或INSERT权限之一
+ *     <ul>
+ *       <li>snapshotManager() - 访问快照管理器</li>
+ *       <li>changelogManager() - 访问变更日志管理器</li>
+ *       <li>latestSnapshot() - 获取最新快照</li>
+ *       <li>snapshot() - 获取指定快照</li>
+ *     </ul>
+ *   </li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 从PrivilegedCatalog获取表(自动包装为PrivilegedFileStoreTable)
+ * Table table = catalog.getTable(Identifier.create("db", "table"));
+ *
+ * // 读取数据 - 需要SELECT权限
+ * DataTableScan scan = ((FileStoreTable) table).newScan();
+ * InnerTableRead read = ((FileStoreTable) table).newRead();
+ *
+ * // 写入数据 - 需要INSERT权限
+ * TableWriteImpl<?> write = ((FileStoreTable) table).newWrite("user");
+ * TableCommitImpl commit = ((FileStoreTable) table).newCommit("user");
+ *
+ * // 标签管理 - 需要INSERT权限
+ * ((FileStoreTable) table).createTag("tag1");
+ * ((FileStoreTable) table).deleteTag("tag1");
+ * }</pre>
+ *
+ * <h2>表复制与权限</h2>
+ * <p>所有的copy方法都会返回新的PrivilegedFileStoreTable实例,保留相同的权限检查器:
+ * <ul>
+ *   <li>{@link #copy(Map)} - 使用动态选项复制</li>
+ *   <li>{@link #copy(TableSchema)} - 使用新Schema复制</li>
+ *   <li>{@link #copyWithoutTimeTravel(Map)} - 复制但不带时间旅行</li>
+ *   <li>{@link #copyWithLatestSchema()} - 使用最新Schema复制</li>
+ *   <li>{@link #switchToBranch(String)} - 切换到指定分支</li>
+ * </ul>
+ *
+ * <h2>与FileStore的集成</h2>
+ * <p>{@link #store()} 方法返回 {@link PrivilegedFileStore},确保通过FileStore进行的
+ * 底层操作也会受到权限检查的保护。
+ *
+ * <h2>异常处理</h2>
+ * <ul>
+ *   <li>{@link NoPrivilegeException} - 用户没有执行操作所需的权限</li>
+ * </ul>
+ *
+ * @see PrivilegedCatalog
+ * @see PrivilegedFileStore
+ * @see PrivilegeChecker
+ */
 public class PrivilegedFileStoreTable extends DelegatedFileStoreTable {
 
     protected final PrivilegeChecker privilegeChecker;
     protected final Identifier identifier;
 
+    /**
+     * 构造带权限检查的FileStoreTable。
+     *
+     * @param wrapped 被包装的原始FileStoreTable
+     * @param privilegeChecker 权限检查器
+     * @param identifier 表标识符
+     */
     protected PrivilegedFileStoreTable(
             FileStoreTable wrapped, PrivilegeChecker privilegeChecker, Identifier identifier) {
         super(wrapped);
@@ -300,6 +394,14 @@ public class PrivilegedFileStoreTable extends DelegatedFileStoreTable {
                 wrapped.switchToBranch(branchName), privilegeChecker, identifier);
     }
 
+    /**
+     * 包装FileStoreTable为PrivilegedFileStoreTable。
+     *
+     * @param table 原始FileStoreTable
+     * @param privilegeChecker 权限检查器
+     * @param identifier 表标识符
+     * @return 带权限检查的FileStoreTable
+     */
     public static PrivilegedFileStoreTable wrap(
             FileStoreTable table, PrivilegeChecker privilegeChecker, Identifier identifier) {
         return new PrivilegedFileStoreTable(table, privilegeChecker, identifier);

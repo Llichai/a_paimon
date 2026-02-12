@@ -21,19 +21,66 @@ package org.apache.paimon.utils;
 import java.io.Serializable;
 import java.util.Objects;
 
-/** Container that accommodates three fields. */
+/**
+ * 三元组容器。
+ *
+ * <p>用于容纳三个字段的不可变容器类，类似于元组(Tuple)的概念。
+ *
+ * <p>主要特性：
+ * <ul>
+ *   <li>不可变 - 所有字段均为 final
+ *   <li>泛型支持 - 支持任意类型的三个字段
+ *   <li>可序列化 - 实现 Serializable 接口
+ *   <li>值对象 - 提供 equals、hashCode 和 toString 方法
+ * </ul>
+ *
+ * <p>使用场景：
+ * <ul>
+ *   <li>函数返回值 - 返回三个相关的值
+ *   <li>数据传输 - 传递三个相关的数据
+ *   <li>键值对扩展 - 扩展的键值对结构
+ * </ul>
+ *
+ * @param <T0> 第一个字段的类型
+ * @param <T1> 第二个字段的类型
+ * @param <T2> 第三个字段的类型
+ * @see Serializable
+ */
 public final class Triple<T0, T1, T2> implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** 第一个字段。 */
     public final T0 f0;
+
+    /** 第二个字段。 */
     public final T1 f1;
+
+    /** 第三个字段。 */
     public final T2 f2;
 
+    /**
+     * 创建一个三元组实例。
+     *
+     * @param f0 第一个字段的值
+     * @param f1 第二个字段的值
+     * @param f2 第三个字段的值
+     * @param <T0> 第一个字段的类型
+     * @param <T1> 第二个字段的类型
+     * @param <T2> 第三个字段的类型
+     * @return 新的三元组实例
+     */
     public static <T0, T1, T2> Triple<T0, T1, T2> of(T0 f0, T1 f1, T2 f2) {
         return new Triple<>(f0, f1, f2);
     }
 
+    /**
+     * 构造三元组。
+     *
+     * @param f0 第一个字段的值
+     * @param f1 第二个字段的值
+     * @param f2 第三个字段的值
+     */
     private Triple(final T0 f0, final T1 f1, final T2 f2) {
         this.f0 = f0;
         this.f1 = f1;

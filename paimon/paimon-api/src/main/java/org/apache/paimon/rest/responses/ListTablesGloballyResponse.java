@@ -27,7 +27,19 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing tables globally. */
+/**
+ * 全局列出表响应对象。
+ *
+ * <p>该类表示跨数据库列出所有表标识符的分页响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>tables - 表标识符列表(包含数据库和表名)
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListTablesGloballyResponse implements PagedResponse<Identifier> {
 

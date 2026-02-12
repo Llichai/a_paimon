@@ -31,9 +31,26 @@ import java.util.Map;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** GlobalIndexResultSerializer to serialize and deserialize GlobalIndexResult. */
+/**
+ * 全局索引结果序列化器,用于序列化和反序列化 {@link GlobalIndexResult}。
+ *
+ * <p>该序列化器支持两种类型的索引结果:
+ * <ul>
+ *   <li>普通的 {@link GlobalIndexResult} - 仅包含行 ID 位图
+ *   <li>{@link ScoredGlobalIndexResult} - 包含行 ID 位图和对应的评分
+ * </ul>
+ *
+ * <p>序列化格式:
+ * <ol>
+ *   <li>版本号(int)
+ *   <li>位图数据长度(int) + 位图数据(bytes)
+ *   <li>评分数据大小(int) - 0 表示无评分,否则为评分数量
+ *   <li>评分数据(float[]) - 仅当有评分时存在
+ * </ol>
+ */
 public class GlobalIndexResultSerializer implements Serializer<GlobalIndexResult> {
 
+    /** 序列化格式版本号 */
     private static final int VERSION = 1;
 
     @Override

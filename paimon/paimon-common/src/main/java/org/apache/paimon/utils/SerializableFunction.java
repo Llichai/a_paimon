@@ -21,6 +21,23 @@ package org.apache.paimon.utils;
 import java.io.Serializable;
 import java.util.function.Function;
 
-/** A {@link Function} that is also {@link Serializable}. */
+/**
+ * 可序列化的 Function 接口。
+ *
+ * <p>这是 {@link Function} 的可序列化版本，同时实现了 {@link Serializable} 接口。
+ *
+ * <p>主要用途：
+ * <ul>
+ *   <li>分布式计算 - 在分布式环境中传递函数逻辑
+ *   <li>状态序列化 - 支持函数状态的序列化和恢复
+ *   <li>Lambda 序列化 - 支持 Lambda 表达式的序列化
+ *   <li>远程执行 - 在远程节点上执行函数逻辑
+ * </ul>
+ *
+ * @param <T> 函数输入参数的类型
+ * @param <R> 函数返回值的类型
+ * @see Function
+ * @see Serializable
+ */
 @FunctionalInterface
 public interface SerializableFunction<T, R> extends Function<T, R>, Serializable {}

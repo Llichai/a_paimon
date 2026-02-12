@@ -18,19 +18,26 @@
 
 package org.apache.paimon.compression;
 
-/** A decompressor which decompresses a block each time. */
+/**
+ * 块解压缩器接口。
+ *
+ * <p>每次解压缩一个块的解压缩器。它从外部提供的字节数组读取和写入数据,
+ * 减少了数据复制时间,提高了解压缩性能。
+ *
+ * <p>该接口定义了块级别的解压缩操作,实现类负责具体的解压缩算法实现。
+ */
 public interface BlockDecompressor {
 
     /**
-     * Decompress source data read from src and write the decompressed data to dst.
+     * 解压缩从 src 读取的源数据,并将解压缩后的数据写入 dst。
      *
-     * @param src Compressed data to read from
-     * @param srcOff The start offset of compressed data
-     * @param srcLen The length of data which want to be decompressed
-     * @param dst The target to write decompressed data
-     * @param dstOff The start offset to write the decompressed data
-     * @return Length of decompressed data
-     * @throws BufferDecompressionException if exception thrown when decompressing
+     * @param src 要读取的压缩数据
+     * @param srcOff 压缩数据的起始偏移量
+     * @param srcLen 要解压缩的数据长度
+     * @param dst 写入解压缩数据的目标数组
+     * @param dstOff 写入解压缩数据的起始偏移量
+     * @return 解压缩后的数据长度
+     * @throws BufferDecompressionException 如果解压缩时抛出异常
      */
     int decompress(byte[] src, int srcOff, int srcLen, byte[] dst, int dstOff)
             throws BufferDecompressionException;

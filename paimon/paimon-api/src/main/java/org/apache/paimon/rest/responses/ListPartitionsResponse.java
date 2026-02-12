@@ -27,7 +27,19 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing partitions. */
+/**
+ * 列出分区响应对象。
+ *
+ * <p>该类表示列出表所有分区的分页响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>partitions - 分区对象列表
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListPartitionsResponse implements PagedResponse<Partition> {
 

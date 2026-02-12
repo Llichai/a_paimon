@@ -28,7 +28,33 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import javax.annotation.Nullable;
 
-/** Response for getting tag. */
+/**
+ * 获取标签响应对象。
+ *
+ * <p>该类表示获取表标签详细信息的响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>tagName - 标签名称
+ *   <li>snapshot - 标签指向的快照对象
+ *   <li>tagCreateTime - 标签创建时间戳(毫秒),可选
+ *   <li>tagTimeRetained - 标签保留时长,可选
+ * </ul>
+ *
+ * <p>JSON 格式示例:
+ * <pre>
+ * {
+ *   "tagName": "v1.0",
+ *   "snapshot": { ... },
+ *   "tagCreateTime": 1609459200000,
+ *   "tagTimeRetained": "7d"
+ * }
+ * </pre>
+ *
+ * <p>标签用于标记重要的快照版本,便于回溯和恢复。
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GetTagResponse implements RESTResponse {
 

@@ -18,5 +18,5 @@
 
 package org.apache.paimon.options.description;
 
-/** Part of description that represents an element inside a block e.g. a link. */
+/** 描述中代表块内元素的接口,例如链接。 */
 public interface InlineElement extends DescriptionElement {}

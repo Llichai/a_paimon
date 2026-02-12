@@ -43,15 +43,72 @@ import org.apache.paimon.types.VarCharType;
 
 import java.util.Comparator;
 
-/** This interface provides core methods to ser/de and compare btree index keys. */
+/**
+ * BTree 索引键的序列化器接口。
+ *
+ * <p>该接口提供了序列化、反序列化和比较 BTree 索引键的核心方法。
+ * 不同数据类型(如整数、字符串、时间戳等)需要不同的序列化策略,通过实现此接口来支持。
+ *
+ * <h2>核心方法</h2>
+ * <ul>
+ *   <li>{@link #serialize(Object)} - 将键对象序列化为字节数组
+ *   <li>{@link #deserialize(MemorySlice)} - 从字节数组反序列化键对象
+ *   <li>{@link #createComparator()} - 创建键的比较器,用于排序和范围查询
+ * </ul>
+ *
+ * <h2>支持的数据类型</h2>
+ * <p>通过工厂方法 {@link #create(DataType)} 自动选择合适的序列化器:
+ * <ul>
+ *   <li>整数类型 - TINYINT, SMALLINT, INT, BIGINT
+ *   <li>浮点类型 - FLOAT, DOUBLE
+ *   <li>布尔类型 - BOOLEAN
+ *   <li>定点数类型 - DECIMAL
+ *   <li>字符串类型 - CHAR, VARCHAR
+ *   <li>时间类型 - DATE, TIME, TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE
+ * </ul>
+ *
+ * <h2>序列化策略</h2>
+ * <ul>
+ *   <li>定长类型 - 直接写入固定字节数(如 INT 4字节, LONG 8字节)
+ *   <li>变长类型 - 先写长度,再写数据(如 STRING, DECIMAL)
+ *   <li>复合类型 - 组合多个字段(如 TIMESTAMP 可能包含毫秒和纳秒)
+ * </ul>
+ *
+ * @see BTreeIndexWriter
+ * @see BTreeIndexReader
+ */
 public interface KeySerializer {
 
+    /**
+     * 将键对象序列化为字节数组。
+     *
+     * @param key 要序列化的键对象
+     * @return 序列化后的字节数组
+     */
     byte[] serialize(Object key);
 
+    /**
+     * 从内存切片反序列化键对象。
+     *
+     * @param data 包含序列化数据的内存切片
+     * @return 反序列化的键对象
+     */
     Object deserialize(MemorySlice data);
 
+    /**
+     * 创建键的比较器。
+     *
+     * @return 用于比较两个键的比较器
+     */
     Comparator<Object> createComparator();
 
+    /**
+     * 根据数据类型创建对应的键序列化器。
+     *
+     * @param type 数据类型
+     * @return 对应的键序列化器
+     * @throws UnsupportedOperationException 如果数据类型不受支持
+     */
     static KeySerializer create(DataType type) {
         return type.accept(
                 new DataTypeDefaultVisitor<KeySerializer>() {
@@ -134,7 +191,7 @@ public interface KeySerializer {
                 });
     }
 
-    /** Serializer for int type. */
+    /** INT 类型的序列化器,固定 4 字节。 */
     class IntSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(4);
 
@@ -156,7 +213,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for long type. */
+    /** BIGINT(LONG)类型的序列化器,固定 8 字节。 */
     class BigIntSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(8);
 
@@ -178,7 +235,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for tiny int type. */
+    /** TINYINT 类型的序列化器,固定 1 字节。 */
     class TinyIntSerializer implements KeySerializer {
 
         @Override
@@ -197,7 +254,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for small int type. */
+    /** SMALLINT(SHORT)类型的序列化器,固定 2 字节。 */
     class SmallIntSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(2);
 
@@ -219,7 +276,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for boolean type. */
+    /** BOOLEAN 类型的序列化器,固定 1 字节(0 或 1)。 */
     class BooleanSerializer implements KeySerializer {
 
         @Override
@@ -238,7 +295,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for float type. */
+    /** FLOAT 类型的序列化器,使用浮点数的 IEEE 754 表示,固定 4 字节。 */
     class FloatSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(4);
 
@@ -260,7 +317,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for double type. */
+    /** DOUBLE 类型的序列化器,使用双精度浮点数的 IEEE 754 表示,固定 8 字节。 */
     class DoubleSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(8);
 
@@ -282,7 +339,15 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for decimal type. */
+    /**
+     * DECIMAL 类型的序列化器。
+     *
+     * <p>根据精度选择序列化策略:
+     * <ul>
+     *   <li>紧凑型(precision <= 18) - 使用 8 字节 LONG 存储
+     *   <li>非紧凑型(precision > 18) - 使用变长字节数组存储
+     * </ul>
+     */
     class DecimalSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(8);
         private final int precision;
@@ -317,7 +382,7 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for STRING type. */
+    /** STRING(CHAR/VARCHAR)类型的序列化器,使用 UTF-8 编码的变长字节数组。 */
     class StringSerializer implements KeySerializer {
 
         @Override
@@ -336,7 +401,15 @@ public interface KeySerializer {
         }
     }
 
-    /** Serializer for timestamp. */
+    /**
+     * TIMESTAMP 类型的序列化器。
+     *
+     * <p>根据精度选择序列化策略:
+     * <ul>
+     *   <li>紧凑型(precision <= 3) - 只存储毫秒,8 字节
+     *   <li>非紧凑型(precision > 3) - 存储毫秒(8字节) + 纳秒(变长),约 9-13 字节
+     * </ul>
+     */
     class TimestampSerializer implements KeySerializer {
         private final MemorySliceOutput keyOut = new MemorySliceOutput(8);
         private final int precision;

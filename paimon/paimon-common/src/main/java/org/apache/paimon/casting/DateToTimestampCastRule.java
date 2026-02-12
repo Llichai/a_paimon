@@ -26,8 +26,35 @@ import org.apache.paimon.utils.DateTimeUtils;
 import java.util.TimeZone;
 
 /**
- * {@link DataTypeRoot#DATE} to {@link DataTypeRoot#TIMESTAMP_WITHOUT_TIME_ZONE}/{@link
- * DataTypeRoot#TIMESTAMP_WITH_LOCAL_TIME_ZONE} cast rule.
+ * {@link DataTypeRoot#DATE} 到 {@link DataTypeRoot#TIMESTAMP_WITHOUT_TIME_ZONE}/{@link
+ * DataTypeRoot#TIMESTAMP_WITH_LOCAL_TIME_ZONE} 的类型转换规则。
+ *
+ * <p>功能说明:
+ *
+ * <ul>
+ *   <li>DATE 转 TIMESTAMP_WITHOUT_TIME_ZONE: 将日期转换为当天的午夜时刻(00:00:00.000)
+ *   <li>DATE 转 TIMESTAMP_WITH_LOCAL_TIME_ZONE: 将日期转换为本地时区的午夜时刻
+ * </ul>
+ *
+ * <p>转换语义:
+ *
+ * <ul>
+ *   <li>日期值表示自 Unix 纪元(1970-01-01)以来的天数
+ *   <li>转换为时间戳时,需要乘以每天的毫秒数(86400000)
+ *   <li>时区处理: TIMESTAMP_WITHOUT_TIME_ZONE 使用 UTC,TIMESTAMP_WITH_LOCAL_TIME_ZONE 使用系统默认时区
+ * </ul>
+ *
+ * <p>转换示例:
+ *
+ * <pre>
+ * DATE '2024-01-15' -> TIMESTAMP '2024-01-15 00:00:00.000'
+ * DATE '1970-01-01' (值为0) -> TIMESTAMP '1970-01-01 00:00:00.000'
+ * DATE '2024-06-30' (Asia/Shanghai) -> TIMESTAMP_WITH_LOCAL_TIME_ZONE '2024-06-30 00:00:00.000 +08:00'
+ * </pre>
+ *
+ * <p>NULL 值处理: 输入为 NULL 时,输出也为 NULL
+ *
+ * <p>SQL 标准兼容性: 符合 SQL:2016 标准中 DATE 到 TIMESTAMP 的隐式转换规则
  */
 class DateToTimestampCastRule extends AbstractCastRule<Number, Timestamp> {
 

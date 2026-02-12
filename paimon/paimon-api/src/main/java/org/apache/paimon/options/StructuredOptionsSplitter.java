@@ -24,26 +24,58 @@ import java.util.List;
 
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
-/** Helper class for splitting a string on a given delimiter with quoting logic. */
+/**
+ * 结构化选项分割器辅助类,用于根据给定分隔符和引号逻辑分割字符串。
+ *
+ * <p>该类支持使用单引号(')或双引号(")引用字符串的一部分。引号可以通过加倍来转义。
+ *
+ * <h2>分割规则</h2>
+ * <ul>
+ *   <li>支持单引号和双引号
+ *   <li>引号可以通过加倍来转义(如 '' 或 "")
+ *   <li>引号内的分隔符不会触发分割
+ *   <li>空格会被自动去除(除非在引号内)
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 示例1: 使用单引号
+ * List<String> result = StructuredOptionsSplitter.splitEscaped("'A;B';C", ';');
+ * // 结果: ["A;B", "C"]
+ *
+ * // 示例2: 使用双引号
+ * List<String> result = StructuredOptionsSplitter.splitEscaped("\"AB'D\";B;C", ';');
+ * // 结果: ["AB'D", "B", "C"]
+ *
+ * // 示例3: 转义引号
+ * List<String> result = StructuredOptionsSplitter.splitEscaped("\"AB'\"\"D;B\";C", ';');
+ * // 结果: ["AB'\"D;B", "C"]
+ *
+ * // 示例4: 转义字符串
+ * String escaped = StructuredOptionsSplitter.escapeWithSingleQuote("A;BCD", ";");
+ * // 结果: "'A;BCD'"
+ * }</pre>
+ */
 class StructuredOptionsSplitter {
 
     /**
-     * Splits the given string on the given delimiter. It supports quoting parts of the string with
-     * either single (') or double quotes ("). Quotes can be escaped by doubling the quotes.
+     * 在给定分隔符上分割给定字符串。
+     * 支持使用单引号(')或双引号(")引用字符串的一部分。
+     * 引号可以通过加倍来转义。
      *
-     * <p>Examples:
+     * <p>示例:
      *
      * <ul>
      *   <li>'A;B';C => [A;B], [C]
      *   <li>"AB'D";B;C => [AB'D], [B], [C]
-     *   <li>"AB'""D;B";C => [AB'\"D;B], [C]
+     *   <li>"AB'""D;B";C => [AB'"D;B], [C]
      * </ul>
      *
-     * <p>For more examples check the tests.
+     * <p>更多示例请查看测试。
      *
-     * @param string a string to split
-     * @param delimiter delimiter to split on
-     * @return a list of splits
+     * @param string 要分割的字符串
+     * @param delimiter 分割所用的分隔符
+     * @return 分割结果列表
      */
     static List<String> splitEscaped(String string, char delimiter) {
         List<Token> tokens = tokenize(checkNotNull(string), delimiter);
@@ -51,13 +83,12 @@ class StructuredOptionsSplitter {
     }
 
     /**
-     * Escapes the given string with single quotes, if the input string contains a double quote or
-     * any of the given {@code charsToEscape}. Any single quotes in the input string will be escaped
-     * by doubling.
+     * 使用单引号转义给定字符串,如果输入字符串包含双引号或任何给定的 {@code charsToEscape}。
+     * 输入字符串中的任何单引号都将通过加倍来转义。
      *
-     * <p>Given that the escapeChar is (;)
+     * <p>假设 escapeChar 是 (;)
      *
-     * <p>Examples:
+     * <p>示例:
      *
      * <ul>
      *   <li>A,B,C,D => A,B,C,D
@@ -67,9 +98,9 @@ class StructuredOptionsSplitter {
      *   <li>AB'"D:B => 'AB''"D:B'
      * </ul>
      *
-     * @param string a string which needs to be escaped
-     * @param charsToEscape escape chars for the escape conditions
-     * @return escaped string by single quote
+     * @param string 需要转义的字符串
+     * @param charsToEscape 转义条件的转义字符
+     * @return 使用单引号转义后的字符串
      */
     static String escapeWithSingleQuote(String string, String... charsToEscape) {
         boolean escape =
@@ -84,6 +115,12 @@ class StructuredOptionsSplitter {
         return string;
     }
 
+    /**
+     * 处理令牌列表,将其转换为字符串列表。
+     *
+     * @param tokens 令牌列表
+     * @return 分割后的字符串列表
+     */
     private static List<String> processTokens(List<Token> tokens) {
         final List<String> splits = new ArrayList<>();
         for (int i = 0; i < tokens.size(); i++) {
@@ -115,6 +152,13 @@ class StructuredOptionsSplitter {
         return splits;
     }
 
+    /**
+     * 将字符串标记化为令牌列表。
+     *
+     * @param string 要标记化的字符串
+     * @param delimiter 分隔符
+     * @return 令牌列表
+     */
     private static List<Token> tokenize(String string, char delimiter) {
         final List<Token> tokens = new ArrayList<>();
         final StringBuilder builder = new StringBuilder();
@@ -141,6 +185,15 @@ class StructuredOptionsSplitter {
         return tokens;
     }
 
+    /**
+     * 消费引号内的字符。
+     *
+     * @param string 字符串
+     * @param quote 引号字符
+     * @param cursor 当前游标位置
+     * @param builder 字符串构建器
+     * @return 下一个游标位置
+     */
     private static int consumeInQuotes(
             String string, char quote, int cursor, StringBuilder builder) {
         for (int i = cursor + 1; i < string.length(); i++) {
@@ -161,6 +214,15 @@ class StructuredOptionsSplitter {
                 "Could not split string. Quoting was not closed properly.");
     }
 
+    /**
+     * 消费未引用的字符。
+     *
+     * @param string 字符串
+     * @param delimiter 分隔符
+     * @param cursor 当前游标位置
+     * @param builder 字符串构建器
+     * @return 下一个游标位置
+     */
     private static int consumeUnquoted(
             String string, char delimiter, int cursor, StringBuilder builder) {
         int i;
@@ -176,36 +238,72 @@ class StructuredOptionsSplitter {
         return i;
     }
 
+    /**
+     * 令牌类型枚举。
+     */
     private enum TokenType {
+        /** 双引号引用的令牌 */
         DOUBLE_QUOTED,
+        /** 单引号引用的令牌 */
         SINGLE_QUOTED,
+        /** 未引用的令牌 */
         UNQUOTED,
+        /** 分隔符令牌 */
         DELIMITER
     }
 
+    /**
+     * 令牌类,表示分割过程中的一个令牌。
+     */
     private static class Token {
+        /** 令牌类型 */
         private final TokenType tokenType;
+        /** 令牌字符串值 */
         private final String string;
+        /** 令牌在原字符串中的位置 */
         private final int position;
 
+        /**
+         * 构造令牌。
+         *
+         * @param tokenType 令牌类型
+         * @param string 令牌字符串值
+         * @param position 令牌位置
+         */
         private Token(TokenType tokenType, String string, int position) {
             this.tokenType = tokenType;
             this.string = string;
             this.position = position;
         }
 
+        /**
+         * 获取令牌类型。
+         *
+         * @return 令牌类型
+         */
         public TokenType getTokenType() {
             return tokenType;
         }
 
+        /**
+         * 获取令牌字符串值。
+         *
+         * @return 字符串值
+         */
         public String getString() {
             return string;
         }
 
+        /**
+         * 获取令牌位置。
+         *
+         * @return 位置
+         */
         public int getPosition() {
             return position;
         }
     }
 
+    /** 私有构造函数,防止实例化。 */
     private StructuredOptionsSplitter() {}
 }

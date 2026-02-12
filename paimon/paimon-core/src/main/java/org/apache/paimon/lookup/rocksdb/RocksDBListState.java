@@ -29,7 +29,32 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
-/** RocksDB state for key -> List of value. */
+/**
+ * 基于 RocksDB 的列表状态实现.
+ *
+ * <p>RocksDBListState 使用 RocksDB 的 merge 操作实现高效的列表追加。
+ * Merge 操作会将多个值合并为一个,避免了读-改-写的开销。
+ *
+ * <h2>存储机制:</h2>
+ * <ul>
+ *   <li>使用 ListDelimitedSerializer 将值列表序列化为单个字节数组
+ *   <li>使用 merge 操作追加新值,避免读取现有列表
+ *   <li>查询时反序列化完整的值列表
+ *   <li>使用 Caffeine 缓存反序列化后的列表
+ * </ul>
+ *
+ * <h2>性能特点:</h2>
+ * <ul>
+ *   <li><b>添加延迟</b>: 微秒级(merge 操作)
+ *   <li><b>查询延迟</b>: 缓存命中时纳秒级,未命中时需反序列化整个列表
+ *   <li><b>缓存失效</b>: 每次添加都会使缓存失效,确保数据一致性
+ * </ul>
+ *
+ * @param <K> 键的类型
+ * @param <V> 值的类型
+ * @see RocksDBState RocksDB 状态基类
+ * @see ListState 列表状态接口
+ */
 public class RocksDBListState<K, V> extends RocksDBState<K, V, List<V>> implements ListState<K, V> {
 
     private final ListDelimitedSerializer listSerializer = new ListDelimitedSerializer();

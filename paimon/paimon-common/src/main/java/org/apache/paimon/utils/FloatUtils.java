@@ -18,9 +18,23 @@
 
 package org.apache.paimon.utils;
 
-/** Utils for float. */
+/**
+ * 浮点数工具类。
+ *
+ * <p>提供浮点数相关的实用方法。
+ */
 public class FloatUtils {
 
+    /**
+     * 比较两个浮点数数组是否相等。
+     *
+     * <p>考虑浮点数精度问题,使用 epsilon 作为误差容限。
+     *
+     * @param arr1 第一个数组
+     * @param arr2 第二个数组
+     * @param epsilon 误差容限
+     * @return 如果两个数组在误差范围内相等则返回 true
+     */
     public static boolean equals(float[] arr1, float[] arr2, float epsilon) {
         if (arr1 == arr2) {
             return true;

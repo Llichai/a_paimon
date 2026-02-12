@@ -24,8 +24,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Description for {@link org.apache.paimon.options.ConfigOption}. Allows providing multiple rich
- * formats.
+ * {@link org.apache.paimon.options.ConfigOption} 的描述类。允许使用多种丰富的格式。
+ *
+ * <p>该类用于为配置选项提供详细的描述信息,包括纯文本、列表、链接、换行符等格式。
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 创建一个包含列表和链接的描述
+ * Description description = Description.builder()
+ *     .text("这是一个配置选项的描述: ")
+ *     .list(
+ *         text("这是列表的第一个元素"),
+ *         text("这是第二个元素,包含一个链接 %s", link("https://example.com")))
+ *     .build();
+ * }</pre>
  *
  * @since 0.4.0
  */

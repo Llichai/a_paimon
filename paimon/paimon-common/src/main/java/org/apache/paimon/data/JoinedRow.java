@@ -27,48 +27,101 @@ import javax.annotation.Nullable;
 import java.util.Objects;
 
 /**
- * An implementation of {@link InternalRow} which is backed by two concatenated {@link InternalRow}.
+ * {@link InternalRow} 的实现,由两个连接的 {@link InternalRow} 支持。
  *
- * <p>This implementation is mutable to allow for performant changes in hot code paths.
+ * <p>此实现是可变的,允许在热点代码路径中进行高性能的变更。
+ *
+ * <p><b>设计目的:</b>
+ * JoinedRow 主要用于 Join 操作和需要合并两个行的场景。它提供了一个逻辑视图,
+ * 将两个独立的行连接成一个单一的行,而无需物理复制数据。
+ *
+ * <p><b>字段布局:</b>
+ * 逻辑上,JoinedRow 的字段由 row1 和 row2 的字段连接而成:
+ * <pre>
+ * row1 字段: [f0, f1, ..., f(n-1)]
+ * row2 字段: [f0, f1, ..., f(m-1)]
+ *            ↓ 连接后 ↓
+ * JoinedRow:  [f0, f1, ..., f(n-1), f(n), f(n+1), ..., f(n+m-1)]
+ *             └─────── row1 ────────┘ └────────── row2 ──────────┘
+ * </pre>
+ *
+ * <p><b>性能优势:</b>
+ * <ul>
+ *   <li>零拷贝: 不复制底层行数据,仅持有引用</li>
+ *   <li>可重用性: 支持原地替换底层行,避免对象创建</li>
+ *   <li>延迟绑定: 可以先创建 JoinedRow,后续再设置底层行</li>
+ * </ul>
+ *
+ * <p><b>字段访问规则:</b>
+ * <ul>
+ *   <li>位置 < row1.getFieldCount(): 从 row1 访问</li>
+ *   <li>位置 >= row1.getFieldCount(): 从 row2 访问(位置需减去 row1 的字段数)</li>
+ * </ul>
+ *
+ * <p><b>可变性:</b>
+ * JoinedRow 是可变的,可以通过 {@link #replace(InternalRow, InternalRow)} 方法
+ * 原地替换底层行。这对于在循环中重用对象非常有用,可以显著减少 GC 压力。
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * JoinedRow joinedRow = new JoinedRow();
+ * for (InternalRow left : leftRows) {
+ *     for (InternalRow right : rightRows) {
+ *         joinedRow.replace(left, right);  // 重用同一个 JoinedRow 对象
+ *         // 处理 joinedRow...
+ *     }
+ * }
+ * }</pre>
+ *
+ * <p>使用场景:
+ * <ul>
+ *   <li>Join 操作:连接左表和右表的行</li>
+ *   <li>宽表构建:将多个窄表合并为宽表</li>
+ *   <li>字段扩展:在原有行基础上追加额外字段</li>
+ * </ul>
  *
  * @since 0.4.0
  */
 @Public
 public class JoinedRow implements InternalRow {
 
+    /** 此行的变更类型,默认为 INSERT。 */
     private RowKind rowKind = RowKind.INSERT;
+    /** 第一个底层行。 */
     private InternalRow row1;
+    /** 第二个底层行。 */
     private InternalRow row2;
 
     /**
-     * Creates a new {@link JoinedRow} of kind {@link RowKind#INSERT}, but without backing rows.
+     * 创建一个类型为 {@link RowKind#INSERT} 的新 {@link JoinedRow},但没有底层行。
      *
-     * <p>Note that it must be ensured that the backing rows are set to non-{@code null} values
-     * before accessing data from this {@link JoinedRow}.
+     * <p>注意:必须确保在从此 {@link JoinedRow} 访问数据之前,
+     * 将底层行设置为非 {@code null} 值。
      */
     public JoinedRow() {}
 
     /**
-     * Creates a new {@link JoinedRow} of kind {@link RowKind#INSERT} backed by row1 and row2.
+     * 创建一个由 row1 和 row2 支持的,类型为 {@link RowKind#INSERT} 的新 {@link JoinedRow}。
      *
-     * <p>Note that it must be ensured that the backing rows are set to non-{@code null} values
-     * before accessing data from this {@link JoinedRow}.
+     * <p>注意:必须确保在从此 {@link JoinedRow} 访问数据之前,
+     * 将底层行设置为非 {@code null} 值。
      *
-     * @param row1 the first row
-     * @param row2 the second row
+     * @param row1 第一个行
+     * @param row2 第二个行
      */
     public JoinedRow(@Nullable InternalRow row1, @Nullable InternalRow row2) {
         this(RowKind.INSERT, row1, row2);
     }
 
     /**
-     * Creates a new {@link JoinedRow} of kind {@link RowKind#INSERT} backed by row1 and row2.
+     * 创建一个由 row1 和 row2 支持的,具有指定 RowKind 的新 {@link JoinedRow}。
      *
-     * <p>Note that it must be ensured that the backing rows are set to non-{@code null} values
-     * before accessing data from this {@link JoinedRow}.
+     * <p>注意:必须确保在从此 {@link JoinedRow} 访问数据之前,
+     * 将底层行设置为非 {@code null} 值。
      *
-     * @param row1 the first row
-     * @param row2 the second row
+     * @param rowKind 行的变更类型
+     * @param row1 第一个行
+     * @param row2 第二个行
      */
     public JoinedRow(RowKind rowKind, @Nullable InternalRow row1, @Nullable InternalRow row2) {
         this.rowKind = rowKind;
@@ -76,15 +129,26 @@ public class JoinedRow implements InternalRow {
         this.row2 = row2;
     }
 
+    /**
+     * 创建一个连接两个行的 JoinedRow 的静态工厂方法。
+     *
+     * @param row1 第一个行
+     * @param row2 第二个行
+     * @return 新创建的 JoinedRow
+     */
     public static JoinedRow join(InternalRow row1, InternalRow row2) {
         return new JoinedRow(row1, row2);
     }
 
     /**
-     * Replaces the {@link InternalRow} backing this {@link JoinedRow}.
+     * 替换支持此 {@link JoinedRow} 的底层 {@link InternalRow}。
      *
-     * <p>This method replaces the backing rows in place and does not return a new object. This is
-     * done for performance reasons.
+     * <p>此方法原地替换底层行,不返回新对象。这样做是出于性能考虑,
+     * 可以在循环中重用同一个 JoinedRow 对象,避免频繁创建对象。
+     *
+     * @param row1 新的第一个行
+     * @param row2 新的第二个行
+     * @return 此 JoinedRow 实例本身(用于链式调用)
      */
     public JoinedRow replace(InternalRow row1, InternalRow row2) {
         this.row1 = row1;
@@ -92,10 +156,20 @@ public class JoinedRow implements InternalRow {
         return this;
     }
 
+    /**
+     * 返回第一个底层行。
+     *
+     * @return 第一个行
+     */
     public InternalRow row1() {
         return row1;
     }
 
+    /**
+     * 返回第二个底层行。
+     *
+     * @return 第二个行
+     */
     public InternalRow row2() {
         return row2;
     }

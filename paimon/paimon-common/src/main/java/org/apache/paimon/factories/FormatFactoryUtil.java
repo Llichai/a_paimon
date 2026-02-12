@@ -28,13 +28,78 @@ import java.util.stream.Collectors;
 
 import static org.apache.paimon.factories.FactoryUtil.discoverFactories;
 
-/** Utility for working with {@link FileFormatFactory}s. */
+/**
+ * 文件格式工厂工具类。
+ *
+ * <p>该工具类提供了发现和获取文件格式工厂的功能，使用服务发现机制（SPI）来查找可用的格式实现。
+ *
+ * <h2>核心功能</h2>
+ * <ul>
+ *   <li><b>工厂发现</b>：自动发现 classpath 中的文件格式工厂</li>
+ *   <li><b>结果缓存</b>：使用 Caffeine 缓存已发现的工厂，提高性能</li>
+ *   <li><b>标识符匹配</b>：根据格式标识符（如 "orc", "parquet"）查找对应工厂</li>
+ *   <li><b>错误提示</b>：当找不到工厂时，列出所有可用的格式标识符</li>
+ * </ul>
+ *
+ * <h2>支持的格式</h2>
+ * <p>常见的文件格式包括：
+ * <ul>
+ *   <li>ORC - 列式存储格式</li>
+ *   <li>Parquet - Apache Parquet 格式</li>
+ *   <li>Avro - Apache Avro 格式</li>
+ *   <li>其他通过插件加载的自定义格式</li>
+ * </ul>
+ *
+ * <h2>缓存策略</h2>
+ * <ul>
+ *   <li>最大缓存 100 个 ClassLoader</li>
+ *   <li>使用软引用，允许在内存不足时回收</li>
+ *   <li>同步执行缓存操作，避免异步线程池开销</li>
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 获取 ORC 格式工厂
+ * FileFormatFactory orcFactory = FormatFactoryUtil.discoverFactory(
+ *     Thread.currentThread().getContextClassLoader(),
+ *     "orc"
+ * );
+ *
+ * // 获取 Parquet 格式工厂
+ * FileFormatFactory parquetFactory = FormatFactoryUtil.discoverFactory(
+ *     classLoader,
+ *     "parquet"
+ * );
+ *
+ * // 处理未找到工厂的情况
+ * try {
+ *     FileFormatFactory factory = FormatFactoryUtil.discoverFactory(
+ *         classLoader, "unknown-format");
+ * } catch (FactoryException e) {
+ *     // 异常消息中包含所有可用的格式标识符
+ *     System.err.println(e.getMessage());
+ * }
+ * }</pre>
+ *
+ * @see FileFormatFactory
+ * @see FactoryUtil
+ */
 public class FormatFactoryUtil {
 
     private static final Cache<ClassLoader, List<FileFormatFactory>> FACTORIES =
             Caffeine.newBuilder().softValues().maximumSize(100).executor(Runnable::run).build();
 
-    /** Discovers a file format factory. */
+    /**
+     * 发现指定标识符的文件格式工厂。
+     *
+     * <p>该方法使用服务发现机制（SPI）查找并返回与给定标识符匹配的文件格式工厂。
+     *
+     * @param classLoader 用于加载工厂的类加载器
+     * @param identifier 格式标识符（如 "orc", "parquet", "avro"）
+     * @param <T> 工厂类型
+     * @return 匹配的文件格式工厂
+     * @throws FactoryException 如果找不到匹配的工厂，异常消息中会列出所有可用的格式标识符
+     */
     @SuppressWarnings("unchecked")
     public static <T extends FileFormatFactory> T discoverFactory(
             ClassLoader classLoader, String identifier) {

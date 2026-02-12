@@ -30,18 +30,36 @@ import java.util.Objects;
 
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
-/** Utilities to compile a generated code to a Class. */
+/**
+ * 编译工具类。
+ *
+ * <p>用于将生成的 Java 代码编译成 Class 类。该类提供了代码编译和缓存功能,避免重复编译相同的代码。
+ *
+ * <p>主要特性:
+ * <ul>
+ *   <li>使用 Janino 进行快速编译</li>
+ *   <li>提供编译结果缓存,避免重复编译</li>
+ *   <li>错误时输出带行号的代码便于调试</li>
+ * </ul>
+ */
 public final class CompileUtils {
 
-    // used for logging the generated codes to a same place
+    // 用于将生成的代码记录到同一位置
     private static final Logger CODE_LOG = LoggerFactory.getLogger(CompileUtils.class);
 
     /**
-     * Cache of compile, Janino generates a new Class Loader and a new Class file every compile
-     * (guaranteeing that the class name will not be repeated). This leads to multiple tasks of the
-     * same process that generate a large number of duplicate class, resulting in a large number of
-     * Meta zone GC (class unloading), resulting in performance bottlenecks. So we add a cache to
-     * avoid this problem.
+     * 编译缓存。
+     *
+     * <p>Janino 每次编译都会生成新的 ClassLoader 和 Class 文件（确保类名不会重复）。
+     * 这导致同一进程的多个任务生成大量重复的类,从而导致大量的元空间 GC（类卸载）,造成性能瓶颈。
+     * 因此我们添加缓存来避免这个问题。
+     *
+     * <p>缓存特性:
+     * <ul>
+     *   <li>使用软引用,允许在内存不足时回收</li>
+     *   <li>5分钟访问过期时间</li>
+     *   <li>最大缓存 300 个类</li>
+     * </ul>
      */
     static final Cache<ClassKey, Class<?>> COMPILED_CLASS_CACHE =
             Caffeine.newBuilder()
@@ -54,20 +72,22 @@ public final class CompileUtils {
                     .build();
 
     /**
-     * Compiles a generated code to a Class.
+     * 将生成的代码编译成 Class。
      *
-     * @param cl the ClassLoader used to load the class
-     * @param name the class name
-     * @param code the generated code
-     * @param <T> the class type
-     * @return the compiled class
+     * <p>该方法使用缓存机制,如果相同的代码已经编译过,则直接返回缓存的结果。
+     *
+     * @param cl 用于加载类的 ClassLoader
+     * @param name 类名
+     * @param code 生成的代码
+     * @param <T> 类的类型
+     * @return 编译后的 Class
      */
     @SuppressWarnings("unchecked")
     public static <T> Class<T> compile(ClassLoader cl, String name, String code) {
         try {
-            // The class name is part of the "code" and makes the string unique,
-            // to prevent class leaks we don't cache the class loader directly
-            // but only its hash code
+            // 类名是 "code" 的一部分并使字符串唯一,
+            // 为了防止类泄漏,我们不直接缓存类加载器,
+            // 而是只缓存其哈希码
             final ClassKey classKey = new ClassKey(cl.hashCode(), code);
             return (Class<T>) COMPILED_CLASS_CACHE.get(classKey, key -> doCompile(cl, name, code));
         } catch (Exception e) {
@@ -75,6 +95,15 @@ public final class CompileUtils {
         }
     }
 
+    /**
+     * 执行实际的编译操作。
+     *
+     * @param cl 类加载器
+     * @param name 类名
+     * @param code 源代码
+     * @param <T> 类的类型
+     * @return 编译后的 Class
+     */
     private static <T> Class<T> doCompile(ClassLoader cl, String name, String code) {
         checkNotNull(cl, "Classloader must not be null.");
         CODE_LOG.debug("Compiling: {} \n\n Code:\n{}", name, code);
@@ -96,8 +125,12 @@ public final class CompileUtils {
     }
 
     /**
-     * To output more information when an error occurs. Generally, when cook fails, it shows which
-     * line is wrong. This line number starts at 1.
+     * 为代码添加行号。
+     *
+     * <p>在编译失败时输出更多信息。通常当 cook 失败时,会显示哪一行出错。这个行号从 1 开始。
+     *
+     * @param code 源代码
+     * @return 带行号的代码
      */
     private static String addLineNumber(String code) {
         String[] lines = code.split("\n");
@@ -108,9 +141,15 @@ public final class CompileUtils {
         return builder.toString();
     }
 
-    /** Class to use as key for the {@link #COMPILED_CLASS_CACHE}. */
+    /**
+     * 用作 {@link #COMPILED_CLASS_CACHE} 的键的类。
+     *
+     * <p>组合类加载器 ID 和代码内容作为缓存键,确保相同的代码在相同的类加载器环境中只编译一次。
+     */
     private static class ClassKey {
+        /** 类加载器的哈希码 */
         private final int classLoaderId;
+        /** 源代码内容 */
         private final String code;
 
         private ClassKey(int classLoaderId, String code) {

@@ -38,20 +38,53 @@ import java.util.Optional;
 import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
-/** Predicate for filtering data using global indexes. */
+/**
+ * 全局索引评估器,用于使用全局索引过滤数据。
+ *
+ * <p>该类实现了谓词访问者模式,对谓词表达式进行遍历并使用全局索引进行求值。
+ * 支持复合谓词的逻辑运算(AND/OR),并能够处理向量搜索。
+ *
+ * <p>主要功能:
+ * <ul>
+ *   <li>评估谓词表达式并返回匹配的行 ID
+ *   <li>缓存字段级别的索引读取器以提高性能
+ *   <li>支持向量搜索与传统谓词的组合查询
+ *   <li>对结果进行逻辑运算(AND/OR)以组合多个条件
+ * </ul>
+ */
 public class GlobalIndexEvaluator
         implements Closeable, PredicateVisitor<Optional<GlobalIndexResult>> {
 
+    /** 表的行类型定义 */
     private final RowType rowType;
+
+    /** 根据字段 ID 获取索引读取器的函数 */
     private final IntFunction<Collection<GlobalIndexReader>> readersFunction;
+
+    /** 索引读取器缓存,键为字段 ID */
     private final Map<Integer, Collection<GlobalIndexReader>> indexReadersCache = new HashMap<>();
 
+    /**
+     * 构造全局索引评估器。
+     *
+     * @param rowType 表的行类型
+     * @param readersFunction 根据字段 ID 获取索引读取器的函数
+     */
     public GlobalIndexEvaluator(
             RowType rowType, IntFunction<Collection<GlobalIndexReader>> readersFunction) {
         this.rowType = rowType;
         this.readersFunction = readersFunction;
     }
 
+    /**
+     * 评估谓词和向量搜索,返回满足条件的行 ID 集合。
+     *
+     * <p>该方法首先评估传统谓词,然后评估向量搜索,最后将两者的结果进行 AND 运算。
+     *
+     * @param predicate 传统谓词表达式,可为 null
+     * @param vectorSearch 向量搜索条件,可为 null
+     * @return 满足条件的行 ID 结果,如果没有索引支持则返回空
+     */
     public Optional<GlobalIndexResult> evaluate(
             @Nullable Predicate predicate, @Nullable VectorSearch vectorSearch) {
         Optional<GlobalIndexResult> compoundResult = Optional.empty();
@@ -87,6 +120,15 @@ public class GlobalIndexEvaluator
         return compoundResult;
     }
 
+    /**
+     * 访问叶子谓词,使用全局索引进行评估。
+     *
+     * <p>对于包含字段引用的叶子谓词,获取该字段对应的所有索引读取器,
+     * 依次评估每个索引,并对结果执行 AND 运算。
+     *
+     * @param predicate 叶子谓词
+     * @return 满足条件的行 ID 结果,如果没有索引支持则返回空
+     */
     @Override
     public Optional<GlobalIndexResult> visit(LeafPredicate predicate) {
         Optional<FieldRef> fieldRefOptional = predicate.fieldRefOptional();
@@ -122,6 +164,15 @@ public class GlobalIndexEvaluator
         return compoundResult;
     }
 
+    /**
+     * 访问复合谓词,根据逻辑运算符组合子谓词的结果。
+     *
+     * <p>对于 OR 运算,对所有子谓词的结果执行 OR 运算。
+     * 对于 AND 运算,对所有子谓词的结果执行 AND 运算。
+     *
+     * @param predicate 复合谓词
+     * @return 满足条件的行 ID 结果,如果没有索引支持则返回空
+     */
     @Override
     public Optional<GlobalIndexResult> visit(CompoundPredicate predicate) {
         if (predicate.function() instanceof Or) {
@@ -160,6 +211,7 @@ public class GlobalIndexEvaluator
         }
     }
 
+    /** 关闭所有缓存的索引读取器。 */
     public void close() {
         IOUtils.closeAllQuietly(
                 indexReadersCache.values().stream()

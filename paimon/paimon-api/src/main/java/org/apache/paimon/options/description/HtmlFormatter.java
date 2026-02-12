@@ -20,7 +20,7 @@ package org.apache.paimon.options.description;
 
 import java.util.EnumSet;
 
-/** Formatter that transforms {@link Description} into Html representation. */
+/** 将 {@link Description} 转换为 HTML 表示的格式化器。 */
 public class HtmlFormatter extends Formatter {
 
     @Override

@@ -18,7 +18,34 @@
 
 package org.apache.paimon.utils;
 
-/** An enumeration indicating the operating system that the JVM runs on. */
+/**
+ * 操作系统枚举类。
+ *
+ * <p>表示 JVM 运行的操作系统类型,提供操作系统检测和判断功能。
+ *
+ * <h2>支持的操作系统</h2>
+ * <ul>
+ *   <li><b>LINUX</b> - Linux 操作系统
+ *   <li><b>WINDOWS</b> - Windows 操作系统
+ *   <li><b>MAC_OS</b> - macOS 操作系统
+ *   <li><b>FREE_BSD</b> - FreeBSD 操作系统
+ *   <li><b>SOLARIS</b> - Solaris 操作系统
+ *   <li><b>UNKNOWN</b> - 未知或不支持的操作系统
+ * </ul>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 获取当前操作系统
+ * OperatingSystem os = OperatingSystem.getCurrentOperatingSystem();
+ *
+ * // 判断操作系统类型
+ * if (OperatingSystem.isWindows()) {
+ *     // Windows 特定逻辑
+ * } else if (OperatingSystem.isLinux()) {
+ *     // Linux 特定逻辑
+ * }
+ * }</pre>
+ */
 public enum OperatingSystem {
     LINUX,
     WINDOWS,

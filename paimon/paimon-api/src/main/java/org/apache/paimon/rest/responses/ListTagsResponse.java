@@ -25,7 +25,19 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.List;
 
-/** Response for listing tags. */
+/**
+ * 列出标签响应对象。
+ *
+ * <p>该类表示列出表所有标签名称的分页响应。
+ *
+ * <p>响应字段:
+ * <ul>
+ *   <li>tags - 标签名称列表
+ *   <li>nextPageToken - 下一页令牌
+ * </ul>
+ *
+ * @since 1.0
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ListTagsResponse implements PagedResponse<String> {
 

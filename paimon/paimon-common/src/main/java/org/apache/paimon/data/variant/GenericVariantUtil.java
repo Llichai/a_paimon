@@ -30,21 +30,58 @@ import java.util.UUID;
  * additional information regarding copyright ownership. */
 
 /**
- * This class defines constants related to the variant format and provides functions for
- * manipulating variant binaries.
+ * Variant 二进制格式的工具类，定义常量并提供操作 variant 二进制数据的函数。
  *
- * <p>A variant is made up of 2 binaries: value and metadata. A variant value consists of a one-byte
- * header and a number of content bytes (can be zero). The header byte is divided into upper 6 bits
- * (called "type info") and lower 2 bits (called "basic type"). The content format is explained in
- * the below constants for all possible basic type and type info values.
+ * <p><b>Variant 值结构：</b>
+ * <ul>
+ *   <li>由值（value）和元数据（metadata）两个二进制部分组成
+ *   <li>值部分包含 1 字节头部和若干内容字节
+ *   <li>头字节分为：高 6 位（类型信息）+ 低 2 位（基本类型）
+ * </ul>
  *
- * <p>The variant metadata includes a version id and a dictionary of distinct strings
- * (case-sensitive). Its binary format is: - Version: 1-byte unsigned integer. The only acceptable
- * value is 1 currently. - Dictionary size: 4-byte little-endian unsigned integer. The number of
- * keys in the dictionary. - Offsets: (size + 1) * 4-byte little-endian unsigned integers.
- * `offsets[i]` represents the starting position of string i, counting starting from the address of
- * `offsets[0]`. Strings must be stored contiguously, so we don’t need to store the string size,
- * instead, we compute it with `offset[i + 1] - offset[i]`. - UTF-8 string data.
+ * <p><b>头字节格式：</b>
+ * <pre>
+ * [7:2] 类型信息 (type info)
+ * [1:0] 基本类型 (basic type)
+ * </pre>
+ *
+ * <p><b>元数据格式：</b>
+ * <ul>
+ *   <li>版本号：1 字节无符号整数，当前只接受值 1
+ *   <li>字典大小：4 字节小端无符号整数，表示字典中键的数量
+ *   <li>偏移量数组：(size + 1) * 4 字节小端无符号整数
+ *   <li>offsets[i] 表示字符串 i 的起始位置（相对于 offsets[0] 的地址）
+ *   <li>字符串必须连续存储，因此无需单独存储字符串大小
+ *   <li>字符串大小通过 offset[i + 1] - offset[i] 计算
+ *   <li>UTF-8 字符串数据
+ * </ul>
+ *
+ * <p><b>基本类型常量 (2 位)：</b>
+ * <ul>
+ *   <li>PRIMITIVE (0): 基本值，类型信息必须是下面定义的值之一
+ *   <li>SHORT_STR (1): 短字符串，类型信息是字符串大小 [0, 63]
+ *   <li>OBJECT (2): 对象值，包含大小、字段 ID 列表、偏移量列表和字段数据
+ *   <li>ARRAY (3): 数组值，包含大小、偏移量列表和元素数据
+ * </ul>
+ *
+ * <p><b>PRIMITIVE 类型信息值：</b>
+ * <ul>
+ *   <li>NULL (0): JSON null 值，无内容
+ *   <li>TRUE (1): true 值，无内容
+ *   <li>FALSE (2): false 值，无内容
+ *   <li>INT1/2/4/8 (3/4/5/6): 有符号整数
+ *   <li>DOUBLE (7): 8 字节 IEEE 双精度浮点数
+ *   <li>DECIMAL4/8/16 (8/9/10): 十进制数
+ *   <li>DATE (11): 日期值
+ *   <li>TIMESTAMP/TIMESTAMP_NTZ (12/13): 时间戳
+ *   <li>FLOAT (14): 4 字节 IEEE 单精度浮点数
+ *   <li>BINARY (15): 二进制数据
+ *   <li>LONG_STR (16): 长字符串
+ *   <li>UUID (20): UUID
+ * </ul>
+ *
+ * @see GenericVariant
+ * @since 1.0
  */
 public class GenericVariantUtil {
     public static final int BASIC_TYPE_BITS = 2;
@@ -237,8 +274,28 @@ public class GenericVariantUtil {
     }
 
     /**
-     * The value type of variant value. It is determined by the header byte but not a 1:1 mapping
-     * (for example, INT1/2/4/8 all maps to `Type.LONG`).
+     * Variant 值的类型枚举。
+     *
+     * <p>由头字节决定，但不是 1:1 映射。
+     * 例如 INT1/INT2/INT4/INT8 都映射到 Type.LONG。
+     *
+     * <p>类型映射：
+     * <ul>
+     *   <li>OBJECT: 对象类型（键值对集合）
+     *   <li>ARRAY: 数组类型（有序值列表）
+     *   <li>NULL: null 值
+     *   <li>BOOLEAN: 布尔值（TRUE/FALSE）
+     *   <li>LONG: 长整型（INT1/INT2/INT4/INT8）
+     *   <li>STRING: 字符串（SHORT_STR/LONG_STR）
+     *   <li>DOUBLE: 双精度浮点数
+     *   <li>DECIMAL: 十进制数（DECIMAL4/DECIMAL8/DECIMAL16）
+     *   <li>DATE: 日期
+     *   <li>TIMESTAMP: 带时区的时间戳
+     *   <li>TIMESTAMP_NTZ: 不带时区的时间戳
+     *   <li>FLOAT: 单精度浮点数
+     *   <li>BINARY: 二进制数据
+     *   <li>UUID: UUID
+     * </ul>
      */
     public enum Type {
         OBJECT,

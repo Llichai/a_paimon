@@ -19,21 +19,21 @@
 package org.apache.paimon.utils;
 
 /**
- * A functional interface for a {@link java.util.function.Function} that may throw exceptions.
+ * 可能抛出异常的 {@link java.util.function.Function} 函数式接口。
  *
- * @param <T> The type of the argument to the function.
- * @param <R> The type of the result of the supplier.
- * @param <E> The type of Exceptions thrown by this function.
+ * @param <T> 函数参数的类型
+ * @param <R> 函数结果的类型
+ * @param <E> 函数抛出的异常类型
  */
 @FunctionalInterface
 public interface FunctionWithException<T, R, E extends Throwable> {
 
     /**
-     * Calls this function.
+     * 调用此函数。
      *
-     * @param value The argument to the function.
-     * @return The result of thus supplier.
-     * @throws E This function may throw an exception.
+     * @param value 函数参数
+     * @return 函数结果
+     * @throws E 此函数可能抛出异常
      */
     R apply(T value) throws E;
 }

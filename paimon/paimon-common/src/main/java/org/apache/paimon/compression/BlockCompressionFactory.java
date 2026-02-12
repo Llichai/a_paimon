@@ -24,18 +24,49 @@ import io.airlift.compress.lzo.LzoDecompressor;
 import javax.annotation.Nullable;
 
 /**
- * Each compression codec has an implementation of {@link BlockCompressionFactory} to create
- * compressors and decompressors.
+ * 块压缩工厂接口。
+ *
+ * <p>每种压缩编解码器都有一个 {@link BlockCompressionFactory} 的实现来创建压缩器和解压缩器。
+ * 该工厂模式允许统一管理不同压缩算法的实例化。
+ *
+ * <p>支持的压缩算法:
+ * <ul>
+ *   <li>ZSTD - 提供高压缩率,支持可配置的压缩级别</li>
+ *   <li>LZ4 - 提供高压缩速度</li>
+ *   <li>LZO - 平衡压缩率和速度</li>
+ *   <li>NONE - 不压缩</li>
+ * </ul>
  */
 public interface BlockCompressionFactory {
 
+    /**
+     * 获取压缩类型。
+     *
+     * @return 压缩类型枚举
+     */
     BlockCompressionType getCompressionType();
 
+    /**
+     * 获取压缩器实例。
+     *
+     * @return 块压缩器
+     */
     BlockCompressor getCompressor();
 
+    /**
+     * 获取解压缩器实例。
+     *
+     * @return 块解压缩器
+     */
     BlockDecompressor getDecompressor();
 
-    /** Creates {@link BlockCompressionFactory} according to the configuration. */
+    /**
+     * 根据配置创建 {@link BlockCompressionFactory}。
+     *
+     * @param compression 压缩选项配置
+     * @return 对应的压缩工厂,如果不压缩则返回 null
+     * @throws IllegalStateException 如果压缩算法未知
+     */
     @Nullable
     static BlockCompressionFactory create(CompressOptions compression) {
         switch (compression.compress().toUpperCase()) {
@@ -53,7 +84,15 @@ public interface BlockCompressionFactory {
         }
     }
 
-    /** Creates {@link BlockCompressionFactory} according to the {@link BlockCompressionType}. */
+    /**
+     * 根据 {@link BlockCompressionType} 创建 {@link BlockCompressionFactory}。
+     *
+     * <p>使用默认配置创建压缩工厂。对于 ZSTD,使用压缩级别 1。
+     *
+     * @param compression 块压缩类型
+     * @return 对应的压缩工厂,如果不压缩则返回 null
+     * @throws IllegalStateException 如果压缩算法未知
+     */
     @Nullable
     static BlockCompressionFactory create(BlockCompressionType compression) {
         switch (compression) {

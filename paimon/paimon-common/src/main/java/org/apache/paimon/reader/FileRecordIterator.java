@@ -29,21 +29,56 @@ import java.util.Iterator;
 import java.util.function.Function;
 
 /**
- * A {@link RecordReader.RecordIterator} to support returning the record's row position and file
- * Path.
+ * 支持返回记录行位置和文件路径的记录迭代器。
+ *
+ * <p>该接口扩展了 {@link RecordReader.RecordIterator},增加了对行位置和文件路径的跟踪能力。
+ *
+ * <h2>核心功能</h2>
+ *
+ * <ul>
+ *   <li>行位置跟踪:记录当前返回记录在文件中的绝对行号
+ *   <li>文件路径:提供数据所在的文件路径
+ *   <li>支持转换和过滤:保留行位置和文件路径信息
+ * </ul>
+ *
+ * <h2>使用场景</h2>
+ *
+ * <ul>
+ *   <li>行级别的删除向量:需要记录删除行的精确位置
+ *   <li>数据溯源:跟踪数据来源文件和位置
+ *   <li>错误定位:在数据处理失败时快速定位问题行
+ *   <li>部分读取:基于行号范围过滤数据
+ * </ul>
+ *
+ * <h2>线程安全性</h2>
+ *
+ * <p>该接口的实现通常不是线程安全的,需要外部同步。
  */
 public interface FileRecordIterator<T> extends RecordReader.RecordIterator<T> {
 
     /**
-     * Get the row position of the row returned by {@link RecordReader.RecordIterator#next}.
+     * 获取 {@link RecordReader.RecordIterator#next} 返回记录的行位置。
      *
-     * @return the row position from 0 to the number of rows in the file
+     * <p>行位置是从0开始的索引,表示记录在文件中的绝对行号。
+     *
+     * @return 行位置,范围从0到文件总行数-1
      */
     long returnedPosition();
 
-    /** @return the file path */
+    /**
+     * 获取记录所在的文件路径。
+     *
+     * @return 文件路径
+     */
     Path filePath();
 
+    /**
+     * 应用转换函数,同时保留行位置和文件路径信息。
+     *
+     * @param function 转换函数
+     * @param <R> 转换后的记录类型
+     * @return 转换后的文件记录迭代器
+     */
     @Override
     default <R> FileRecordIterator<R> transform(Function<T, R> function) {
         FileRecordIterator<T> thisIterator = this;
@@ -75,6 +110,12 @@ public interface FileRecordIterator<T> extends RecordReader.RecordIterator<T> {
         };
     }
 
+    /**
+     * 应用过滤器,同时保留行位置和文件路径信息。
+     *
+     * @param filter 过滤谓词
+     * @return 过滤后的文件记录迭代器
+     */
     @Override
     default FileRecordIterator<T> filter(Filter<T> filter) {
         FileRecordIterator<T> thisIterator = this;
@@ -110,6 +151,22 @@ public interface FileRecordIterator<T> extends RecordReader.RecordIterator<T> {
         };
     }
 
+    /**
+     * 基于位图选择记录。
+     *
+     * <p>只返回行位置在选择位图中的记录,用于实现行级别的部分读取。
+     *
+     * <h2>实现逻辑</h2>
+     *
+     * <ul>
+     *   <li>维护期望的下一个行号(nextExpected)
+     *   <li>当返回的行位置与期望值匹配时,返回该记录
+     *   <li>跳过不在选择位图中的记录
+     * </ul>
+     *
+     * @param selection 行位置选择位图
+     * @return 过滤后的迭代器
+     */
     default FileRecordIterator<T> selection(RoaringBitmap32 selection) {
         FileRecordIterator<T> thisIterator = this;
         final Iterator<Integer> selects = selection.iterator();

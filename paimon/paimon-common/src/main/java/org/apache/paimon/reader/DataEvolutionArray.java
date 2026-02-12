@@ -27,7 +27,52 @@ import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.data.Timestamp;
 import org.apache.paimon.data.variant.Variant;
 
-/** The array which is made up by several rows. */
+/**
+ * 由多个数组组合而成的数据演化数组。
+ *
+ * <p>该类是 {@link InternalArray} 的实现,将来自不同模式版本的多个数组组合成一个统一的数组视图。
+ *
+ * <h2>设计背景</h2>
+ *
+ * <p>在表模式演化过程中,嵌套数组类型的字段可能来自不同的文件和模式版本。
+ * DataEvolutionArray 通过映射关系将这些部分数组组合为完整的数组。
+ *
+ * <h2>核心概念</h2>
+ *
+ * <ul>
+ *   <li><b>rowOffsets</b>:长度为输出元素数,指示每个元素来自哪个内部数组(数组索引)
+ *   <li><b>fieldOffsets</b>:长度为输出元素数,指示每个元素在源数组中的偏移量
+ *   <li><b>rows</b>:内部数组列表,存储来自不同模式版本的多个数组
+ * </ul>
+ *
+ * <h2>工作原理</h2>
+ *
+ * <p>与 {@link DataEvolutionRow} 类似,但操作对象是数组元素而非行字段:
+ *
+ * <ul>
+ *   <li>通过 rowOffsets[i] 确定第i个元素来自哪个内部数组
+ *   <li>通过 fieldOffsets[i] 确定在该数组中的位置
+ *   <li>当 rowOffsets[i] < 0 时,表示该元素不存在,返回 null
+ * </ul>
+ *
+ * <h2>空值处理</h2>
+ *
+ * <p>当 rowOffsets[pos] < 0 时,{@link #isNullAt(int)} 返回 true,表示该位置的元素不存在。
+ *
+ * <h2>性能优化</h2>
+ *
+ * <ul>
+ *   <li>零拷贝:不复制数据,只维护引用
+ *   <li>延迟计算:仅在访问元素时才进行映射
+ *   <li>数组访问:使用数组而非Map,提高查找效率
+ * </ul>
+ *
+ * <h2>线程安全性</h2>
+ *
+ * <p>该类不是线程安全的,需要外部同步。
+ *
+ * @see DataEvolutionRow
+ */
 public class DataEvolutionArray implements InternalArray {
 
     private final InternalArray[] rows;

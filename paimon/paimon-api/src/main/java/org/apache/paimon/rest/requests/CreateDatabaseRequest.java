@@ -27,19 +27,52 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 
 import java.util.Map;
 
-/** Request for creating database. */
+/**
+ * 创建数据库请求。
+ *
+ * <p>用于向 REST 服务器发送创建数据库的请求,包含数据库名称和配置选项。
+ *
+ * <p>JSON 序列化格式:
+ *
+ * <pre>{@code
+ * {
+ *   "name": "my_database",
+ *   "options": {
+ *     "warehouse": "/path/to/warehouse",
+ *     "metastore": "hive"
+ *   }
+ * }
+ * }</pre>
+ *
+ * <p>示例: 创建新数据库
+ *
+ * <pre>{@code
+ * Map<String, String> options = new HashMap<>();
+ * options.put("warehouse", "/user/hive/warehouse");
+ * options.put("comment", "Production database");
+ * CreateDatabaseRequest request = new CreateDatabaseRequest("prod_db", options);
+ * }</pre>
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateDatabaseRequest implements RESTRequest {
 
     private static final String FIELD_NAME = "name";
     private static final String FIELD_OPTIONS = "options";
 
+    /** 数据库名称。 */
     @JsonProperty(FIELD_NAME)
     private final String name;
 
+    /** 数据库配置选项。 */
     @JsonProperty(FIELD_OPTIONS)
     private final Map<String, String> options;
 
+    /**
+     * 构造函数。
+     *
+     * @param name 数据库名称
+     * @param options 数据库配置选项
+     */
     @JsonCreator
     public CreateDatabaseRequest(
             @JsonProperty(FIELD_NAME) String name,
@@ -48,11 +81,21 @@ public class CreateDatabaseRequest implements RESTRequest {
         this.options = options;
     }
 
+    /**
+     * 获取数据库名称。
+     *
+     * @return 数据库名称
+     */
     @JsonGetter(FIELD_NAME)
     public String getName() {
         return name;
     }
 
+    /**
+     * 获取数据库配置选项。
+     *
+     * @return 配置选项映射
+     */
     @JsonGetter(FIELD_OPTIONS)
     public Map<String, String> getOptions() {
         return options;

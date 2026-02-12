@@ -27,36 +27,40 @@ import java.util.Map;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /**
- * {@code ConfigOptions} are used to build a {@link ConfigOption}. The option is typically built in
- * one of the following pattern:
+ * 配置选项构建器类,用于构建 {@link ConfigOption} 实例。
+ *
+ * <p>该类提供了流式 API 来创建类型安全的配置选项。
+ *
+ * <h2>使用模式</h2>
+ * 配置选项通常按以下模式之一构建:
  *
  * <pre>{@code
- * // simple string-valued option with a default value
+ * // 简单的字符串类型选项,带有默认值
  * ConfigOption<String> tempDirs = ConfigOptions
  *     .key("tmp.dir")
  *     .stringType()
  *     .defaultValue("/tmp");
  *
- * // simple integer-valued option with a default value
+ * // 简单的整数类型选项,带有默认值
  * ConfigOption<Integer> parallelism = ConfigOptions
  *     .key("application.parallelism")
  *     .intType()
  *     .defaultValue(100);
  *
- * // option of list of integers with a default value
+ * // 整数列表类型的选项,带有默认值
  * ConfigOption<Integer> parallelism = ConfigOptions
  *     .key("application.ports")
  *     .intType()
  *     .asList()
  *     .defaultValue(8000, 8001, 8002);
  *
- * // option with no default value
+ * // 没有默认值的选项
  * ConfigOption<String> userName = ConfigOptions
  *     .key("user.name")
  *     .stringType()
  *     .noDefaultValue();
  *
- * // option with deprecated keys to check
+ * // 带有废弃键检查的选项
  * ConfigOption<Double> threshold = ConfigOptions
  *     .key("cpu.utilization.threshold")
  *     .doubleType()
@@ -70,10 +74,10 @@ import static org.apache.paimon.utils.Preconditions.checkNotNull;
 public class ConfigOptions {
 
     /**
-     * Starts building a new {@link ConfigOption}.
+     * 开始构建一个新的 {@link ConfigOption}。
      *
-     * @param key The key for the config option.
-     * @return The builder for the config option with the given key.
+     * @param key 配置选项的键
+     * @return 配置选项的构建器,用于指定给定键的配置选项
      */
     public static OptionBuilder key(String key) {
         checkNotNull(key);
@@ -83,98 +87,95 @@ public class ConfigOptions {
     // ------------------------------------------------------------------------
 
     /**
-     * The option builder is used to create a {@link ConfigOption}. It is instantiated via {@link
-     * ConfigOptions#key(String)}.
+     * 选项构建器,用于创建 {@link ConfigOption}。
+     *
+     * <p>通过 {@link ConfigOptions#key(String)} 实例化。
      */
     public static final class OptionBuilder {
         /**
-         * Workaround to reuse the {@link TypedConfigOptionBuilder} for a {@link Map Map&lt;String,
-         * String&gt;}.
+         * 为 {@link Map Map&lt;String, String&gt;} 复用 {@link TypedConfigOptionBuilder} 的变通方法。
          */
         @SuppressWarnings("unchecked")
         private static final Class<Map<String, String>> PROPERTIES_MAP_CLASS =
                 (Class<Map<String, String>>) (Class<?>) Map.class;
 
-        /** The key for the config option. */
+        /** 配置选项的键 */
         private final String key;
 
         /**
-         * Creates a new OptionBuilder.
+         * 创建一个新的 OptionBuilder。
          *
-         * @param key The key for the config option
+         * @param key 配置选项的键
          */
         OptionBuilder(String key) {
             this.key = key;
         }
 
-        /** Defines that the value of the option should be of {@link Boolean} type. */
+        /** 定义选项值应为 {@link Boolean} 类型。 */
         public TypedConfigOptionBuilder<Boolean> booleanType() {
             return new TypedConfigOptionBuilder<>(key, Boolean.class);
         }
 
-        /** Defines that the value of the option should be of {@link Integer} type. */
+        /** 定义选项值应为 {@link Integer} 类型。 */
         public TypedConfigOptionBuilder<Integer> intType() {
             return new TypedConfigOptionBuilder<>(key, Integer.class);
         }
 
-        /** Defines that the value of the option should be of {@link Long} type. */
+        /** 定义选项值应为 {@link Long} 类型。 */
         public TypedConfigOptionBuilder<Long> longType() {
             return new TypedConfigOptionBuilder<>(key, Long.class);
         }
 
-        /** Defines that the value of the option should be of {@link Float} type. */
+        /** 定义选项值应为 {@link Float} 类型。 */
         public TypedConfigOptionBuilder<Float> floatType() {
             return new TypedConfigOptionBuilder<>(key, Float.class);
         }
 
-        /** Defines that the value of the option should be of {@link Double} type. */
+        /** 定义选项值应为 {@link Double} 类型。 */
         public TypedConfigOptionBuilder<Double> doubleType() {
             return new TypedConfigOptionBuilder<>(key, Double.class);
         }
 
-        /** Defines that the value of the option should be of {@link String} type. */
+        /** 定义选项值应为 {@link String} 类型。 */
         public TypedConfigOptionBuilder<String> stringType() {
             return new TypedConfigOptionBuilder<>(key, String.class);
         }
 
-        /** Defines that the value of the option should be of {@link Duration} type. */
+        /** 定义选项值应为 {@link Duration} 类型。 */
         public TypedConfigOptionBuilder<Duration> durationType() {
             return new TypedConfigOptionBuilder<>(key, Duration.class);
         }
 
-        /** Defines that the value of the option should be of {@link MemorySize} type. */
+        /** 定义选项值应为 {@link MemorySize} 类型。 */
         public TypedConfigOptionBuilder<MemorySize> memoryType() {
             return new TypedConfigOptionBuilder<>(key, MemorySize.class);
         }
 
         /**
-         * Defines that the value of the option should be of {@link Enum} type.
+         * 定义选项值应为 {@link Enum} 类型。
          *
-         * @param enumClass Concrete type of the expected enum.
+         * @param enumClass 期望的枚举的具体类型
          */
         public <T extends Enum<T>> TypedConfigOptionBuilder<T> enumType(Class<T> enumClass) {
             return new TypedConfigOptionBuilder<>(key, enumClass);
         }
 
         /**
-         * Defines that the value of the option should be a set of properties, which can be
-         * represented as {@code Map<String, String>}.
+         * 定义选项值应为一组属性,可以表示为 {@code Map<String, String>}。
          */
         public TypedConfigOptionBuilder<Map<String, String>> mapType() {
             return new TypedConfigOptionBuilder<>(key, PROPERTIES_MAP_CLASS);
         }
 
         /**
-         * Creates a ConfigOption with the given default value.
+         * 使用给定的默认值创建 ConfigOption。
          *
-         * <p>This method does not accept "null". For options with no default value, choose one of
-         * the {@code noDefaultValue} methods.
+         * <p>此方法不接受 "null"。对于没有默认值的选项,选择 {@code noDefaultValue} 方法之一。
          *
-         * @param value The default value for the config option
-         * @param <T> The type of the default value.
-         * @return The config option with the default value.
-         * @deprecated define the type explicitly first with one of the intType(), stringType(),
-         *     etc.
+         * @param value 配置选项的默认值
+         * @param <T> 默认值的类型
+         * @return 带有默认值的配置选项
+         * @deprecated 首先使用 intType()、stringType() 等明确定义类型
          */
         @Deprecated
         public <T> ConfigOption<T> defaultValue(T value) {
@@ -183,12 +184,10 @@ public class ConfigOptions {
         }
 
         /**
-         * Creates a string-valued option with no default value. String-valued options are the only
-         * ones that can have no default value.
+         * 创建一个没有默认值的字符串类型选项。字符串类型选项是唯一可以没有默认值的选项。
          *
-         * @return The created ConfigOption.
-         * @deprecated define the type explicitly first with one of the intType(), stringType(),
-         *     etc.
+         * @return 创建的 ConfigOption
+         * @deprecated 首先使用 intType()、stringType() 等明确定义类型
          */
         @Deprecated
         public ConfigOption<String> noDefaultValue() {
@@ -197,9 +196,9 @@ public class ConfigOptions {
     }
 
     /**
-     * Builder for {@link ConfigOption} with a defined atomic type.
+     * 带有已定义原子类型的 {@link ConfigOption} 构建器。
      *
-     * @param <T> atomic type of the option
+     * @param <T> 选项的原子类型
      */
     public static class TypedConfigOptionBuilder<T> {
         private final String key;
@@ -211,19 +210,19 @@ public class ConfigOptions {
         }
 
         /**
-         * Creates a ConfigOption with the given default value.
+         * 使用给定的默认值创建 ConfigOption。
          *
-         * @param value The default value for the config option
-         * @return The config option with the default value.
+         * @param value 配置选项的默认值
+         * @return 带有默认值的配置选项
          */
         public ConfigOption<T> defaultValue(T value) {
             return new ConfigOption<>(key, clazz, ConfigOption.EMPTY_DESCRIPTION, value);
         }
 
         /**
-         * Creates a ConfigOption without a default value.
+         * 创建一个没有默认值的 ConfigOption。
          *
-         * @return The config option without a default value.
+         * @return 没有默认值的配置选项
          */
         public ConfigOption<T> noDefaultValue() {
             return new ConfigOption<>(key, clazz, Description.builder().text("").build(), null);
@@ -232,6 +231,6 @@ public class ConfigOptions {
 
     // ------------------------------------------------------------------------
 
-    /** Not intended to be instantiated. */
+    /** 不打算实例化的私有构造函数。 */
     private ConfigOptions() {}
 }

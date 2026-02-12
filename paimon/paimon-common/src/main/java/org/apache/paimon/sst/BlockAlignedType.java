@@ -18,21 +18,45 @@
 
 package org.apache.paimon.sst;
 
-/** Aligned type for block. */
+/**
+ * 块对齐类型枚举。
+ *
+ * <p>定义 SST 文件中数据块的对齐方式:
+ * <ul>
+ *   <li>{@link #ALIGNED} - 对齐的块,按固定边界对齐以提高读取效率
+ *   <li>{@link #UNALIGNED} - 非对齐的块,紧凑存储以节省空间
+ * </ul>
+ */
 public enum BlockAlignedType {
+    /** 对齐的块 */
     ALIGNED((byte) 0),
+
+    /** 非对齐的块 */
     UNALIGNED((byte) 1);
 
+    /** 类型的字节表示 */
     private final byte b;
 
     BlockAlignedType(byte b) {
         this.b = b;
     }
 
+    /**
+     * 转换为字节表示。
+     *
+     * @return 字节值
+     */
     public byte toByte() {
         return b;
     }
 
+    /**
+     * 从字节值创建对齐类型。
+     *
+     * @param b 字节值
+     * @return 对应的对齐类型
+     * @throws IllegalStateException 如果字节值非法
+     */
     public static BlockAlignedType fromByte(byte b) {
         for (BlockAlignedType type : BlockAlignedType.values()) {
             if (type.toByte() == b) {

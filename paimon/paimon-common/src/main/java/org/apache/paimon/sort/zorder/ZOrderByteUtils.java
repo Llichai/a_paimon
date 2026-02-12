@@ -24,27 +24,124 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-/* This file is based on source code from the Iceberg Project (http://iceberg.apache.org/), licensed by the Apache
- * Software Foundation (ASF) under the Apache License, Version 2.0. See the NOTICE file distributed with this work for
- * additional information regarding copyright ownership. */
-
 /**
- * Within Z-Ordering the byte representations of objects being compared must be ordered, this
- * requires several types to be transformed when converted to bytes. The goal is to map object's
- * whose byte representation are not lexicographically ordered into representations that are
- * lexicographically ordered. Bytes produced should be compared lexicographically as unsigned bytes,
- * big-endian.
+ * Z-Order 字节工具类。
  *
- * <p>All types except for String are stored within an 8 Byte Buffer
+ * <p>该工具类提供了将各种数据类型转换为字典序可比较字节表示的方法，以及比特位交错功能。
+ * 这些方法是实现 Z-Order 索引的核心基础。
  *
- * <p>Most of these techniques are derived from
+ * <h2>核心功能</h2>
+ * <ul>
+ *   <li><b>有序字节转换</b>：将各种类型转换为字典序可比较的字节数组</li>
+ *   <li><b>比特位交错</b>：将多列的字节按位交错组合成 Z-Order 索引</li>
+ *   <li><b>字节填充/截断</b>：处理变长类型使其符合固定长度要求</li>
+ *   <li><b>缓冲区重用</b>：提供 ByteBuffer 重用机制减少内存分配</li>
+ * </ul>
+ *
+ * <h2>字节转换原理</h2>
+ *
+ * <h3>1. 有符号整数转换</h3>
+ * <p>有符号整数的字节表示不满足字典序，因为符号位导致负数的字节值大于正数。
+ * 解决方法是翻转符号位，使得：
+ * <pre>
+ * 原始范围: [MIN_VALUE ... -1, 0 ... MAX_VALUE]
+ * 翻转后:   [0 ... MAX_VALUE, MIN_VALUE ... -1]
+ * 结果:     负数 < 正数，且大小关系保持
+ * </pre>
+ *
+ * <h3>2. 浮点数转换</h3>
+ * <p>根据 IEEE 754 标准："如果两个浮点数以相同格式排序（如 x < y），
+ * 当它们的位被重新解释为符号-幅度整数时，它们的顺序保持不变。"
+ * <p>转换步骤：
+ * <ol>
+ *   <li>将浮点数转换为 long 类型的位表示</li>
+ *   <li>对符号位和符号-幅度位进行异或操作</li>
+ *   <li>结果满足字典序可比性</li>
+ * </ol>
+ *
+ * <h3>3. 字符串转换</h3>
+ * <p>字符串本身是字典序可比的，但不同长度会破坏 Z-Order 的要求（每列必须贡献相同字节数）。
+ * 解决方法：
+ * <ul>
+ *   <li>设置固定长度（如 8 字节）</li>
+ *   <li>短字符串：右侧填充 0x00</li>
+ *   <li>长字符串：截断到固定长度</li>
+ * </ul>
+ *
+ * <h2>比特位交错原理</h2>
+ * <p>Z-Order 通过交错多列的比特位来生成一维索引。算法流程：
+ * <pre>
+ * 输入：columnsBinary = [[col1_bytes], [col2_bytes], ...]
+ * 过程：
+ *   1. 从每列的最高位开始
+ *   2. 依次取各列的当前位，写入输出
+ *   3. 移动到下一位，重复直到所有位处理完
+ * 输出：交错后的字节数组
+ *
+ * 示例（2列，每列2位）：
+ *   col1 = [1,0]  (二进制)
+ *   col2 = [1,1]  (二进制)
+ *   交错结果 = [1,1,0,1] (按 col1[0], col2[0], col1[1], col2[1] 顺序)
+ * </pre>
+ *
+ * <h2>使用示例</h2>
+ * <pre>{@code
+ * // 1. 整数转有序字节
+ * ByteBuffer buffer = ByteBuffer.allocate(8);
+ * ByteBuffer result = ZOrderByteUtils.intToOrderedBytes(42, buffer);
+ *
+ * // 2. 浮点数转有序字节
+ * result = ZOrderByteUtils.doubleToOrderedBytes(3.14, buffer);
+ *
+ * // 3. 字符串转固定长度字节
+ * result = ZOrderByteUtils.stringToOrderedBytes("hello", 8, buffer);
+ *
+ * // 4. 字节填充/截断
+ * byte[] data = new byte[]{1, 2, 3};
+ * result = ZOrderByteUtils.byteTruncateOrFill(data, 8, buffer);
+ *
+ * // 5. 比特位交错
+ * byte[][] columns = {
+ *     {0x12, 0x34},  // 列1
+ *     {0x56, 0x78}   // 列2
+ * };
+ * byte[] zorder = ZOrderByteUtils.interleaveBits(columns, 4);
+ * }</pre>
+ *
+ * <h2>性能优化</h2>
+ * <ul>
+ *   <li><b>缓冲区重用</b>：所有方法支持传入 ByteBuffer 重用</li>
+ *   <li><b>ThreadLocal</b>：字符串编码器使用 ThreadLocal 避免重复创建</li>
+ *   <li><b>原地操作</b>：尽可能在提供的缓冲区上原地操作</li>
+ *   <li><b>固定长度</b>：原始类型固定使用 8 字节，便于优化</li>
+ * </ul>
+ *
+ * <h2>注意事项</h2>
+ * <ul>
+ *   <li>所有字节比较应按无符号字节、大端序进行</li>
+ *   <li>NULL 值统一表示为全 0 字节</li>
+ *   <li>变长类型的截断可能导致信息损失</li>
+ *   <li>比特交错要求每列贡献相同字节数</li>
+ * </ul>
+ *
+ * <p>本文件基于 Iceberg 项目的源代码（http://iceberg.apache.org/），
+ * 由 Apache Software Foundation (ASF) 根据 Apache License 2.0 授权。
+ * 详见随本作品分发的 NOTICE 文件以获取其他版权所有权信息。
+ *
+ * <p>大部分技术来源于：
  * https://aws.amazon.com/blogs/database/z-order-indexing-for-multifaceted-queries-in-amazon-dynamodb-part-2/
+ *
+ * @see ZIndexer
  */
 public class ZOrderByteUtils {
 
+    /** 原始类型的缓冲区大小（8字节）。 */
     public static final int PRIMITIVE_BUFFER_SIZE = 8;
+
+    /** NULL 值的字节表示（8个0字节）。 */
     public static final byte[] NULL_BYTES = new byte[PRIMITIVE_BUFFER_SIZE];
 
+    /** 线程本地的字符集编码器，用于字符串转字节。 */
     private static final ThreadLocal<CharsetEncoder> ENCODER = new ThreadLocal<>();
 
     static {
@@ -58,9 +155,15 @@ public class ZOrderByteUtils {
     }
 
     /**
-     * Signed ints do not have their bytes in magnitude order because of the sign bit. To fix this,
-     * flip the sign bit so that all negatives are ordered before positives. This essentially shifts
-     * the 0 value so that we don't break our ordering when we cross the new 0 value.
+     * 将有符号整数转换为有序字节表示。
+     *
+     * <p>有符号整数的字节不是按幅度顺序排列的，因为符号位的存在。
+     * 为了修正这个问题，翻转符号位使所有负数排在正数之前。
+     * 这本质上是移动了 0 值的位置，避免在跨越新 0 值时破坏排序。
+     *
+     * @param val 要转换的整数值
+     * @param reuse 重用的 ByteBuffer
+     * @return 包含有序字节的 ByteBuffer
      */
     public static ByteBuffer intToOrderedBytes(int val, ByteBuffer reuse) {
         ByteBuffer bytes = reuse(reuse, PRIMITIVE_BUFFER_SIZE);
@@ -69,8 +172,13 @@ public class ZOrderByteUtils {
     }
 
     /**
-     * Signed longs are treated the same as the signed ints in {@link #intToOrderedBytes(int,
-     * ByteBuffer)}.
+     * 将有符号长整数转换为有序字节表示。
+     *
+     * <p>处理方式与 {@link #intToOrderedBytes(int, ByteBuffer)} 相同。
+     *
+     * @param val 要转换的长整数值
+     * @param reuse 重用的 ByteBuffer
+     * @return 包含有序字节的 ByteBuffer
      */
     public static ByteBuffer longToOrderedBytes(long val, ByteBuffer reuse) {
         ByteBuffer bytes = reuse(reuse, PRIMITIVE_BUFFER_SIZE);

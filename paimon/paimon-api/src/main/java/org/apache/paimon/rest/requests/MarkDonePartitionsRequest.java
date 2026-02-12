@@ -25,10 +25,50 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonPro
 import java.util.List;
 import java.util.Map;
 
-/** Request for marking done partition. */
+/**
+ * 标记完成分区请求。
+ *
+ * <p>用于向 REST 服务器发送标记分区为"已完成"状态的请求。
+ *
+ * <p>此操作通常用于分区级别的数据质量管理,标记某些分区的数据已经准备就绪可供查询。
+ *
+ * <p>JSON 序列化格式:
+ *
+ * <pre>{@code
+ * {
+ *   "specs": [
+ *     {
+ *       "year": "2024",
+ *       "month": "01",
+ *       "day": "15"
+ *     },
+ *     {
+ *       "year": "2024",
+ *       "month": "01",
+ *       "day": "16"
+ *     }
+ *   ]
+ * }
+ * }</pre>
+ *
+ * <p>示例: 标记多个分区为完成
+ *
+ * <pre>{@code
+ * List<Map<String, String>> specs = Arrays.asList(
+ *     Map.of("year", "2024", "month", "01", "day", "15"),
+ *     Map.of("year", "2024", "month", "01", "day", "16")
+ * );
+ * MarkDonePartitionsRequest request = new MarkDonePartitionsRequest(specs);
+ * }</pre>
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MarkDonePartitionsRequest extends BasePartitionsRequest {
 
+    /**
+     * 构造函数。
+     *
+     * @param partitionSpecs 要标记为完成的分区规格列表
+     */
     @JsonCreator
     public MarkDonePartitionsRequest(
             @JsonProperty(FIELD_PARTITION_SPECS) List<Map<String, String>> partitionSpecs) {
