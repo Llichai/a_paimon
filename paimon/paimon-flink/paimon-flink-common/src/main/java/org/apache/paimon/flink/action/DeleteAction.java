@@ -36,13 +36,97 @@ import java.util.stream.Collectors;
 
 import static org.apache.paimon.CoreOptions.MergeEngine.DEDUPLICATE;
 
-/** Delete from table action for Flink. */
+/**
+ * 删除操作 - 用于从表中删除满足条件的行。
+ *
+ * <p>DeleteAction 根据指定的 SQL 条件删除表中的行。此操作以批量方式执行，使用 Flink 批处理引擎
+ * 处理大量数据的删除。删除操作要求表采用去重合并引擎（DEDUPLICATE）。
+ *
+ * <p>删除工作原理：
+ * <ol>
+ *   <li>验证表的合并引擎是否为去重模式（必须）
+ *   <li>使用 SQL 条件查询要删除的行
+ *   <li>将查询结果转换为删除标记（RowKind.DELETE）
+ *   <li>通过 Flink 批处理管道写入表，标记这些行为已删除
+ * </ol>
+ *
+ * <p>合并引擎要求：
+ * <ul>
+ *   <li><b>必须</b>: 只有去重合并引擎（DEDUPLICATE）支持批量删除
+ *   <li>其他合并引擎（APPEND-ONLY, AGGREGATE）不支持删除操作
+ * </ul>
+ *
+ * <p>SQL 条件语法：
+ * <pre>
+ * 简单条件: "year = 2023"
+ * 范围条件: "age > 18 AND age < 65"
+ * 模糊条件: "name LIKE 'John%'"
+ * 复杂条件: "(status = 'active' OR status = 'pending') AND created_date < '2023-01-01'"
+ * </pre>
+ *
+ * <p>应用场景：
+ * <ul>
+ *   <li><b>数据清理</b>: 删除过期或无效的数据
+ *   <li><b>错误纠正</b>: 删除错误录入的数据
+ *   <li><b>GDPR 合规</b>: 删除用户请求删除的数据
+ *   <li><b>数据修复</b>: 清理重复或冗余数据
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * // 删除所有 2020 年的记录
+ * DeleteAction action = new DeleteAction(
+ *     "analytics_db",
+ *     "events_table",
+ *     "year = 2020",
+ *     catalogConfig
+ * );
+ * action.run();
+ *
+ * // 删除状态为已取消的订单
+ * DeleteAction action2 = new DeleteAction(
+ *     "orders_db",
+ *     "orders",
+ *     "status = 'cancelled'",
+ *     catalogConfig
+ * );
+ * action2.run();
+ * }</pre>
+ *
+ * <p>性能考虑：
+ * <ul>
+ *   <li>删除操作触发完整的表扫描和写入操作
+ *   <li>建议在离峰时段执行
+ *   <li>对于大表的大范围删除可能耗时较长
+ *   <li>可以通过分区选择优化性能
+ * </ul>
+ *
+ * <p>注意事项：
+ * <ul>
+ *   <li>删除是不可逆操作，删除前应确认条件正确
+ *   <li>删除不直接释放存储空间，需要通过压缩操作清理
+ *   <li>已删除的数据仍可通过快照恢复
+ * </ul>
+ *
+ * @throws UnsupportedOperationException 如果表不使用去重合并引擎
+ * @see DropPartitionAction
+ * @see ExpireSnapshotsAction
+ */
 public class DeleteAction extends TableActionBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeleteAction.class);
 
+    /** SQL 条件表达式，用于选择要删除的行 */
     private final String filter;
 
+    /**
+     * 构造删除操作
+     *
+     * @param databaseName 数据库名称
+     * @param tableName 表名称
+     * @param filter SQL 过滤条件，定义要删除的行
+     * @param catalogConfig Catalog 配置参数
+     */
     public DeleteAction(
             String databaseName,
             String tableName,

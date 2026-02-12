@@ -55,11 +55,17 @@ import java.util.List;
  * @param <T> 记录类型（通常是 KeyValue）
  */
 public class LoserTree<T> implements Closeable {
-    /** 败者树数组（tree[0] 存储全局胜者，tree[parent] 存储父节点的败者） */
+    /**
+     * 败者树数组（tree[0] 存储全局胜者，tree[parent] 存储父节点的败者）
+     */
     private final int[] tree;
-    /** 叶子节点数量（输入 reader 数量） */
+    /**
+     * 叶子节点数量（输入 reader 数量）
+     */
     private final int size;
-    /** 叶子节点列表（包装 RecordReader 的迭代器） */
+    /**
+     * 叶子节点列表（包装 RecordReader 的迭代器）
+     */
     private final List<LeafIterator<T>> leaves;
 
     /**
@@ -70,17 +76,21 @@ public class LoserTree<T> implements Closeable {
      */
     private final Comparator<T> firstComparator;
 
-    /** 第二级比较器（比较序列号） */
+    /**
+     * 第二级比较器（比较序列号）
+     */
     private final Comparator<T> secondComparator;
 
-    /** 是否已初始化 */
+    /**
+     * 是否已初始化
+     */
     private boolean initialized;
 
     /**
      * 构造败者树
      *
      * @param nextBatchReaders RecordReader 列表
-     * @param firstComparator 第一级比较器（用户键）
+     * @param firstComparator  第一级比较器（用户键）
      * @param secondComparator 第二级比较器（序列号）
      */
     public LoserTree(
@@ -253,7 +263,7 @@ public class LoserTree<T> implements Closeable {
      *
      * <p>只需比较序列号，不需要比较用户键
      *
-     * @param index 父节点索引
+     * @param index      父节点索引
      * @param parentNode 父节点（败者）
      * @param winnerNode 胜者节点
      */
@@ -290,7 +300,7 @@ public class LoserTree<T> implements Closeable {
      *
      * <p>需要完整比较用户键和序列号
      *
-     * @param index 父节点索引
+     * @param index      父节点索引
      * @param parentNode 父节点（败者）
      * @param winnerNode 胜者节点
      */
@@ -364,22 +374,34 @@ public class LoserTree<T> implements Closeable {
      * <p>包装 {@link RecordReader}，管理批次读取和状态
      */
     private static class LeafIterator<T> implements Closeable {
-        /** 批次记录读取器 */
+        /**
+         * 批次记录读取器
+         */
         private final RecordReader<T> reader;
 
-        /** 当前批次使用的迭代器 */
+        /**
+         * 当前批次使用的迭代器
+         */
         private RecordReader.RecordIterator<T> iterator;
 
-        /** 当前最小的 KeyValue */
+        /**
+         * 当前最小的 KeyValue
+         */
         private T kv;
 
-        /** 标记是否访问完成 */
+        /**
+         * 标记是否访问完成
+         */
         private boolean endOfInput;
 
-        /** 第一个相同键胜者的索引（用于快速调整） */
+        /**
+         * 第一个相同键胜者的索引（用于快速调整）
+         */
         private int firstSameKeyIndex;
 
-        /** 当前节点的状态 */
+        /**
+         * 当前节点的状态
+         */
         private State state;
 
         /**
@@ -497,7 +519,9 @@ public class LoserTree<T> implements Closeable {
         WINNER_WITH_SAME_KEY(true),  // 胜者：相同键
         WINNER_POPPED(true);         // 胜者：已弹出
 
-        /** 是否为胜者 */
+        /**
+         * 是否为胜者
+         */
         private final boolean winner;
 
         /**

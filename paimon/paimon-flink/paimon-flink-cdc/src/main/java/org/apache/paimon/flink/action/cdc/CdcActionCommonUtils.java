@@ -44,35 +44,124 @@ import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkState;
 import static org.apache.paimon.utils.StringUtils.toLowerCaseIfNeed;
 
-/** Common utils for CDC Action. */
+/**
+ * CDC Action 通用工具类
+ *
+ * <p>CdcActionCommonUtils 提供了 CDC 数据同步的通用辅助方法，主要功能包括:
+ * <ul>
+ *   <li><b>Schema 校验</b>: 检查源表 Schema 与 Paimon 表 Schema 的兼容性
+ *   <li><b>Schema 构建</b>: 根据源表结构和配置构建 Paimon 表的 Schema
+ *   <li><b>表名映射</b>: 支持表名前缀/后缀转换和自定义映射
+ *   <li><b>类型映射</b>: 源表数据类型到 Paimon 数据类型的转换
+ *   <li><b>大小写转换</b>: 处理大小写敏感的字段名称
+ * </ul>
+ *
+ * <p>配置参数说明:
+ * <ul>
+ *   <li><b>KAFKA_CONF</b>: Kafka 连接配置
+ *   <li><b>MYSQL_CONF</b>: MySQL 源配置
+ *   <li><b>POSTGRES_CONF</b>: PostgreSQL 源配置
+ *   <li><b>MONGODB_CONF</b>: MongoDB 源配置
+ *   <li><b>PULSAR_CONF</b>: Pulsar 连接配置
+ *   <li><b>TABLE_PREFIX/SUFFIX</b>: 表名前缀/后缀
+ *   <li><b>TABLE_MAPPING</b>: 自定义表名映射规则
+ *   <li><b>PRIMARY_KEYS</b>: 指定主键列
+ *   <li><b>PARTITION_KEYS</b>: 指定分区键列
+ *   <li><b>COMPUTED_COLUMN</b>: 计算列定义
+ *   <li><b>METADATA_COLUMN</b>: CDC 元数据列（database_name, table_name 等）
+ * </ul>
+ *
+ * <p>使用示例:
+ * <pre>{@code
+ * // 检查 Schema 兼容性
+ * List<DataField> sourceFields = getSourceTableFields();
+ * CdcActionCommonUtils.assertSchemaCompatible(paimonSchema, sourceFields);
+ *
+ * // 构建 Paimon Schema
+ * Schema paimonSchema = CdcActionCommonUtils.buildPaimonSchema(
+ *     "my_table",
+ *     Arrays.asList("id"),        // primaryKeys
+ *     Arrays.asList("year"),      // partitionKeys
+ *     Arrays.asList(),             // computedColumns
+ *     tableConfig,
+ *     sourceSchema,
+ *     new CdcMetadataConverter[]{}, // metadataConverters
+ *     true                          // caseSensitive
+ * );
+ * }</pre>
+ *
+ * @see org.apache.paimon.flink.sink.cdc.UpdatedDataFieldsProcessFunction
+ * @see ComputedColumn
+ */
 public class CdcActionCommonUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(CdcActionCommonUtils.class);
 
+    // ========== CDC 源配置常量 ==========
+    /** Kafka 连接配置参数名 */
     public static final String KAFKA_CONF = "kafka_conf";
+    /** MongoDB 源配置参数名 */
     public static final String MONGODB_CONF = "mongodb_conf";
+    /** MySQL 源配置参数名 */
     public static final String MYSQL_CONF = "mysql_conf";
+    /** PostgreSQL 源配置参数名 */
     public static final String POSTGRES_CONF = "postgres_conf";
+    /** Pulsar 连接配置参数名 */
     public static final String PULSAR_CONF = "pulsar_conf";
+
+    // ========== 表名转换配置常量 ==========
+    /** 表名前缀配置参数名 */
     public static final String TABLE_PREFIX = "table_prefix";
+    /** 表名后缀配置参数名 */
     public static final String TABLE_SUFFIX = "table_suffix";
+    /** 数据库名前缀配置参数名 */
     public static final String TABLE_PREFIX_DB = "table_prefix_db";
+    /** 数据库名后缀配置参数名 */
     public static final String TABLE_SUFFIX_DB = "table_suffix_db";
+    /** 表名映射规则配置参数名（JSON 格式的映射关系） */
     public static final String TABLE_MAPPING = "table_mapping";
+
+    // ========== 表过滤配置常量 ==========
+    /** 包含的源表配置参数名（白名单） */
     public static final String INCLUDING_TABLES = "including_tables";
+    /** 排除的源表配置参数名（黑名单） */
     public static final String EXCLUDING_TABLES = "excluding_tables";
+    /** 包含的数据库配置参数名（白名单） */
     public static final String INCLUDING_DBS = "including_dbs";
+    /** 排除的数据库配置参数名（黑名单） */
     public static final String EXCLUDING_DBS = "excluding_dbs";
+
+    // ========== 类型和字段配置常量 ==========
+    /** 数据类型映射配置参数名（JSON 格式的类型转换规则） */
     public static final String TYPE_MAPPING = "type_mapping";
+    /** 分区键配置参数名 */
     public static final String PARTITION_KEYS = "partition_keys";
+    /** 主键配置参数名 */
     public static final String PRIMARY_KEYS = "primary_keys";
+    /** 计算列配置参数名（JSON 格式的列定义和表达式） */
     public static final String COMPUTED_COLUMN = "computed_column";
+    /** CDC 元数据列配置参数名（如 database_name, table_name, op_ts） */
     public static final String METADATA_COLUMN = "metadata_column";
+
+    // ========== 其他配置常量 ==========
+    /** 多表分区键配置参数名（支持为不同表指定不同分区键） */
     public static final String MULTIPLE_TABLE_PARTITION_KEYS = "multiple_table_partition_keys";
+    /** 急切初始化配置参数名（同步开始前初始化所有表） */
     public static final String EAGER_INIT = "eager_init";
+    /** 从源 Schema 同步主键配置参数名 */
     public static final String SYNC_PKEYS_FROM_SOURCE_SCHEMA =
             "sync_primary_keys_from_source_schema";
 
+    /**
+     * 校验 Paimon Schema 与源表 Schema 的兼容性
+     *
+     * <p>此方法检查源表的所有字段是否都存在于 Paimon 表中，并且对应字段的类型是否可以转换。
+     * 如果不兼容，抛出 IllegalArgumentException 异常。
+     *
+     * @param paimonSchema Paimon 目标表的 Schema
+     * @param sourceTableFields 源表的字段列表
+     * @throws IllegalArgumentException 当 Schema 不兼容时抛出，包含详细的错误信息
+     */
     public static void assertSchemaCompatible(
             TableSchema paimonSchema, List<DataField> sourceTableFields) {
         if (!schemaCompatible(paimonSchema, sourceTableFields)) {
@@ -85,18 +174,40 @@ public class CdcActionCommonUtils {
         }
     }
 
+    /**
+     * 检查 Paimon Schema 与源表 Schema 的兼容性
+     *
+     * <p>遍历源表的所有字段，验证:
+     * <ol>
+     *   <li>字段名称是否存在于 Paimon Schema 中
+     *   <li>字段类型是否可以从源类型转换为 Paimon 类型
+     * </ol>
+     *
+     * <p>支持的类型转换规则由 {@link UpdatedDataFieldsProcessFunction#canConvert} 定义，
+     * 使用默认的类型映射规则 {@link TypeMapping#defaultMapping()}。
+     *
+     * @param paimonSchema Paimon 目标表的 Schema
+     * @param sourceTableFields 源表的字段列表
+     * @return 如果兼容返回 true，否则返回 false
+     */
     public static boolean schemaCompatible(
             TableSchema paimonSchema, List<DataField> sourceTableFields) {
+        // 遍历源表的每个字段
         for (DataField field : sourceTableFields) {
+            // 在 Paimon Schema 中查找同名字段
             int idx = paimonSchema.fieldNames().indexOf(field.name());
             if (idx < 0) {
+                // 字段不存在，记录日志并返回不兼容
                 LOG.info("Cannot find field '{}' in Paimon table.", field.name());
                 return false;
             }
+            // 获取 Paimon 中对应字段的类型
             DataType type = paimonSchema.fields().get(idx).type();
+            // 检查源类型是否可以转换为 Paimon 类型
             if (UpdatedDataFieldsProcessFunction.canConvert(
                             field.type(), type, TypeMapping.defaultMapping())
                     != UpdatedDataFieldsProcessFunction.ConvertAction.CONVERT) {
+                // 类型不兼容，记录日志并返回不兼容
                 LOG.info(
                         "Cannot convert field '{}' from source table type '{}' to Paimon type '{}'.",
                         field.name(),

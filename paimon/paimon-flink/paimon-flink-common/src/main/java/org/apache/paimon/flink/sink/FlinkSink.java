@@ -68,23 +68,145 @@ import static org.apache.paimon.flink.utils.ManagedMemoryUtils.declareManagedMem
 import static org.apache.paimon.flink.utils.ParallelismUtils.forwardParallelism;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Abstract sink of paimon. */
+/**
+ * Paimon Flink 汇聚抽象基类 - 提供数据写入 Paimon 表的核心能力。
+ *
+ * <p>FlinkSink 将 Flink DataStream 中的数据写入到 Paimon 表，支持：
+ * <ul>
+ *   <li>批处理和流处理模式
+ *   <li>主键表和追加表
+ *   <li>列式存储和行式存储
+ *   <li>多种索引格式（Parquet、ORC、Avro）
+ *   <li>精确一次语义（EXACTLY_ONCE）
+ *   <li>事务提交
+ * </ul>
+ *
+ * <h3>工作流程</h3>
+ * <p>写入过程分为两个阶段：
+ * <pre>
+ * 1. 写入阶段（doWrite）
+ *    ├─ 数据通过 WriterOperator 写入本地 WriteBuffer
+ *    ├─ 定期 flush WriteBuffer，生成 DataFile
+ *    ├─ 将 DataFile 元数据封装为 Committable
+ *    └─ 发送 Committable 到 Committer 算子
+ *
+ * 2. 提交阶段（doCommit）
+ *    ├─ GlobalCommitter 接收所有并行 Writer 的 Committable
+ *    ├─ 按事务顺序合并 Committable
+ *    ├─ 创建新的 Snapshot（原子操作）
+ *    └─ 完成提交（Checkpoint 时）
+ * </pre>
+ *
+ * <h3>核心特性</h3>
+ * <ul>
+ *   <li><b>精确一次语义</b>：通过 Flink Checkpoint 和 Snapshot 原子性保证
+ *   <li><b>写入优化</b>：支持 pre-commit compaction，在提交前合并小文件
+ *   <li><b>资源隔离</b>：支持为 Writer 和 Committer 分配独立的 CPU 和内存
+ *   <li><b>标签自动创建</b>：支持在 Savepoint 时自动创建标签
+ *   <li><b>Write-only 模式</b>：支持只写不读的优化模式
+ * </ul>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+ * env.enableCheckpointing(60000);  // 每60秒checkpoint
+ * env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+ *
+ * // 创建源数据
+ * DataStream<RowData> source = ...;
+ *
+ * // 获取目标 Paimon 表
+ * FileStoreTable table = catalog.getTable(new Identifier("db", "sink_table"));
+ *
+ * // 创建汇聚并写入
+ * RowDataSink sink = new RowDataSink(table);
+ * sink.sinkFrom(source);
+ *
+ * env.execute("Streaming ETL");
+ * }</pre>
+ *
+ * <h3>与 FlinkSourceBuilder 的关系</h3>
+ * <p>FlinkSourceBuilder 和 FlinkSink 配套使用，形成 ETL 管道：
+ * <pre>{@code
+ * // 源表
+ * DataStream<RowData> source = new FlinkSourceBuilder(sourceTable)
+ *     .env(env)
+ *     .sourceBounded(false)
+ *     .build();
+ *
+ * // 处理逻辑
+ * DataStream<RowData> processed = source.map(row -> {...});
+ *
+ * // 写入目标表
+ * FlinkSink sink = new RowDataSink(sinkTable);
+ * sink.sinkFrom(processed);
+ * }</pre>
+ *
+ * <h3>配置选项</h3>
+ * 通过表选项配置汇聚行为：
+ * <ul>
+ *   <li>sink.parallelism: 写入并行度
+ *   <li>sink.committer-memory: Committer 内存大小
+ *   <li>sink.committer-cpu: Committer CPU 核心数
+ *   <li>sink.writer-memory: Writer 内存大小
+ *   <li>sink.writer-cpu: Writer CPU 核心数
+ *   <li>sink.auto-tag-for-savepoint: Savepoint 时自动创建标签
+ *   <li>write-only: 只写模式（不生成 Snapshot）
+ * </ul>
+ *
+ * <h3>实现类</h3>
+ * <ul>
+ *   <li>{@link org.apache.paimon.flink.sink.RowDataSink}: 通用的 RowData 汇聚
+ *   <li>其他特定格式的汇聚实现（如 CDC、Iceberg 等）
+ * </ul>
+ *
+ * @param <T> 输入数据流中的元素类型
+ */
 public abstract class FlinkSink<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** Writer 算子的默认名称 */
     private static final String WRITER_NAME = "Writer";
+
+    /** Write-only 模式 Writer 算子的名称 */
     private static final String WRITER_WRITE_ONLY_NAME = "Writer(write-only)";
+
+    /** 全局提交器算子的名称 */
     private static final String GLOBAL_COMMITTER_NAME = "Global Committer";
 
+    /** 目标 Paimon 表 */
     protected final FileStoreTable table;
+
+    /** 是否忽略之前的文件（新表 vs 已有数据的表） */
     private final boolean ignorePreviousFiles;
 
+    /**
+     * 创建 FlinkSink 实例。
+     *
+     * @param table 目标 Paimon 表
+     * @param ignorePreviousFiles 是否忽略之前已存在的文件（true 适用于新表，false 用于现有表）
+     */
     public FlinkSink(FileStoreTable table, boolean ignorePreviousFiles) {
         this.table = table;
         this.ignorePreviousFiles = ignorePreviousFiles;
     }
 
+    /**
+     * 从数据流写入到 Paimon 表（自动生成 commitUser）。
+     *
+     * <p>该方法是 {@link #sinkFrom(DataStream, String)} 的简化版本，
+     * 自动为新作业生成 commitUser。Checkpoint 恢复时会使用保存的 commitUser。
+     *
+     * <p>内部会调用两个阶段：
+     * <ul>
+     *   <li>doWrite：数据写入 WriteBuffer 并生成 Committable
+     *   <li>doCommit：Committable 合并并提交（创建新 Snapshot）
+     * </ul>
+     *
+     * @param input 输入数据流
+     * @return DataStreamSink
+     */
     public DataStreamSink<?> sinkFrom(DataStream<T> input) {
         // This commitUser is valid only for new jobs.
         // After the job starts, this commitUser will be recorded into the states of write and
@@ -94,6 +216,15 @@ public abstract class FlinkSink<T> implements Serializable {
         return sinkFrom(input, createCommitUser(table.coreOptions().toConfiguration()));
     }
 
+    /**
+     * 从数据流写入到 Paimon 表（指定 commitUser）。
+     *
+     * <p>commitUser 用于标识提交者身份，在多个写入作业同时写入时用于区分。
+     *
+     * @param input 输入数据流
+     * @param initialCommitUser 初始 commitUser（仅对新作业有效）
+     * @return DataStreamSink
+     */
     public DataStreamSink<?> sinkFrom(DataStream<T> input, String initialCommitUser) {
         // do the actually writing action, no snapshot generated in this stage
         DataStream<Committable> written = doWrite(input, initialCommitUser, null);
@@ -101,6 +232,15 @@ public abstract class FlinkSink<T> implements Serializable {
         return doCommit(written, initialCommitUser);
     }
 
+    /**
+     * 检查数据流是否包含 SinkMaterializer 算子。
+     *
+     * <p>SinkMaterializer 通常由 SQL Table API 自动添加。
+     * 需要此信息来判断是否应启用特定的优化。
+     *
+     * @param input 输入数据流
+     * @return 是否存在 SinkMaterializer
+     */
     private boolean hasSinkMaterializer(DataStream<T> input) {
         // traverse the transformation graph with breadth first search
         Set<Integer> visited = new HashSet<>();
@@ -122,6 +262,29 @@ public abstract class FlinkSink<T> implements Serializable {
         return false;
     }
 
+    /**
+     * 执行写入操作（第一阶段）。
+     *
+     * <p>该方法：
+     * <ul>
+     *   <li>创建 WriterOperator，将数据写入 WriteBuffer
+     *   <li>周期性 flush WriteBuffer，生成 DataFile
+     *   <li>如果启用 pre-commit compaction，则在提交前合并小文件
+     *   <li>返回 Committable 供后续提交
+     * </ul>
+     *
+     * <p>资源配置：
+     * <ul>
+     *   <li>并行度：如果 parallelism 为 null，则继承输入流的并行度
+     *   <li>托管内存：根据 SINK_USE_MANAGED_MEMORY 配置
+     *   <li>CPU 和内存限制：通过 SINK_WRITER_CPU 和 SINK_WRITER_MEMORY 配置
+     * </ul>
+     *
+     * @param input 输入数据流
+     * @param commitUser commit 用户标识
+     * @param parallelism 写入并行度（null 表示继承输入流）
+     * @return Committable 数据流
+     */
     public DataStream<Committable> doWrite(
             DataStream<T> input, String commitUser, @Nullable Integer parallelism) {
         StreamExecutionEnvironment env = input.getExecutionEnvironment();
@@ -186,6 +349,21 @@ public abstract class FlinkSink<T> implements Serializable {
         return written;
     }
 
+    /**
+     * 执行提交操作（第二阶段）。
+     *
+     * <p>该方法：
+     * <ul>
+     *   <li>创建 GlobalCommitter，接收并合并所有 Writer 的 Committable
+     *   <li>按事务顺序提交 Committable
+     *   <li>原子创建新 Snapshot（所有数据文件都可见后）
+     *   <li>完成后更新所有 Reader 和 CDC 消费者的状态
+     * </ul>
+     *
+     * @param written Committable 数据流
+     * @param commitUser commit 用户标识
+     * @return 汇聚结果
+     */
     public DataStreamSink<?> doCommit(DataStream<Committable> written, String commitUser) {
         StreamExecutionEnvironment env = written.getExecutionEnvironment();
         ReadableConfig conf = env.getConfiguration();

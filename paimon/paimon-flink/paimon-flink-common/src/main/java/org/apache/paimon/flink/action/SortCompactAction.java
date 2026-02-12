@@ -42,7 +42,84 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** Compact with sort action. */
+/**
+ * 排序压缩操作。
+ *
+ * <p>用于在压缩 Paimon 表数据时，同时按照指定的列进行排序。这是 CompactAction 的增强版本，
+ * 在重新整合数据文件的同时，根据配置的排序策略重新排序数据，以优化查询性能。
+ *
+ * <p>主要特性：
+ * <ul>
+ *   <li>在压缩数据的同时进行排序</li>
+ *   <li>支持多列排序</li>
+ *   <li>支持自定义排序策略（ASC/DESC）</li>
+ *   <li>改善查询性能，特别是范围查询</li>
+ *   <li>Flink 集群执行操作，支持分布式处理</li>
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ *     // 执行排序压缩，按 user_id 升序、timestamp 降序排列
+ *     SortCompactAction action = new SortCompactAction(
+ *         "mydb",
+ *         "mytable",
+ *         catalogConfig,
+ *         new HashMap<String, String>() {{
+ *             put("sort.strategy", "order_by");
+ *             put("sort.columns", "user_id ASC,timestamp DESC");
+ *         }}
+ *     )
+ *     .withOrder("user_id ASC,timestamp DESC")
+ *     .withStrategy("order_by");
+ *
+ *     action.run();
+ * }</pre>
+ *
+ * <p>参数说明：
+ * <ul>
+ *   <li>database: 目标数据库名称</li>
+ *   <li>tableName: 目标表名称</li>
+ *   <li>sortStrategy: 排序策略（如 "order_by" 等）</li>
+ *   <li>orderColumns: 排序列列表，格式为 "col1 ASC,col2 DESC"</li>
+ * </ul>
+ *
+ * <p>排序压缩过程：
+ * <ul>
+ *   <li>读取表的所有数据文件</li>
+ *   <li>按照指定的排序列进行全局排序</li>
+ *   <li>生成排序后的新数据文件</li>
+ *   <li>按照表的分桶策略重新分桶</li>
+ *   <li>提交新快照，原数据自动清理</li>
+ * </ul>
+ *
+ * <p>性能提升场景：
+ * <ul>
+ *   <li>时间序列数据按时间戳排序，提升时间范围查询性能</li>
+ *   <li>按用户 ID 排序，提升用户维度的点查询性能</li>
+ *   <li>按多个列排序，支持复杂查询场景优化</li>
+ *   <li>频繁的范围扫描和分析查询</li>
+ * </ul>
+ *
+ * <p>注意事项：
+ * <ul>
+ *   <li>排序列应该选择高频查询的条件列</li>
+ *   <li>排序结果的行成本较高，应按需使用</li>
+ *   <li>大表的排序压缩需要大量的 Flink 集群资源</li>
+ *   <li>排序过程中表处于不可写状态</li>
+ *   <li>排序完成后性能改善的程度取决于数据分布和查询模式</li>
+ * </ul>
+ *
+ * <p>与常规 CompactAction 的区别：
+ * <ul>
+ *   <li>排序压缩会修改数据顺序，可能增加写入成本</li>
+ *   <li>适合读多写少的场景</li>
+ *   <li>查询性能通常优于普通压缩</li>
+ * </ul>
+ *
+ * @see CompactAction
+ * @see TableSorter
+ * @since 0.1
+ */
 public class SortCompactAction extends CompactAction {
 
     private static final Logger LOG = LoggerFactory.getLogger(SortCompactAction.class);

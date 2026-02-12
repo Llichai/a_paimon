@@ -27,7 +27,39 @@ import javax.annotation.Nullable;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** Clear consumers action for Flink. */
+/**
+ * Flink 清除消费者操作。
+ *
+ * <p>用于清除 Paimon 表中已注册的消费者。消费者是订阅表数据变化的客户端，每个消费者都有独立的消费进度管理。
+ * 本操作可以选择性地清除指定的消费者，支持基于正则表达式的包含和排除模式匹配。
+ *
+ * <p>主要特性：
+ * <ul>
+ *   <li>支持正则表达式模式匹配消费者名称</li>
+ *   <li>支持包含模式（includingPattern）：只清除匹配的消费者</li>
+ *   <li>支持排除模式（excludingPattern）：不清除匹配的消费者</li>
+ *   <li>本地执行操作，无需 Flink 集群</li>
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ *     ClearConsumerAction action = new ClearConsumerAction(dbName, tableName, catalogConfig)
+ *         .withIncludingConsumers("consumer_.*")
+ *         .withExcludingConsumers("consumer_.*_backup");
+ *     action.run();
+ * }</pre>
+ *
+ * <p>注意事项：
+ * <ul>
+ *   <li>清除消费者后，无法恢复消费进度，需谨慎操作</li>
+ *   <li>如果未指定 includingConsumers，则匹配所有消费者</li>
+ *   <li>excludingConsumers 在 includingConsumers 之后应用，可用于排除特定消费者</li>
+ * </ul>
+ *
+ * @see ConsumerManager
+ * @see TableActionBase
+ * @since 0.1
+ */
 public class ClearConsumerAction extends TableActionBase implements LocalAction {
 
     private String includingConsumers;

@@ -75,40 +75,61 @@ import static java.util.Collections.singletonList;
  */
 public class MergeTreeCompactTask extends CompactTask {
 
-    /** 最小文件大小阈值（小于此值的文件需要压缩） */
+    /**
+     * 最小文件大小阈值（小于此值的文件需要压缩）
+     */
     private final long minFileSize;
-    /** 压缩重写器 */
+    /**
+     * 压缩重写器
+     */
     private final CompactRewriter rewriter;
-    /** 输出层级 */
+    /**
+     * 输出层级
+     */
     private final int outputLevel;
-    /** 删除文件供应商（Deletion Vector 相关） */
+    /**
+     * 删除文件供应商（Deletion Vector 相关）
+     */
     private final Supplier<CompactDeletionFile> compactDfSupplier;
-    /** 区间分区结果（每个 Section 是一个不重叠的键范围） */
+    /**
+     * 区间分区结果（每个 Section 是一个不重叠的键范围）
+     */
     private final List<List<SortedRun>> partitioned;
-    /** 是否丢弃删除记录 */
+    /**
+     * 是否丢弃删除记录
+     */
     private final boolean dropDelete;
-    /** 最大层级 */
+    /**
+     * 最大层级
+     */
     private final int maxLevel;
-    /** 记录级别过期策略 */
-    @Nullable private final RecordLevelExpire recordLevelExpire;
-    /** 是否强制重写所有文件 */
+    /**
+     * 记录级别过期策略
+     */
+    @Nullable
+    private final RecordLevelExpire recordLevelExpire;
+    /**
+     * 是否强制重写所有文件
+     */
     private final boolean forceRewriteAllFiles;
 
-    /** 指标：升级文件数量 */
+    /**
+     * 指标：升级文件数量
+     */
     private int upgradeFilesNum;
 
     /**
      * 构造 MergeTree 压缩任务
      *
-     * @param keyComparator 键比较器
-     * @param minFileSize 最小文件大小阈值
-     * @param rewriter 压缩重写器
-     * @param unit 压缩单元
-     * @param dropDelete 是否丢弃删除记录
-     * @param maxLevel 最大层级
-     * @param metricsReporter 指标上报器
-     * @param compactDfSupplier 删除文件供应商
-     * @param recordLevelExpire 记录级别过期策略
+     * @param keyComparator        键比较器
+     * @param minFileSize          最小文件大小阈值
+     * @param rewriter             压缩重写器
+     * @param unit                 压缩单元
+     * @param dropDelete           是否丢弃删除记录
+     * @param maxLevel             最大层级
+     * @param metricsReporter      指标上报器
+     * @param compactDfSupplier    删除文件供应商
+     * @param recordLevelExpire    记录级别过期策略
      * @param forceRewriteAllFiles 是否强制重写所有文件
      */
     public MergeTreeCompactTask(
@@ -197,9 +218,9 @@ public class MergeTreeCompactTask extends CompactTask {
     /**
      * 记录指标日志
      *
-     * @param startMillis 开始时间（毫秒）
+     * @param startMillis   开始时间（毫秒）
      * @param compactBefore 压缩前文件
-     * @param compactAfter 压缩后文件
+     * @param compactAfter  压缩后文件
      * @return 日志信息
      */
     @Override
@@ -222,7 +243,7 @@ public class MergeTreeCompactTask extends CompactTask {
      *
      * <p>否则，只需改变文件的层级元数据，避免重写开销
      *
-     * @param file 待升级文件
+     * @param file     待升级文件
      * @param toUpdate 压缩结果（累积更新）
      * @throws Exception 升级异常
      */
@@ -256,7 +277,7 @@ public class MergeTreeCompactTask extends CompactTask {
      * </ul>
      *
      * @param candidate 候选文件队列
-     * @param toUpdate 压缩结果（累积更新）
+     * @param toUpdate  压缩结果（累积更新）
      * @throws Exception 重写异常
      */
     private void rewrite(List<List<SortedRun>> candidate, CompactResult toUpdate) throws Exception {
@@ -284,7 +305,7 @@ public class MergeTreeCompactTask extends CompactTask {
      * 重写实现（归并压缩）
      *
      * @param candidate 候选文件队列
-     * @param toUpdate 压缩结果（累积更新）
+     * @param toUpdate  压缩结果（累积更新）
      * @throws Exception 重写异常
      */
     private void rewriteImpl(List<List<SortedRun>> candidate, CompactResult toUpdate)

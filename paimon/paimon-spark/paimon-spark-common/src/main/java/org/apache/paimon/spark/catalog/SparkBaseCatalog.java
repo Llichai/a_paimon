@@ -37,7 +37,81 @@ import java.util.Set;
 import static org.apache.paimon.catalog.Catalog.SYSTEM_DATABASE_NAME;
 import static org.apache.spark.sql.connector.catalog.TableCatalogCapability.SUPPORT_COLUMN_DEFAULT_VALUE;
 
-/** Spark base catalog. */
+/**
+ * Spark Catalog 基类。
+ *
+ * <p>为 Spark 中的 Paimon Catalog 实现提供基础功能。Spark Catalog 是 Spark SQL 与 Paimon 数据湖的
+ * 集成点，负责管理表、命名空间、存储过程等元数据和操作。
+ *
+ * <p>主要职责：
+ * <ul>
+ *   <li>实现 Spark TableCatalog 接口，支持表的创建、删除、查询等基本操作</li>
+ *   <li>支持命名空间管理（数据库级别的隔离）</li>
+ *   <li>提供存储过程的加载和执行能力</li>
+ *   <li>维护 Paimon Catalog 的引用，委托实际的表操作</li>
+ *   <li>支持列级别的默认值设置（SUPPORT_COLUMN_DEFAULT_VALUE capability）</li>
+ * </ul>
+ *
+ * <p>实现接口：
+ * <ul>
+ *   <li>{@link TableCatalog} - Spark SQL Catalog 接口</li>
+ *   <li>{@link SupportsNamespaces} - 命名空间支持</li>
+ *   <li>{@link ProcedureCatalog} - 存储过程 Catalog</li>
+ *   <li>{@link WithPaimonCatalog} - Paimon Catalog 持有者</li>
+ * </ul>
+ *
+ * <p>核心特性：
+ * <ul>
+ *   <li>系统数据库支持 - 提供系统级别的存储过程和操作</li>
+ *   <li>Paimon 源检测 - 自动识别使用 Paimon 作为数据源</li>
+ *   <li>存储过程注册 - 支持系统存储过程的动态加载</li>
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ *     // 通过 Spark Session 创建 Paimon Catalog
+ *     val spark = SparkSession.builder()
+ *         .appName("paimon-app")
+ *         .enableHiveSupport()
+ *         .build()
+ *
+ *     spark.sql("""
+ *         CREATE CATALOG paimon_catalog
+ *         USING 'org.apache.paimon.spark.SparkCatalog'
+ *         WITH (
+ *             warehouse='/path/to/paimon/warehouse'
+ *         )
+ *     """)
+ *
+ *     // 使用 Catalog 执行操作
+ *     spark.sql("USE CATALOG paimon_catalog")
+ *     spark.sql("CREATE DATABASE mydb")
+ *     spark.sql("CREATE TABLE mydb.mytable (id INT, name STRING)")
+ * }</pre>
+ *
+ * <p>System Namespace：
+ * <ul>
+ *   <li>系统数据库名称为 "system"（见 SYSTEM_DATABASE_NAME）</li>
+ *   <li>系统数据库包含系统存储过程和操作</li>
+ *   <li>用户不能在系统数据库中创建常规表</li>
+ * </ul>
+ *
+ * <p>Procedure（存储过程）加载：
+ * <ul>
+ *   <li>系统数据库中的存储过程通过 SparkProcedures 注册</li>
+ *   <li>包括压缩、快照管理、标签操作等常用操作</li>
+ *   <li>支持过程调用的参数传递和结果返回</li>
+ * </ul>
+ *
+ * <p>继承说明：
+ * <p>具体的 Catalog 实现应继承本类并实现 WithPaimonCatalog 接口所需的方法。
+ * 例如 SparkCatalog 和 SparkGenericCatalog 是本类的两个主要实现。
+ *
+ * @see org.apache.paimon.spark.SparkCatalog
+ * @see org.apache.paimon.spark.SparkGenericCatalog
+ * @see org.apache.paimon.spark.SparkProcedures
+ * @since 0.1
+ */
 public abstract class SparkBaseCatalog
         implements TableCatalog, SupportsNamespaces, ProcedureCatalog, WithPaimonCatalog {
 

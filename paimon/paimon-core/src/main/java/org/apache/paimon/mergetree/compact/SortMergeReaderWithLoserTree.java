@@ -25,7 +25,6 @@ import org.apache.paimon.utils.FieldsComparator;
 import org.apache.paimon.utils.Preconditions;
 
 import javax.annotation.Nullable;
-
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
@@ -54,18 +53,22 @@ import java.util.List;
  */
 public class SortMergeReaderWithLoserTree<T> implements SortMergeReader<T> {
 
-    /** 合并函数包装器 */
+    /**
+     * 合并函数包装器
+     */
     private final MergeFunctionWrapper<T> mergeFunctionWrapper;
-    /** 败者树（用于多路归并） */
+    /**
+     * 败者树（用于多路归并）
+     */
     private final LoserTree<KeyValue> loserTree;
 
     /**
      * 构造败者树归并排序读取器
      *
-     * @param readers 输入读取器列表
-     * @param userKeyComparator 用户键比较器
+     * @param readers                  输入读取器列表
+     * @param userKeyComparator        用户键比较器
      * @param userDefinedSeqComparator 用户自定义序列号比较器
-     * @param mergeFunctionWrapper 合并函数包装器
+     * @param mergeFunctionWrapper     合并函数包装器
      */
     public SortMergeReaderWithLoserTree(
             List<RecordReader<KeyValue>> readers,
@@ -139,7 +142,9 @@ public class SortMergeReaderWithLoserTree<T> implements SortMergeReader<T> {
      */
     private class SortMergeIterator implements RecordIterator<T> {
 
-        /** 是否已释放 */
+        /**
+         * 是否已释放
+         */
         private boolean released = false;
 
         /**

@@ -58,7 +58,58 @@ import java.util.stream.Collectors;
 import static org.apache.paimon.CoreOptions.DELETION_VECTORS_ENABLED;
 import static org.apache.paimon.format.OrcOptions.ORC_TIMESTAMP_LTZ_LEGACY_TYPE;
 
-/** Orc {@link FileFormat}. */
+/**
+ * ORC 列式文件格式 - 提供 Paimon 与 Apache ORC 格式的集成。
+ *
+ * <p>OrcFileFormat 负责 Paimon 表数据的 ORC 格式读写，包括：
+ * <ul>
+ *   <li>ORC 文件的创建和读取
+ *   <li>Paimon RowType 到 ORC TypeDescription 的类型转换
+ *   <li>ORC 特有的压缩和优化选项配置
+ *   <li>统计信息提取（用于查询优化）
+ *   <li>谓词下推（predicate pushdown）
+ * </ul>
+ *
+ * <h3>ORC 格式特点</h3>
+ * <ul>
+ *   <li>高度压缩：支持字典编码、RLE 等多种压缩方式
+ *   <li>列式存储：天然支持列投影和谓词下推
+ *   <li>内置统计：每个 Stripe 都包含列统计信息
+ *   <li>向量化处理：支持批量处理，提高性能
+ *   <li>类型丰富：支持复杂类型（Map、Array、Struct）
+ * </ul>
+ *
+ * <h3>配置选项</h3>
+ * <ul>
+ *   <li>orc.compress: 压缩算法（NONE, SNAPPY, GZIP, LZO, ZSTD）
+ *   <li>orc.compress.size: 压缩块大小
+ *   <li>orc.stripe.size: Stripe 大小（字节）
+ *   <li>orc.row.index.stride: 行索引步长
+ *   <li>orc.bloom.filter: 是否启用 Bloom Filter
+ * </ul>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 表选项配置
+ * Map<String, String> options = new HashMap<>();
+ * options.put("format.type", "orc");
+ * options.put("format.orc.compress", "snappy");
+ *
+ * // 创建使用 ORC 格式的表
+ * Table table = catalog.createTable(
+ *     new Identifier("db", "table"),
+ *     schema,
+ *     options);
+ * }</pre>
+ *
+ * <h3>线程安全性</h3>
+ * <p>OrcFileFormat 被标注为 @ThreadSafe，可以在多线程环境中安全使用。
+ * Reader 和 Writer 工厂方法可以并发调用。
+ *
+ * @see FileFormat 文件格式基类
+ * @see OrcReaderFactory ORC 读取器工厂
+ * @see OrcWriterFactory ORC 写入器工厂
+ */
 @ThreadSafe
 public class OrcFileFormat extends FileFormat {
 

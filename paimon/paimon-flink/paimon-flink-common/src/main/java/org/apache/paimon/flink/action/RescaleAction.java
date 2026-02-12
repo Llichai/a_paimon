@@ -41,7 +41,77 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 
-/** Action to rescale one partition of a table. */
+/**
+ * 重新扩展（重新分桶）操作。
+ *
+ * <p>用于调整 Paimon 表的分桶数量，从而改变数据在桶中的分布。当表的写入并行度、数据分布不均匀，
+ * 或需要调整查询性能时，可以使用本操作重新分配数据的桶结构。
+ *
+ * <p>主要特性：
+ * <ul>
+ *   <li>支持修改指定分区的分桶数量</li>
+ *   <li>支持指定扫描和写入的并行度</li>
+ *   <li>通过重新分配实现数据重新分布</li>
+ *   <li>支持特定分区的增量重扩展</li>
+ *   <li>Flink 集群执行操作，支持分布式处理</li>
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ *     // 重新扩展指定分区，修改分桶数为 16
+ *     RescaleAction action = new RescaleAction(
+ *         "mydb",
+ *         "mytable",
+ *         catalogConfig
+ *     )
+ *     .withBucketNum(16)                      // 设置新的分桶数
+ *     .withPartition("year", "2024")          // 指定分区
+ *     .withPartition("month", "01")
+ *     .withScanParallelism(8)                 // 扫描并行度
+ *     .withSinkParallelism(8);                // 写入并行度
+ *
+ *     action.run();
+ * }</pre>
+ *
+ * <p>参数说明：
+ * <ul>
+ *   <li>databaseName: 目标数据库名称</li>
+ *   <li>tableName: 目标表名称</li>
+ *   <li>bucketNum: 新的分桶数量</li>
+ *   <li>partition: 分区值映射，指定要重扩展的分区</li>
+ *   <li>scanParallelism: 扫描并行度（可选）</li>
+ *   <li>sinkParallelism: 写入并行度（可选）</li>
+ * </ul>
+ *
+ * <p>重扩展过程：
+ * <ul>
+ *   <li>扫描指定分区的现有数据文件</li>
+ *   <li>根据新分桶数重新计算数据的桶位置</li>
+ *   <li>并行读取原数据文件</li>
+ *   <li>根据新分桶规则写入新的数据文件</li>
+ *   <li>提交新快照，原数据自动清理</li>
+ * </ul>
+ *
+ * <p>典型应用场景：
+ * <ul>
+ *   <li>业务增长导致写入并行度需要调整</li>
+ *   <li>数据分布不均匀，某些桶特别大</li>
+ *   <li>查询性能下降，需要优化数据分布</li>
+ *   <li>从低并行度逐步扩展到高并行度</li>
+ * </ul>
+ *
+ * <p>注意事项：
+ * <ul>
+ *   <li>重扩展仅适用于固定桶模式的表（BucketMode.FIXED）</li>
+ *   <li>执行过程会产生临时数据文件，需要足够的存储空间</li>
+ *   <li>大表的重扩展可能需要较长时间和较高的 Flink 集群资源</li>
+ *   <li>重扩展期间表可以继续读取，但不能进行写入操作</li>
+ *   <li>如果中止操作，应清理临时文件</li>
+ * </ul>
+ *
+ * @see TableActionBase
+ * @since 0.1
+ */
 public class RescaleAction extends TableActionBase {
 
     private @Nullable Integer bucketNum;

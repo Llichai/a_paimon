@@ -75,19 +75,118 @@ import static org.apache.paimon.partition.PartitionPredicate.createBinaryPartiti
 import static org.apache.paimon.partition.PartitionPredicate.createPartitionPredicate;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-/** Table compact action for Flink. */
+/**
+ * Flink 压缩操作 - 用于 Paimon 表的离线压缩任务。
+ *
+ * <p>CompactAction 是一个独立的 Flink Job，用于执行表级别的压缩操作，
+ * 包括合并小文件、优化查询性能、回收存储空间等。
+ *
+ * <h3>压缩类型</h3>
+ * <ul>
+ *   <li><b>增量压缩</b>（默认）：仅压缩新增文件，适合持续增量的场景
+ *   <li><b>全量压缩</b>：压缩所有文件到最高层级，适合一次性优化
+ *   <li><b>分桶压缩</b>：针对固定桶进行压缩，适合主键表
+ *   <li><b>追加表压缩</b>：针对追加表的特殊压缩策略
+ * </ul>
+ *
+ * <h3>使用场景</h3>
+ * <ul>
+ *   <li>定期维护：每日/周运行压缩 Job，回收存储空间
+ *   <li>查询优化：在查询任务前运行压缩，提升扫表性能
+ *   <li>数据清理：与 TTL 配合使用，清理过期数据
+ *   <li>特定分区：针对热数据分区进行压缩
+ * </ul>
+ *
+ * <h3>配置选项</h3>
+ * <ul>
+ *   <li>partitions：指定要压缩的分区列表
+ *   <li>whereSql：SQL WHERE 条件，用于选择分区
+ *   <li>partitionIdleTime：分区空闲时间限制
+ *   <li>fullCompaction：是否执行全量压缩
+ * </ul>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 1. 压缩所有分区
+ * StreamExecutionEnvironment env =
+ *     StreamExecutionEnvironment.getExecutionEnvironment();
+ * CompactAction action = new CompactAction("db", "table", catalogConfig, tableConf);
+ * action.run(env);
+ * env.execute("Compact Table");
+ *
+ * // 2. 压缩特定分区
+ * List<Map<String, String>> partitions = Arrays.asList(
+ *     Collections.singletonMap("date", "2024-01-01"),
+ *     Collections.singletonMap("date", "2024-01-02")
+ * );
+ * action.withPartitions(partitions).run(env);
+ *
+ * // 3. 使用 SQL 条件压缩
+ * action.withWhereSql("date >= '2024-01-01' AND date <= '2024-01-10'").run(env);
+ *
+ * // 4. 执行全量压缩
+ * action.withFullCompaction(true).run(env);
+ * }</pre>
+ *
+ * <h3>压缩流程</h3>
+ * <pre>
+ * 1. 获取待压缩文件
+ *    ├─ 根据分区条件过滤文件
+ *    ├─ 获取所有 Level-0（未排序）文件
+ *    └─ 根据 BucketMode 选择合并策略
+ *
+ * 2. 执行压缩
+ *    ├─ 多线程读取文件
+ *    ├─ 按主键排序（如果是主键表）
+ *    ├─ 生成新的 DataFile
+ *    └─ 创建压缩结果（哪些文件被删除，哪些新增）
+ *
+ * 3. 提交变更
+ *    ├─ 创建新 Snapshot
+ *    ├─ 标记旧文件为已删除
+ *    └─ 返回已删除文件列表
+ * </pre>
+ *
+ * <h3>与 Compact Manager 的关系</h3>
+ * <p>{@link org.apache.paimon.compact.CompactManager} 是运行时的自动压缩管理器，
+ * 而 CompactAction 是离线的手动压缩工具，两者配合使用可以得到最佳效果：
+ * <ul>
+ *   <li>CompactManager：在写入过程中自动触发小压缩
+ *   <li>CompactAction：定期运行大规模压缩 Job
+ * </ul>
+ *
+ * @see TableActionBase 表操作基类
+ */
 public class CompactAction extends TableActionBase {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CompactAction.class);
 
+    /** 待压缩的分区列表（指定分区时设置） */
     protected List<Map<String, String>> partitions;
 
+    /** SQL WHERE 条件（通过 SQL 选择分区时设置） */
     protected String whereSql;
 
+    /** 分区空闲时间限制（只压缩空闲分区） */
     @Nullable protected Duration partitionIdleTime = null;
 
+    /** 是否执行全量压缩 */
     @Nullable protected Boolean fullCompaction;
 
+    /**
+     * 创建压缩操作。
+     *
+     * <p>注意：
+     * <ul>
+     *   <li>只支持 FileStoreTable，不支持其他表类型
+     *   <li>自动关闭 WRITE_ONLY 模式，以便进行压缩
+     * </ul>
+     *
+     * @param database 数据库名
+     * @param tableName 表名
+     * @param catalogConfig Catalog 配置
+     * @param tableConf 表配置
+     */
     public CompactAction(
             String database,
             String tableName,
@@ -110,11 +209,32 @@ public class CompactAction extends TableActionBase {
     //  Java API
     // ------------------------------------------------------------------------
 
+    /**
+     * 指定要压缩的分区列表。
+     *
+     * <p>每个 Map 表示一个分区，键为分区字段名，值为分区值。
+     * 例如：{date: "2024-01-01", region: "us-east"}
+     *
+     * @param partitions 分区列表
+     * @return this
+     */
     public CompactAction withPartitions(List<Map<String, String>> partitions) {
         this.partitions = partitions;
         return this;
     }
 
+    /**
+     * 通过 SQL WHERE 条件指定要压缩的分区。
+     *
+     * <p>示例：
+     * <pre>
+     * action.withWhereSql("date >= '2024-01-01' AND date <= '2024-01-10'");
+     * action.withWhereSql("region = 'us-east' OR region = 'us-west'");
+     * </pre>
+     *
+     * @param whereSql SQL WHERE 条件（不包含 WHERE 关键字）
+     * @return this
+     */
     public CompactAction withWhereSql(String whereSql) {
         this.whereSql = whereSql;
         return this;

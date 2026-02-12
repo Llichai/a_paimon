@@ -87,81 +87,127 @@ import java.util.stream.LongStream;
  */
 public class CompactionMetrics {
 
-    /** 指标组名称 */
+    /**
+     * 指标组名称
+     */
     private static final String GROUP_NAME = "compaction";
 
     // ==================== 指标名称常量 ====================
 
-    /** 最大Level0文件数量 */
+    /**
+     * 最大Level0文件数量
+     */
     public static final String MAX_LEVEL0_FILE_COUNT = "maxLevel0FileCount";
 
-    /** 平均Level0文件数量 */
+    /**
+     * 平均Level0文件数量
+     */
     public static final String AVG_LEVEL0_FILE_COUNT = "avgLevel0FileCount";
 
-    /** 压缩线程繁忙度百分比 */
+    /**
+     * 压缩线程繁忙度百分比
+     */
     public static final String COMPACTION_THREAD_BUSY = "compactionThreadBusy";
 
-    /** 平均压缩时间（毫秒） */
+    /**
+     * 平均压缩时间（毫秒）
+     */
     public static final String AVG_COMPACTION_TIME = "avgCompactionTime";
 
-    /** 已完成的压缩任务数 */
+    /**
+     * 已完成的压缩任务数
+     */
     public static final String COMPACTION_COMPLETED_COUNT = "compactionCompletedCount";
 
-    /** 总压缩任务数 */
+    /**
+     * 总压缩任务数
+     */
     public static final String COMPACTION_TOTAL_COUNT = "compactionTotalCount";
 
-    /** 队列中的压缩任务数 */
+    /**
+     * 队列中的压缩任务数
+     */
     public static final String COMPACTION_QUEUED_COUNT = "compactionQueuedCount";
 
-    /** 最大压缩输入文件大小（字节） */
+    /**
+     * 最大压缩输入文件大小（字节）
+     */
     public static final String MAX_COMPACTION_INPUT_SIZE = "maxCompactionInputSize";
 
-    /** 最大压缩输出文件大小（字节） */
+    /**
+     * 最大压缩输出文件大小（字节）
+     */
     public static final String MAX_COMPACTION_OUTPUT_SIZE = "maxCompactionOutputSize";
 
-    /** 平均压缩输入文件大小（字节） */
+    /**
+     * 平均压缩输入文件大小（字节）
+     */
     public static final String AVG_COMPACTION_INPUT_SIZE = "avgCompactionInputSize";
 
-    /** 平均压缩输出文件大小（字节） */
+    /**
+     * 平均压缩输出文件大小（字节）
+     */
     public static final String AVG_COMPACTION_OUTPUT_SIZE = "avgCompactionOutputSize";
 
-    /** 最大总文件大小（字节） */
+    /**
+     * 最大总文件大小（字节）
+     */
     public static final String MAX_TOTAL_FILE_SIZE = "maxTotalFileSize";
 
-    /** 平均总文件大小（字节） */
+    /**
+     * 平均总文件大小（字节）
+     */
     public static final String AVG_TOTAL_FILE_SIZE = "avgTotalFileSize";
 
-    /** 繁忙度测量时间窗口：60秒 */
+    /**
+     * 繁忙度测量时间窗口：60秒
+     */
     private static final long BUSY_MEASURE_MILLIS = 60_000;
 
-    /** 压缩时间统计窗口大小：最近100次压缩 */
+    /**
+     * 压缩时间统计窗口大小：最近100次压缩
+     */
     private static final int COMPACTION_TIME_WINDOW = 100;
 
-    /** 指标组，用于注册和管理所有压缩相关指标 */
+    /**
+     * 指标组，用于注册和管理所有压缩相关指标
+     */
     private final MetricGroup metricGroup;
 
-    /** 分区-桶 → Reporter 的映射 */
+    /**
+     * 分区-桶 → Reporter 的映射
+     */
     private final Map<PartitionAndBucket, ReporterImpl> reporters;
 
-    /** 线程ID → 压缩计时器 的映射，用于跟踪每个线程的繁忙度 */
+    /**
+     * 线程ID → 压缩计时器 的映射，用于跟踪每个线程的繁忙度
+     */
     private final Map<Long, CompactTimer> compactTimers;
 
-    /** 压缩时间队列，保存最近的压缩耗时 */
+    /**
+     * 压缩时间队列，保存最近的压缩耗时
+     */
     private final Queue<Long> compactionTimes;
 
-    /** 已完成的压缩计数器 */
+    /**
+     * 已完成的压缩计数器
+     */
     private Counter compactionsCompletedCounter;
 
-    /** 总压缩计数器 */
+    /**
+     * 总压缩计数器
+     */
     private Counter compactionsTotalCounter;
 
-    /** 队列中的压缩计数器 */
+    /**
+     * 队列中的压缩计数器
+     */
     private Counter compactionsQueuedCounter;
 
     /**
      * 构造压缩指标收集器
      *
-     * @param registry 指标注册器
+     * @param registry  指标注册器
      * @param tableName 表名
      */
     public CompactionMetrics(MetricRegistry registry, String tableName) {
@@ -188,6 +234,7 @@ public class CompactionMetrics {
      *
      * <p>为所有压缩相关的指标注册Gauge和Counter。
      */
+    private void registerGenericCompactionMetrics() {
         metricGroup.gauge(MAX_LEVEL0_FILE_COUNT, () -> getLevel0FileCountStream().max().orElse(-1));
         metricGroup.gauge(
                 AVG_LEVEL0_FILE_COUNT, () -> getLevel0FileCountStream().average().orElse(-1));
@@ -280,16 +327,24 @@ public class CompactionMetrics {
          */
         void reportCompactionTime(long time);
 
-        /** 增加已完成的压缩计数 */
+        /**
+         * 增加已完成的压缩计数
+         */
         void increaseCompactionsCompletedCount();
 
-        /** 增加总压缩计数 */
+        /**
+         * 增加总压缩计数
+         */
         void increaseCompactionsTotalCount();
 
-        /** 增加队列中的压缩计数 */
+        /**
+         * 增加队列中的压缩计数
+         */
         void increaseCompactionsQueuedCount();
 
-        /** 减少队列中的压缩计数 */
+        /**
+         * 减少队列中的压缩计数
+         */
         void decreaseCompactionsQueuedCount();
 
         /**
@@ -313,7 +368,9 @@ public class CompactionMetrics {
          */
         void reportTotalFileSize(long bytes);
 
-        /** 注销该Reporter */
+        /**
+         * 注销该Reporter
+         */
         void unregister();
     }
 
@@ -324,19 +381,29 @@ public class CompactionMetrics {
      */
     private class ReporterImpl implements Reporter {
 
-        /** 分区-桶标识 */
+        /**
+         * 分区-桶标识
+         */
         private final PartitionAndBucket key;
 
-        /** Level0文件数量 */
+        /**
+         * Level0文件数量
+         */
         private long level0FileCount;
 
-        /** 压缩输入文件大小 */
+        /**
+         * 压缩输入文件大小
+         */
         private long compactionInputSize = 0;
 
-        /** 压缩输出文件大小 */
+        /**
+         * 压缩输出文件大小
+         */
         private long compactionOutputSize = 0;
 
-        /** 总文件大小 */
+        /**
+         * 总文件大小
+         */
         private long totalFileSize = 0;
 
         /**
@@ -416,7 +483,7 @@ public class CompactionMetrics {
      * 创建分区-桶的Reporter
      *
      * @param partition 分区
-     * @param bucket 桶ID
+     * @param bucket    桶ID
      * @return Reporter实例
      */
     public Reporter createReporter(BinaryRow partition, int bucket) {
@@ -433,17 +500,21 @@ public class CompactionMetrics {
      */
     private static class PartitionAndBucket {
 
-        /** 分区 */
+        /**
+         * 分区
+         */
         private final BinaryRow partition;
 
-        /** 桶ID */
+        /**
+         * 桶ID
+         */
         private final int bucket;
 
         /**
          * 构造分区-桶标识
          *
          * @param partition 分区
-         * @param bucket 桶ID
+         * @param bucket    桶ID
          */
         private PartitionAndBucket(BinaryRow partition, int bucket) {
             this.partition = partition;

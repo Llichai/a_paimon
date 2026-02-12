@@ -56,24 +56,88 @@ import java.util.regex.Pattern;
 import static org.apache.paimon.flink.sink.FlinkStreamPartitioner.partition;
 import static org.apache.paimon.flink.sink.FlinkStreamPartitioner.rebalance;
 
-/** Database compact action for Flink. */
+/**
+ * 数据库压缩操作 - 用于压缩数据库中的所有表。
+ *
+ * <p>CompactDatabaseAction 用于批量压缩数据库中的多个表，将小文件合并为大文件以提高查询性能和
+ * 减少存储开销。支持通过正则表达式选择特定的表进行压缩，可配置压缩模式和分区隔离策略。
+ *
+ * <p>压缩模式：
+ * <ul>
+ *   <li><b>DIVIDED</b>: 分离模式，每个表的数据流分别处理（默认）
+ *   <li><b>COMBINED</b>: 组合模式，所有表的数据流合并处理，提高资源利用率
+ * </ul>
+ *
+ * <p>过滤配置：
+ * <ul>
+ *   <li><b>表过滤</b>: 使用正则表达式选择要压缩的表
+ *   <li><b>数据库过滤</b>: 选择特定的数据库进行压缩
+ *   <li><b>排除过滤</b>: 排除某些不需要压缩的表
+ * </ul>
+ *
+ * <p>压缩配置：
+ * <ul>
+ *   <li><b>分区隔离</b>: 配置多久未更新的分区被视为闲置
+ *   <li><b>完整压缩</b>: 是否进行完整压缩（压缩所有文件）还是增量压缩
+ *   <li><b>表选项</b>: 为压缩指定特定的表选项
+ * </ul>
+ *
+ * <p>应用场景：
+ * <ul>
+ *   <li><b>批量优化</b>: 定期压缩整个数据库以维持性能
+ *   <li><b>存储清理</b>: 清理小文件，减少存储碎片
+ *   <li><b>性能优化</b>: 通过减少文件数提高查询速度
+ *   <li><b>定期维护</b>: 作为日常维护任务的一部分
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * CompactDatabaseAction action = new CompactDatabaseAction(catalogConfig);
+ *
+ * // 设置只压缩 analytics_db 数据库中的表
+ * action.databasePattern("analytics_db");
+ *
+ * // 选择匹配 events_* 的表进行压缩
+ * action.includingPattern("events_.*");
+ *
+ * // 排除临时表
+ * action.excludingPattern("temp_.*");
+ *
+ * // 30 分钟未更新的分区视为闲置
+ * action.partitionIdleTime("30 min");
+ *
+ * action.run();
+ * }</pre>
+ *
+ * @see CompactAction
+ * @see SortCompactAction
+ */
 public class CompactDatabaseAction extends ActionBase {
     private static final Logger LOG = LoggerFactory.getLogger(CompactDatabaseAction.class);
 
+    /** 要压缩的表的匹配模式（默认匹配所有表） */
     private Pattern includingPattern = Pattern.compile(".*");
+    /** 要排除的表的匹配模式（可选） */
     @Nullable private Pattern excludingPattern;
+    /** 数据库的匹配模式（默认匹配所有数据库） */
     private Pattern databasePattern = Pattern.compile(".*");
 
+    /** 数据库压缩模式：DIVIDED（分离）或 COMBINED（组合） */
     private MultiTablesSinkMode databaseCompactMode = MultiTablesSinkMode.DIVIDED;
 
+    /** 缓存的表对象映射 */
     private final Map<String, FileStoreTable> tableMap = new HashMap<>();
 
+    /** 应用于所有表的压缩选项 */
     private Options tableOptions = new Options();
 
+    /** 分区闲置时间：超过此时间未更新的分区被视为闲置 */
     @Nullable private Duration partitionIdleTime = null;
 
+    /** 是否执行完整压缩（压缩所有文件） */
     private Boolean fullCompaction;
 
+    /** 是否使用流处理模式 */
     private boolean isStreaming;
 
     public CompactDatabaseAction(Map<String, String> catalogConfig) {

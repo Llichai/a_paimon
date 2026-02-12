@@ -48,7 +48,64 @@ import java.util.Optional;
 
 import static org.apache.avro.file.DataFileConstants.SNAPPY_CODEC;
 
-/** Avro {@link FileFormat}. */
+/**
+ * Avro 行式文件格式 - 提供 Paimon 与 Apache Avro 格式的集成。
+ *
+ * <p>AvroFileFormat 负责 Paimon 表数据的 Avro 格式读写，提供模式演化能力和
+ * 优秀的跨语言互操作性，适合数据管道和消息队列场景。
+ *
+ * <h3>Avro 格式特点</h3>
+ * <ul>
+ *   <li>行式存储：每行完整存储，适合顺序读取
+ *   <li>模式演化：强大的 Schema 演化能力（向后/向前兼容）
+ *   <li>紧凑格式：二进制格式，比 JSON 更紧凑
+ *   <li>自包含：每个文件包含 Schema 定义
+ *   <li>跨语言支持：Java、Python、C++、Go 等原生支持
+ *   <li>生态集成：与 Kafka、Hive、Spark 良好集成
+ * </ul>
+ *
+ * <h3>与 Parquet/ORC 的对比</h3>
+ * <ul>
+ *   <li>Parquet/ORC：列式存储，OLAP 友好，列投影性能好
+ *   <li>Avro：行式存储，适合 OLTP 和 CDC，模式演化能力强
+ * </ul>
+ *
+ * <h3>配置选项</h3>
+ * <ul>
+ *   <li>avro.codec: 压缩编码（null, deflate, snappy, bzip2）
+ *   <li>avro.row-name-mapping: 行名称映射配置
+ *   <li>avro.zstd.level: ZSTD 压缩级别
+ * </ul>
+ *
+ * <h3>使用示例</h3>
+ * <pre>{@code
+ * // 表选项配置
+ * Map<String, String> options = new HashMap<>();
+ * options.put("format.type", "avro");
+ * options.put("avro.codec", "snappy");  // 快速压缩
+ *
+ * // 创建使用 Avro 格式的表（适合 CDC 场景）
+ * Table table = catalog.createTable(
+ *     new Identifier("db", "cdc_table"),
+ *     schema,
+ *     options);
+ *
+ * // Avro 数据支持 Schema 演化，旧版本的 reader 也能读新版本的数据
+ * }</pre>
+ *
+ * <h3>模式演化（Schema Evolution）</h3>
+ * <p>Avro 支持强大的 Schema 演化能力：
+ * <ul>
+ *   <li>添加字段（带默认值）：新 reader 可以读旧数据
+ *   <li>移除字段：旧 reader 可以跳过新字段
+ *   <li>重命名字段：支持字段别名映射
+ *   <li>类型变换：支持兼容的类型转换（int → long 等）
+ * </ul>
+ *
+ * @see FileFormat 文件格式基类
+ * @see AvroBulkFormat Avro 读取器
+ * @see AvroFileWriter Avro 写入器
+ */
 public class AvroFileFormat extends FileFormat {
 
     public static final String IDENTIFIER = "avro";
