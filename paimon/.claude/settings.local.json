@@ -3,7 +3,8 @@
     "allow": [
       "Bash(D:/a_git/paimon/BATCH1_PROGRESS.md << 'EOF'\n# 批次1进度：paimon-core/mergetree/compact/aggregate\n\n## 已完成（8/45）\n\n### Factory类\n1. ✅ FieldBoolAndAggFactory.java\n2. ✅ FieldBoolOrAggFactory.java  \n3. ✅ FieldMaxAggFactory.java\n4. ✅ FieldMinAggFactory.java\n5. ✅ FieldSumAggFactory.java\n6. ✅ FieldProductAggFactory.java\n7. ✅ FieldFirstValueAggFactory.java\n8. ✅ FieldLastValueAggFactory.java\n\n## 进行中\n\n### 下一批Factory类（需处理）\n- FieldFirstNonNullValueAggFactory.java\n- FieldFirstNonNullValueAggLegacyFactory.java\n- FieldLastNonNullValueAggFactory.java\n- FieldCollectAggFactory.java\n- FieldListaggAggFactory.java\n- FieldMergeMapAggFactory.java\n- FieldPrimaryKeyAggFactory.java\n- FieldNestedUpdateAggFactory.java\n- FieldNestedPartialUpdateAggFactory.java\n- FieldHllSketchAggFactory.java\n- FieldThetaSketchAggFactory.java\n- FieldRoaringBitmap32AggFactory.java\n- FieldRoaringBitmap64AggFactory.java\nEOF)",
       "Bash(dir:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(find:*)"
     ]
   }
 }
