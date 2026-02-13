@@ -88,13 +88,21 @@ import java.util.stream.IntStream;
  */
 public class SortBufferWriteBuffer implements WriteBuffer {
 
-    /** 键类型 */
+    /**
+     * 键类型
+     */
     private final RowType keyType;
-    /** 值类型 */
+    /**
+     * 值类型
+     */
     private final RowType valueType;
-    /** KeyValue 序列化器 */
+    /**
+     * KeyValue 序列化器
+     */
     private final KeyValueSerializer serializer;
-    /** 排序缓冲区（内存或外部） */
+    /**
+     * 排序缓冲区（内存或外部）
+     */
     private final SortBuffer buffer;
 
     /**
@@ -107,15 +115,15 @@ public class SortBufferWriteBuffer implements WriteBuffer {
      *   <li>序列号字段（keyType.getFieldCount()）
      * </ol>
      *
-     * @param keyType 键类型
-     * @param valueType 值类型
+     * @param keyType                  键类型
+     * @param valueType                值类型
      * @param userDefinedSeqComparator 用户定义序列比较器
-     * @param memoryPool 内存池
-     * @param spillable 是否支持溢写
-     * @param maxDiskSize 最大磁盘大小
-     * @param sortMaxFan 排序最大扇出
-     * @param compression 压缩选项
-     * @param ioManager IO 管理器
+     * @param memoryPool               内存池
+     * @param spillable                是否支持溢写
+     * @param maxDiskSize              最大磁盘大小
+     * @param sortMaxFan               排序最大扇出
+     * @param compression              压缩选项
+     * @param ioManager                IO 管理器
      */
     public SortBufferWriteBuffer(
             RowType keyType,
@@ -178,14 +186,14 @@ public class SortBufferWriteBuffer implements WriteBuffer {
         this.buffer =
                 ioManager != null && spillable
                         ? new BinaryExternalSortBuffer( // 外部排序（支持溢写）
-                                new BinaryRowSerializer(serializer.getArity()),
-                                keyComparator,
-                                memoryPool.pageSize(),
-                                inMemorySortBuffer,
-                                ioManager,
-                                sortMaxFan,
-                                compression,
-                                maxDiskSize)
+                        new BinaryRowSerializer(serializer.getArity()),
+                        keyComparator,
+                        memoryPool.pageSize(),
+                        inMemorySortBuffer,
+                        ioManager,
+                        sortMaxFan,
+                        compression,
+                        maxDiskSize)
                         : inMemorySortBuffer; // 内存排序
     }
 
@@ -193,9 +201,9 @@ public class SortBufferWriteBuffer implements WriteBuffer {
      * 写入记录
      *
      * @param sequenceNumber 序列号
-     * @param valueKind 值类型
-     * @param key 键
-     * @param value 值
+     * @param valueKind      值类型
+     * @param key            键
+     * @param value          值
      * @return true 表示成功写入，false 表示缓冲区已满
      * @throws IOException IO 异常
      */
@@ -241,9 +249,9 @@ public class SortBufferWriteBuffer implements WriteBuffer {
      *
      * <p>对缓冲区排序并应用合并函数，输出合并后的记录
      *
-     * @param keyComparator 键比较器
-     * @param mergeFunction 合并函数
-     * @param rawConsumer 原始记录消费者（可选）
+     * @param keyComparator  键比较器
+     * @param mergeFunction  合并函数
+     * @param rawConsumer    原始记录消费者（可选）
      * @param mergedConsumer 合并后记录消费者
      * @throws IOException IO 异常
      */
@@ -296,38 +304,61 @@ public class SortBufferWriteBuffer implements WriteBuffer {
      * </ol>
      */
     private class MergeIterator {
-        /** 原始记录消费者 */
-        @Nullable private final KvConsumer rawConsumer;
-        /** KeyValue 迭代器（已排序） */
+        /**
+         * 原始记录消费者
+         */
+        @Nullable
+        private final KvConsumer rawConsumer;
+        /**
+         * KeyValue 迭代器（已排序）
+         */
         private final MutableObjectIterator<BinaryRow> kvIter;
-        /** 键比较器 */
+        /**
+         * 键比较器
+         */
         private final Comparator<InternalRow> keyComparator;
-        /** 归并函数包装器 */
+        /**
+         * 归并函数包装器
+         */
         private final ReducerMergeFunctionWrapper mergeFunctionWrapper;
-        /** 是否需要复制（合并函数要求） */
+        /**
+         * 是否需要复制（合并函数要求）
+         */
         private final boolean requireCopy;
 
         // previously read kv
-        /** 前一条记录的序列化器 */
+        /**
+         * 前一条记录的序列化器
+         */
         private KeyValueSerializer previous;
-        /** 前一条记录的行 */
+        /**
+         * 前一条记录的行
+         */
         private BinaryRow previousRow;
         // reads the next kv
-        /** 当前记录的序列化器 */
+        /**
+         * 当前记录的序列化器
+         */
         private KeyValueSerializer current;
-        /** 当前记录的行 */
+        /**
+         * 当前记录的行
+         */
         private BinaryRow currentRow;
 
-        /** 归并结果 */
+        /**
+         * 归并结果
+         */
         private KeyValue result;
-        /** 是否已前进 */
+        /**
+         * 是否已前进
+         */
         private boolean advanced;
 
         /**
          * 构造归并迭代器
          *
-         * @param rawConsumer 原始记录消费者
-         * @param kvIter KeyValue 迭代器
+         * @param rawConsumer   原始记录消费者
+         * @param kvIter        KeyValue 迭代器
          * @param keyComparator 键比较器
          * @param mergeFunction 合并函数
          * @throws IOException IO 异常
@@ -403,7 +434,7 @@ public class SortBufferWriteBuffer implements WriteBuffer {
                 // 读取相同键的所有记录
                 while (readOnce()) {
                     if (keyComparator.compare(
-                                    previous.getReusedKv().key(), current.getReusedKv().key())
+                            previous.getReusedKv().key(), current.getReusedKv().key())
                             != 0) {
                         break; // 键不同，停止
                     }

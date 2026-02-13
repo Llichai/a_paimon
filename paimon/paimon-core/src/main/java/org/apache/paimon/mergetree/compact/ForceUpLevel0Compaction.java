@@ -57,17 +57,25 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ForceUpLevel0Compaction implements CompactStrategy {
 
-    /** 内部的通用压缩策略 */
+    /**
+     * 内部的通用压缩策略
+     */
     private final UniversalCompaction universal;
-    /** 最大压缩间隔（null 表示无限制） */
-    @Nullable private final Integer maxCompactInterval;
-    /** 压缩触发计数器（用于控制间隔） */
-    @Nullable private final AtomicInteger compactTriggerCount;
+    /**
+     * 最大压缩间隔（null 表示无限制）
+     */
+    @Nullable
+    private final Integer maxCompactInterval;
+    /**
+     * 压缩触发计数器（用于控制间隔）
+     */
+    @Nullable
+    private final AtomicInteger compactTriggerCount;
 
     /**
      * 构造强制 Level-0 压缩策略
      *
-     * @param universal 通用压缩策略
+     * @param universal          通用压缩策略
      * @param maxCompactInterval 最大压缩间隔（null 表示每次都强制压缩）
      */
     public ForceUpLevel0Compaction(
@@ -97,7 +105,7 @@ public class ForceUpLevel0Compaction implements CompactStrategy {
      * </ol>
      *
      * @param numLevels 总层级数
-     * @param runs 当前所有文件
+     * @param runs      当前所有文件
      * @return 压缩单元（如果需要压缩）
      */
     @Override

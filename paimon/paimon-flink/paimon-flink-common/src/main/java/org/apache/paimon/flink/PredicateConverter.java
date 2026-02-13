@@ -93,7 +93,9 @@ import static org.apache.paimon.flink.LogicalTypeConversion.toDataType;
  */
 public class PredicateConverter implements ExpressionVisitor<Predicate> {
 
-    /** 谓词构建器（用于构建各种谓词对象） */
+    /**
+     * 谓词构建器（用于构建各种谓词对象）
+     */
     private final PredicateBuilder builder;
 
     /**
@@ -114,7 +116,9 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
         this.builder = builder;
     }
 
-    /** 匹配简单前缀 LIKE 模式的正则表达式（如 "abc%"） */
+    /**
+     * 匹配简单前缀 LIKE 模式的正则表达式（如 "abc%"）
+     */
     private static final Pattern BEGIN_PATTERN = Pattern.compile("([^%]+)%");
 
     /**
@@ -192,7 +196,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
             // 递归转换两个子表达式，然后进行逻辑或
             return PredicateBuilder.or(children.get(0).accept(this), children.get(1).accept(this));
 
-        // 步骤2：比较运算（=、!=、<、<=、>、>=）
+            // 步骤2：比较运算（=、!=、<、<=、>、>=）
         } else if (func == BuiltInFunctionDefinitions.EQUALS) {
             // 尝试两个方向：field = literal 或 literal = field
             return visitBiFunction(children, builder::equal, builder::equal);
@@ -211,7 +215,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
         } else if (func == BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL) {
             return visitBiFunction(children, builder::lessOrEqual, builder::greaterOrEqual);
 
-        // 步骤3：IN 操作
+            // 步骤3：IN 操作
         } else if (func == BuiltInFunctionDefinitions.IN) {
             // IN 格式：field IN (literal1, literal2, ...)
             FieldReferenceExpression fieldRefExpr =
@@ -223,7 +227,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
             }
             return builder.in(builder.indexOf(fieldRefExpr.getName()), literals);
 
-        // 步骤4：空值检查
+            // 步骤4：空值检查
         } else if (func == BuiltInFunctionDefinitions.IS_NULL) {
             return extractFieldReference(children.get(0))
                     .map(FieldReferenceExpression::getName)
@@ -237,7 +241,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
                     .map(builder::isNotNull)
                     .orElseThrow(UnsupportedExpression::new);
 
-        // 步骤5：范围查询（BETWEEN）
+            // 步骤5：范围查询（BETWEEN）
         } else if (func == BuiltInFunctionDefinitions.BETWEEN) {
             // BETWEEN 格式：field BETWEEN lower AND upper
             FieldReferenceExpression fieldRefExpr =
@@ -245,7 +249,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
             return builder.between(
                     builder.indexOf(fieldRefExpr.getName()), children.get(1), children.get(2));
 
-        // 步骤6：字符串匹配（LIKE）
+            // 步骤6：字符串匹配（LIKE）
         } else if (func == BuiltInFunctionDefinitions.LIKE) {
             FieldReferenceExpression fieldRefExpr =
                     extractFieldReference(children.get(0)).orElseThrow(UnsupportedExpression::new);
@@ -266,10 +270,10 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
                         children.size() <= 2
                                 ? null
                                 : Objects.requireNonNull(
-                                                extractLiteral(
-                                                        fieldRefExpr.getOutputDataType(),
-                                                        children.get(2)))
-                                        .toString();
+                                        extractLiteral(
+                                                fieldRefExpr.getOutputDataType(),
+                                                children.get(2)))
+                                .toString();
                 String escapedSqlPattern = sqlPattern;
                 boolean allowQuick = false;
 
@@ -333,7 +337,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
                 }
             }
 
-        // 步骤7：布尔值检查（IS TRUE、IS FALSE）
+            // 步骤7：布尔值检查（IS TRUE、IS FALSE）
         } else if (func == BuiltInFunctionDefinitions.IS_TRUE) {
             FieldReferenceExpression fieldRefExpr =
                     extractFieldReference(children.get(0)).orElseThrow(UnsupportedExpression::new);
@@ -363,8 +367,8 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
      * </ol>
      *
      * @param children 表达式列表（长度为 2）
-     * @param visit1 字段在第一个位置时的处理函数
-     * @param visit2 字段在第二个位置时的处理函数（反转方向）
+     * @param visit1   字段在第一个位置时的处理函数
+     * @param visit2   字段在第二个位置时的处理函数（反转方向）
      * @return 构建的谓词
      * @throws UnsupportedExpression 如果无法提取字段或字面量
      */
@@ -424,7 +428,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
      * </ol>
      *
      * @param expectedType 期望的数据类型
-     * @param expression 表达式
+     * @param expression   表达式
      * @return 提取的字面量值
      * @throws UnsupportedExpression 如果无法提取或转换字面量
      */
@@ -483,12 +487,12 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
             // 字符串类型
             case CHAR:
             case VARCHAR:
-            // 布尔类型
+                // 布尔类型
             case BOOLEAN:
-            // 二进制类型
+                // 二进制类型
             case BINARY:
             case VARBINARY:
-            // 数值类型：浮点数和定点数
+                // 数值类型：浮点数和定点数
             case DECIMAL:
             case TINYINT:
             case SMALLINT:
@@ -496,13 +500,13 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
             case BIGINT:
             case FLOAT:
             case DOUBLE:
-            // 时间类型
+                // 时间类型
             case DATE:
             case TIME_WITHOUT_TIME_ZONE:
             case TIMESTAMP_WITHOUT_TIME_ZONE:
             case TIMESTAMP_WITH_TIME_ZONE:
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-            // 时间间隔类型
+                // 时间间隔类型
             case INTERVAL_YEAR_MONTH:
             case INTERVAL_DAY_TIME:
                 return true;
@@ -553,7 +557,7 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
      * }</pre>
      *
      * @param rowType 行类型（包含所有可用字段的信息）
-     * @param filter 解析后的过滤表达式（来自 Flink SQL 解析器）
+     * @param filter  解析后的过滤表达式（来自 Flink SQL 解析器）
      * @return 转换的谓词（如果不支持则返回空）
      */
     public static Optional<Predicate> convert(RowType rowType, ResolvedExpression filter) {
@@ -571,5 +575,6 @@ public class PredicateConverter implements ExpressionVisitor<Predicate> {
      *
      * <p>调用方可以捕获此异常并选择忽略该过滤条件，改为执行全表扫描。
      */
-    public static class UnsupportedExpression extends RuntimeException {}
+    public static class UnsupportedExpression extends RuntimeException {
+    }
 }

@@ -166,7 +166,7 @@ public interface DeletionVector extends DeletionVectorJudger {
      *   <li>V2格式: {@link Bitmap64DeletionVector}
      * </ul>
      *
-     * @param fileIO 文件I/O接口
+     * @param fileIO       文件I/O接口
      * @param deletionFile 删除文件的元数据,包含路径、偏移量和长度
      * @return 反序列化的删除向量实例
      * @throws IOException 如果读取或反序列化失败
@@ -190,10 +190,10 @@ public interface DeletionVector extends DeletionVectorJudger {
      *   <li>否则抛出异常
      * </ul>
      *
-     * @param dis 数据输入流
+     * @param dis    数据输入流
      * @param length 预期的数据长度,可为null(不进行长度校验)
      * @return 反序列化的删除向量实例
-     * @throws IOException 如果读取失败
+     * @throws IOException      如果读取失败
      * @throws RuntimeException 如果魔数无效或长度不匹配
      */
     static DeletionVector read(DataInputStream dis, @Nullable Long length) throws IOException {
@@ -274,8 +274,8 @@ public interface DeletionVector extends DeletionVectorJudger {
      *
      * <p>此工厂根据文件名查找对应的删除文件,并从中读取删除向量。
      *
-     * @param fileIO 文件I/O接口
-     * @param files 数据文件元数据列表
+     * @param fileIO        文件I/O接口
+     * @param files         数据文件元数据列表
      * @param deletionFiles 删除文件列表,可为null
      * @return 删除向量工厂实例
      */

@@ -56,12 +56,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Convert {@link Predicate} to {@link FilterCompat.Filter}. */
+/**
+ * Convert {@link Predicate} to {@link FilterCompat.Filter}.
+ */
 public class ParquetFilters {
 
     private static final ConvertFilterToParquet CONVERTER = new ConvertFilterToParquet();
 
-    private ParquetFilters() {}
+    private ParquetFilters() {
+    }
 
     public static FilterCompat.Filter convert(List<Predicate> predicates) {
         FilterPredicate result = null;

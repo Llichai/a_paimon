@@ -66,26 +66,38 @@ public class UniversalCompaction implements CompactStrategy {
 
     private static final Logger LOG = LoggerFactory.getLogger(UniversalCompaction.class);
 
-    /** 最大空间放大百分比（例如 200 表示允许 200% 的额外空间） */
+    /**
+     * 最大空间放大百分比（例如 200 表示允许 200% 的额外空间）
+     */
     private final int maxSizeAmp;
-    /** 大小比例阈值（例如 1 表示 1% 的比例差异） */
+    /**
+     * 大小比例阈值（例如 1 表示 1% 的比例差异）
+     */
     private final int sizeRatio;
-    /** 触发压缩的文件数量阈值 */
+    /**
+     * 触发压缩的文件数量阈值
+     */
     private final int numRunCompactionTrigger;
 
-    /** 提前全量压缩策略（可选） */
-    @Nullable private final EarlyFullCompaction earlyFullCompact;
-    /** 非峰值时段策略（可选，用于调整压缩激进程度） */
-    @Nullable private final OffPeakHours offPeakHours;
+    /**
+     * 提前全量压缩策略（可选）
+     */
+    @Nullable
+    private final EarlyFullCompaction earlyFullCompact;
+    /**
+     * 非峰值时段策略（可选，用于调整压缩激进程度）
+     */
+    @Nullable
+    private final OffPeakHours offPeakHours;
 
     /**
      * 构造通用压缩策略
      *
-     * @param maxSizeAmp 最大空间放大百分比
-     * @param sizeRatio 大小比例阈值
+     * @param maxSizeAmp              最大空间放大百分比
+     * @param sizeRatio               大小比例阈值
      * @param numRunCompactionTrigger 触发压缩的文件数量
-     * @param earlyFullCompact 提前全量压缩策略
-     * @param offPeakHours 非峰值时段策略
+     * @param earlyFullCompact        提前全量压缩策略
+     * @param offPeakHours            非峰值时段策略
      */
     public UniversalCompaction(
             int maxSizeAmp,
@@ -112,7 +124,7 @@ public class UniversalCompaction implements CompactStrategy {
      * </ol>
      *
      * @param numLevels 总层级数
-     * @param runs 当前所有文件（按时间排序，最新的在前）
+     * @param runs      当前所有文件（按时间排序，最新的在前）
      * @return 压缩单元（如果需要压缩）
      */
     @Override
@@ -164,7 +176,7 @@ public class UniversalCompaction implements CompactStrategy {
      * <p>用于 LOOKUP changelog 模式：确保 Level-0 文件及时压缩以生成 changelog
      *
      * @param numLevels 总层级数
-     * @param runs 当前所有文件
+     * @param runs      当前所有文件
      * @return 压缩单元（包含所有 Level-0 文件）
      */
     Optional<CompactUnit> forcePickL0(int numLevels, List<LevelSortedRun> runs) {
@@ -204,7 +216,7 @@ public class UniversalCompaction implements CompactStrategy {
      * </pre>
      *
      * @param maxLevel 最大层级
-     * @param runs 当前所有文件
+     * @param runs     当前所有文件
      * @return 压缩单元（全量压缩）或 null
      */
     @VisibleForTesting
@@ -238,7 +250,7 @@ public class UniversalCompaction implements CompactStrategy {
      * 基于大小比例选择压缩单元（默认从第一个文件开始）
      *
      * @param maxLevel 最大层级
-     * @param runs 当前所有文件
+     * @param runs     当前所有文件
      * @return 压缩单元或 null
      */
     @VisibleForTesting
@@ -253,8 +265,8 @@ public class UniversalCompaction implements CompactStrategy {
     /**
      * 基于大小比例选择压缩单元（指定候选文件数量）
      *
-     * @param maxLevel 最大层级
-     * @param runs 当前所有文件
+     * @param maxLevel       最大层级
+     * @param runs           当前所有文件
      * @param candidateCount 初始候选文件数量
      * @return 压缩单元或 null
      */
@@ -289,10 +301,10 @@ public class UniversalCompaction implements CompactStrategy {
      * 结果：压缩所有4个文件
      * </pre>
      *
-     * @param maxLevel 最大层级
-     * @param runs 当前所有文件
+     * @param maxLevel       最大层级
+     * @param runs           当前所有文件
      * @param candidateCount 初始候选文件数量
-     * @param forcePick 是否强制选择（即使只有1个候选文件）
+     * @param forcePick      是否强制选择（即使只有1个候选文件）
      * @return 压缩单元或 null
      */
     public CompactUnit pickForSizeRatio(
@@ -331,7 +343,7 @@ public class UniversalCompaction implements CompactStrategy {
     /**
      * 计算候选文件的总大小
      *
-     * @param runs 文件列表
+     * @param runs           文件列表
      * @param candidateCount 候选文件数量
      * @return 总大小（字节）
      */
@@ -353,7 +365,7 @@ public class UniversalCompaction implements CompactStrategy {
      *   <li>避免输出到 Level-0：如果计算结果是 Level-0，继续包含 Level-0 文件直到非 Level-0
      * </ul>
      *
-     * @param runs 文件列表
+     * @param runs     文件列表
      * @param maxLevel 最大层级
      * @param runCount 压缩的文件数量
      * @return 压缩单元

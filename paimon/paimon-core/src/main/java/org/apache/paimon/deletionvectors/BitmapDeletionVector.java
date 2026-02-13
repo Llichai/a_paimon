@@ -78,15 +78,23 @@ import java.util.zip.CRC32;
  */
 public class BitmapDeletionVector implements DeletionVector {
 
-    /** 魔数,用于标识V1格式的删除向量 */
+    /**
+     * 魔数,用于标识V1格式的删除向量
+     */
     public static final int MAGIC_NUMBER = 1581511376;
-    /** 魔数字段的字节大小 */
+    /**
+     * 魔数字段的字节大小
+     */
     public static final int MAGIC_NUMBER_SIZE_BYTES = 4;
 
-    /** 底层RoaringBitmap32实例,存储已删除行的位置 */
+    /**
+     * 底层RoaringBitmap32实例,存储已删除行的位置
+     */
     private final RoaringBitmap32 roaringBitmap;
 
-    /** 创建一个空的删除向量 */
+    /**
+     * 创建一个空的删除向量
+     */
     public BitmapDeletionVector() {
         this.roaringBitmap = new RoaringBitmap32();
     }
@@ -139,8 +147,7 @@ public class BitmapDeletionVector implements DeletionVector {
 
     @Override
     public int serializeTo(DataOutputStream out) {
-        try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                DataOutputStream dos = new DataOutputStream(bos)) {
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream(); DataOutputStream dos = new DataOutputStream(bos)) {
             dos.writeInt(MAGIC_NUMBER);
             roaringBitmap.serialize(dos);
             byte[] data = bos.toByteArray();
@@ -187,8 +194,7 @@ public class BitmapDeletionVector implements DeletionVector {
      */
     private void checkPosition(long position) {
         if (position > RoaringBitmap32.MAX_VALUE) {
-            throw new IllegalArgumentException(
-                    "The file has too many rows, RoaringBitmap32 only supports files with row count not exceeding 2147483647.");
+            throw new IllegalArgumentException("The file has too many rows, RoaringBitmap32 only supports files with row count not exceeding 2147483647.");
         }
     }
 

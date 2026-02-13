@@ -181,7 +181,8 @@ public class SnapshotReaderImpl implements SnapshotReader {
     private final FileStorePathFactory pathFactory;
     private final String tableName;
     private final IndexFileHandler indexFileHandler;
-    @Nullable private final DVMetaCache dvMetaCache;
+    @Nullable
+    private final DVMetaCache dvMetaCache;
 
     private ScanMode scanMode = ScanMode.ALL;
     private RecordComparator lazyPartitionComparator;
@@ -438,7 +439,9 @@ public class SnapshotReaderImpl implements SnapshotReader {
         return this;
     }
 
-    /** Get splits from {@link FileKind#ADD} files. */
+    /**
+     * Get splits from {@link FileKind#ADD} files.
+     */
     @Override
     public Plan read() {
         FileStoreScan.Plan plan = scan.plan();

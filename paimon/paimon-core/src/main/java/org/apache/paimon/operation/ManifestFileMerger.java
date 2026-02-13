@@ -122,13 +122,13 @@ public class ManifestFileMerger {
      *   <li>如果不满足完全压缩条件，执行次要压缩
      * </ol>
      *
-     * @param input 输入的Manifest文件列表
-     * @param manifestFile Manifest文件操作接口
-     * @param suggestedMetaSize 建议的单个Manifest文件大小
-     * @param suggestedMinMetaCount 建议的最小Manifest文件数量
+     * @param input                      输入的Manifest文件列表
+     * @param manifestFile               Manifest文件操作接口
+     * @param suggestedMetaSize          建议的单个Manifest文件大小
+     * @param suggestedMinMetaCount      建议的最小Manifest文件数量
      * @param manifestFullCompactionSize 完全压缩的触发大小
-     * @param partitionType 分区类型
-     * @param manifestReadParallelism Manifest读取并行度（可选）
+     * @param partitionType              分区类型
+     * @param manifestReadParallelism    Manifest读取并行度（可选）
      * @return 合并后的Manifest文件列表
      * @throws RuntimeException 如果合并失败，会清理临时文件并抛出异常
      */

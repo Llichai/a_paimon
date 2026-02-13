@@ -157,47 +157,82 @@ import static org.apache.paimon.utils.Preconditions.checkState;
  */
 public class FlinkSourceBuilder {
 
-    /** 默认数据源名称 */
+    /**
+     * 默认数据源名称
+     */
     private static final String SOURCE_NAME = "Source";
 
-    /** Paimon 表对象 */
+    /**
+     * Paimon 表对象
+     */
     private final Table table;
 
-    /** 表配置选项 */
+    /**
+     * 表配置选项
+     */
     private final Options conf;
 
-    /** 是否为无序数据源（BUCKET_UNAWARE 模式或 HASH_FIXED 未排序模式） */
+    /**
+     * 是否为无序数据源（BUCKET_UNAWARE 模式或 HASH_FIXED 未排序模式）
+     */
     private final boolean unordered;
 
-    /** 数据源名称，用于 Flink UI 显示 */
+    /**
+     * 数据源名称，用于 Flink UI 显示
+     */
     private String sourceName;
 
-    /** 是否为有界数据源（true=批处理，false=流处理） */
+    /**
+     * 是否为有界数据源（true=批处理，false=流处理）
+     */
     private Boolean sourceBounded;
 
-    /** Flink 流执行环境 */
+    /**
+     * Flink 流执行环境
+     */
     private StreamExecutionEnvironment env;
 
-    /** 列投影配置（支持嵌套投影） */
-    @Nullable private int[][] projectedFields;
+    /**
+     * 列投影配置（支持嵌套投影）
+     */
+    @Nullable
+    private int[][] projectedFields;
 
-    /** 行级过滤谓词 */
-    @Nullable private Predicate predicate;
+    /**
+     * 行级过滤谓词
+     */
+    @Nullable
+    private Predicate predicate;
 
-    /** 分区级过滤谓词 */
-    @Nullable private PartitionPredicate partitionPredicate;
+    /**
+     * 分区级过滤谓词
+     */
+    @Nullable
+    private PartitionPredicate partitionPredicate;
 
-    /** 并行度设置 */
-    @Nullable private Integer parallelism;
+    /**
+     * 并行度设置
+     */
+    @Nullable
+    private Integer parallelism;
 
-    /** 行数限制 */
-    @Nullable private Long limit;
+    /**
+     * 行数限制
+     */
+    @Nullable
+    private Long limit;
 
-    /** 水位线策略 */
-    @Nullable private WatermarkStrategy<RowData> watermarkStrategy;
+    /**
+     * 水位线策略
+     */
+    @Nullable
+    private WatermarkStrategy<RowData> watermarkStrategy;
 
-    /** 动态分区过滤信息 */
-    @Nullable private DynamicPartitionFilteringInfo dynamicPartitionFilteringInfo;
+    /**
+     * 动态分区过滤信息
+     */
+    @Nullable
+    private DynamicPartitionFilteringInfo dynamicPartitionFilteringInfo;
 
     /**
      * 创建 FlinkSourceBuilder 实例。
