@@ -50,56 +50,260 @@ import static org.apache.paimon.utils.SerializationUtils.newBytesType;
 import static org.apache.paimon.utils.SerializationUtils.newStringType;
 
 /**
- * 数据文件的元数据信息。
+ * 数据文件的元数据接口 - Paimon 存储引擎的核心类之一
  *
- * <p>这是 Paimon 存储引擎的核心类之一,用于描述和管理数据文件的完整元数据信息。每个数据文件都对应一个 DataFileMeta 对象,
+ * <p>这个接口用于描述和管理数据文件的完整元数据信息。每个数据文件都对应一个 DataFileMeta 对象，
  * 包含文件的物理属性、统计信息、键值范围、序列号、索引等关键信息。
  *
- * <h2>核心功能</h2>
+ * <p><b>核心功能：</b>
  * <ul>
- *   <li><b>文件标识</b>: 文件名、文件大小、存储路径等物理属性</li>
- *   <li><b>数据统计</b>: 行数、删除行数、键值统计信息(最小值/最大值/空值数)</li>
- *   <li><b>键范围</b>: 最小键和最大键,用于数据过滤和范围查询</li>
- *   <li><b>序列号</b>: 最小序列号和最大序列号,用于版本控制和增量读取</li>
- *   <li><b>层级信息</b>: LSM 树的层级,用于合并策略</li>
- *   <li><b>索引信息</b>: 嵌入式索引数据,支持快速数据定位</li>
- *   <li><b>扩展文件</b>: 额外的关联文件(如 Bloom Filter、列索引等)</li>
+ *   <li><b>文件标识</b>：文件名、文件大小、存储路径等物理属性
+ *   <li><b>数据统计</b>：行数、删除行数、键值统计信息(最小值/最大值/空值数)
+ *   <li><b>键范围</b>：最小键和最大键，用于数据过滤和范围查询
+ *   <li><b>序列号</b>：最小序列号和最大序列号，用于版本控制和增量读取
+ *   <li><b>层级信息</b>：LSM 树的层级，用于合并策略
+ *   <li><b>索引信息</b>：嵌入式索引数据，支持快速数据定位
+ *   <li><b>扩展文件</b>：额外的关联文件(如 Bloom Filter、列索引等)
  * </ul>
  *
- * <h2>版本演进</h2>
- * DataFileMeta 的结构经历了多个版本的演进:
+ * <p><b>版本演进历史：</b>
  * <ul>
- *   <li><b>v08</b>: 基础版本,包含文件名、大小、行数、键范围、统计信息、序列号、Schema ID、层级</li>
- *   <li><b>v09</b>: 增加额外文件列表、创建时间</li>
- *   <li><b>v10</b>: 增加删除行数(支持删除标记)</li>
- *   <li><b>v12</b>: 增加嵌入式索引、文件来源</li>
- *   <li><b>FirstRowId</b>: 增加首行 ID、写入列信息、值统计列信息</li>
- *   <li><b>Current</b>: 增加外部路径(支持外部表)</li>
+ *   <li><b>v08</b>：基础版本，包含：
+ *       <ul>
+ *           <li>文件名、大小、行数
+ *           <li>最小键、最大键
+ *           <li>键统计、值统计
+ *           <li>最小/最大序列号
+ *           <li>Schema ID
+ *           <li>**层级信息（level）**
+ *       </ul>
+ *   <li><b>v09</b>：增加：额外文件列表、创建时间
+ *   <li><b>v10</b>：增加：删除行数（支持删除标记）
+ *   <li><b>v12</b>：增加：嵌入式索引、文件来源
+ *   <li><b>v14（FirstRowId）</b>：增加：首行 ID、写入列信息、值统计列信息
+ *   <li><b>当前版本</b>：增加：外部路径（支持外部表）
  * </ul>
  *
- * <h2>使用场景</h2>
- * <ul>
- *   <li><b>文件写入</b>: 写入器生成文件后创建对应的元数据</li>
- *   <li><b>文件读取</b>: 读取器根据元数据选择和过滤文件</li>
- *   <li><b>合并操作</b>: 合并策略根据元数据选择合并文件</li>
- *   <li><b>快照管理</b>: 快照通过元数据追踪文件变更</li>
- *   <li><b>数据过期</b>: 根据创建时间和序列号过期旧数据</li>
+ * <p><b>重要用途：</b>
+ *
+ * <ol>
+ *   <li><b>文件写入</b>
+ *       <ul>
+ *           <li>写入器生成文件后创建对应的元数据
+ *           <li>存储文件的统计信息供后续使用
+ *       </ul>
+ *   <li><b>文件读取</b>
+ *       <ul>
+ *           <li>读取器根据元数据选择和过滤文件
+ *           <li>使用键范围（minKey/maxKey）过滤不需要的文件
+ *           <li>使用行数和删除行数估算实际数据量
+ *       </ul>
+ *   <li><b>合并操作</b>
+ *       <ul>
+ *           <li>合并策略根据元数据选择合并文件
+ *           <li>使用文件大小（fileSize）判断是否需要升级
+ *           <li>使用序列号确保正确的合并顺序
+ *       </ul>
+ *   <li><b>快照管理</b>
+ *       <ul>
+ *           <li>快照通过元数据追踪文件变更
+ *           <li>生成 Manifest 文件记录元数据
+ *       </ul>
+ *   <li><b>数据过期处理</b>
+ *       <ul>
+ *           <li>根据创建时间过期旧数据
+ *           <li>根据序列号判断数据的新旧程度
+ *       </ul>
  * </ul>
  *
- * <h2>设计模式</h2>
+ * <p><b>使用场景示例：</b>
+ * <pre>{@code
+ * // 场景 1：压缩策略
+ * if (file.fileSize() < minFileSize) {
+ *     // 小文件需要合并
+ *     candidates.add(file);
+ * }
+ *
+ * // 场景 2：读取优化
+ * if (keyComparator.compare(file.maxKey(), queryKey) < 0) {
+ *     // 文件的最大键小于查询键，跳过此文件
+ *     continue;
+ * }
+ *
+ * // 场景 3：版本控制
+ * if (file.minSequenceNumber() > currentSequenceNumber) {
+ *     // 文件中的所有数据都是更新的，优先读取
+ * }
+ *
+ * // 场景 4：数据统计
+ * long totalRows = files.stream().mapToLong(DataFileMeta::rowCount).sum();
+ * long deletedRows = files.stream().mapToLong(DataFileMeta::deleteRowCount).sum();
+ * double liveDataRatio = (totalRows - deletedRows) / (double) totalRows;
+ * }</pre>
+ *
+ * <p><b>设计模式：</b>
  * <ul>
- *   <li>使用接口定义,支持多种实现(如 PojoDataFileMeta)</li>
- *   <li>提供静态工厂方法,简化对象创建</li>
- *   <li>不可变对象设计,所有修改操作返回新实例</li>
- *   <li>支持序列化和反序列化,用于持久化存储</li>
+ *   <li>接口定义：使用接口而不是具体类，支持多种实现
+ *   <li>工厂方法：提供静态工厂方法简化对象创建
+ *   <li>不可变对象：所有修改操作返回新实例（通过序列化重新创建）
+ *   <li>序列化支持：完整的序列化和反序列化机制用于持久化
+ * </ul>
+ *
+ * <p><b>关键字段（SCHEMA）：</b>
+ * <ul>
+ *   <li>_FILE_NAME（String）：文件的唯一标识
+ *   <li>_FILE_SIZE（Long）：文件大小（字节）
+ *   <li>_ROW_COUNT（Long）：文件中的行数
+ *   <li>_MIN_KEY / _MAX_KEY（BinaryRow）：键范围，用于范围查询优化
+ *   <li>_KEY_STATS / _VALUE_STATS（SimpleStats）：键值统计信息
+ *   <li>_MIN_SEQUENCE_NUMBER / _MAX_SEQUENCE_NUMBER（Long）：版本号范围
+ *   <li>_SCHEMA_ID（Long）：表的 Schema 版本
+ *   <li><b>_LEVEL（Int）：LSM Tree 的层级号，核心字段</b>
+ *   <li>_EXTRA_FILES（String[]）：关联的额外文件（如索引、统计）
+ *   <li>_CREATION_TIME（Timestamp）：文件创建时间
+ *   <li>_DELETE_ROW_COUNT（Long）：删除行数（可选）
+ *   <li>其他：嵌入式索引、文件来源等
  * </ul>
  *
  * @since 0.9.0
+ * @see Levels LSM Tree 层级管理器，使用 DataFileMeta 管理文件
+ * @see CompactStrategy 压缩策略，根据 DataFileMeta 进行决策
+ * @see DataFileMeta08Serializer 数据文件元数据的序列化器
  */
 @Public
 public interface DataFileMeta {
 
-    /** 数据文件元数据的行类型 Schema,定义了所有字段的类型和结构。用于序列化和反序列化。 */
+    /**
+     * 数据文件元数据的行类型 Schema
+     *
+     * <p>定义了所有字段的类型和结构，用于序列化和反序列化。
+     *
+     * <p><b>字段详解（按序列）：</b>
+     * <ol>
+     *   <li><b>_FILE_NAME (String)</b> - 文件名，索引 0
+     *       <ul>
+     *           <li>唯一标识文件在存储系统中的位置
+     *           <li>通常是相对路径或完整路径
+     *           <li>示例：2024-02-13/part-0/file-123.parquet
+     *       </ul>
+     *   <li><b>_FILE_SIZE (BigInt)</b> - 文件大小，索引 1
+     *       <ul>
+     *           <li>以字节为单位，不包含索引等辅助数据
+     *           <li>用于压缩策略决策（大文件直接升级，小文件需要合并）
+     *           <li>影响计算：空间放大、写放大估算
+     *       </ul>
+     *   <li><b>_ROW_COUNT (BigInt)</b> - 行数，索引 2
+     *       <ul>
+     *           <li>文件中的逻辑行数（删除记录也计入）
+     *           <li>用于数据量估算、查询规划
+     *           <li>与 _DELETE_ROW_COUNT 配合计算实际行数
+     *       </ul>
+     *   <li><b>_MIN_KEY (Bytes)</b> - 最小键，索引 3
+     *       <ul>
+     *           <li>文件中最小的键（按键比较器）
+     *           <li>用于范围查询的快速过滤：if (queryKey < minKey) skip
+     *           <li>用于区间分区（IntervalPartition）判断文件是否有重叠
+     *       </ul>
+     *   <li><b>_MAX_KEY (Bytes)</b> - 最大键，索引 4
+     *       <ul>
+     *           <li>文件中最大的键（按键比较器）
+     *           <li>用于范围查询的快速过滤：if (queryKey > maxKey) skip
+     *           <li>用于 Level-1~N 的有序性验证
+     *       </ul>
+     *   <li><b>_KEY_STATS (SimpleStats)</b> - 键统计信息，索引 5
+     *       <ul>
+     *           <li>包含键列的统计：最小值、最大值、空值数
+     *           <li>用于谓词下推优化
+     *       </ul>
+     *   <li><b>_VALUE_STATS (SimpleStats)</b> - 值统计信息，索引 6
+     *       <ul>
+     *           <li>包含值列的统计信息
+     *           <li>用于查询优化和数据分析
+     *       </ul>
+     *   <li><b>_MIN_SEQUENCE_NUMBER (BigInt)</b> - 最小序列号，索引 7
+     *       <ul>
+     *           <li>文件中最小的序列号
+     *           <li>用于版本控制：判断文件中的数据新旧程度
+     *           <li>用于增量读取：确定起始序列号
+     *       </ul>
+     *   <li><b>_MAX_SEQUENCE_NUMBER (BigInt)</b> - 最大序列号，索引 8
+     *       <ul>
+     *           <li>文件中最大的序列号
+     *           <li>Level-0 文件按此字段降序排列（最新数据优先）
+     *           <li>用于判断是否应该优先读取此文件
+     *       </ul>
+     *   <li><b>_SCHEMA_ID (BigInt)</b> - Schema ID，索引 9
+     *       <ul>
+     *           <li>表的 Schema 版本号
+     *           <li>表结构演变时增加
+     *           <li>读取文件时需要与当前 Schema 匹配
+     *       </ul>
+     *   <li><b>_LEVEL (Int)</b> - LSM 层级，索引 10 【核心字段】
+     *       <ul>
+     *           <li>文件在 LSM Tree 中的层级
+     *           <li>0 = Level-0（最新，键可能重叠）
+     *           <li>1+ = Level-1~N（较旧，键不重叠）
+     *           <li>用于压缩策略判断
+     *           <li>用于读取时确定查询顺序
+     *       </ul>
+     *   <li><b>_EXTRA_FILES (Array&lt;String&gt;)</b> - 额外文件列表，索引 11
+     *       <ul>
+     *           <li>关联的额外文件，如索引、统计等
+     *           <li>示例：[bloom-filter-123, col-stats-456]
+     *       </ul>
+     *   <li><b>_CREATION_TIME (Timestamp)</b> - 创建时间，索引 12
+     *       <ul>
+     *           <li>文件创建时的时间戳
+     *           <li>用于数据过期策略（TTL）
+     *           <li>用于 Level-0 文件的排序（当序列号相同时）
+     *       </ul>
+     *   <li><b>_DELETE_ROW_COUNT (BigInt)</b> - 删除行数，索引 13【可选】
+     *       <ul>
+     *           <li>文件中标记为删除的行数
+     *           <li>实际行数 = _ROW_COUNT - _DELETE_ROW_COUNT
+     *           <li>值为 null 表示此文件没有删除记录
+     *           <li>用于评估数据质量和是否需要重写
+     *       </ul>
+     *   <li><b>_EMBEDDED_FILE_INDEX (Bytes)</b> - 嵌入式索引，索引 14【可选】
+     *       <ul>
+     *           <li>文件内部的索引数据（如行组索引）
+     *           <li>用于快速定位数据块
+     *       </ul>
+     *   <li><b>_FILE_SOURCE (TinyInt)</b> - 文件来源，索引 15【可选】
+     *       <ul>
+     *           <li>标识文件的来源：写入、压缩等
+     *           <li>类型：FileSource enum
+     *       </ul>
+     *   <li><b>_VALUE_STATS_COLS (Array&lt;String&gt;)</b> - 值统计列，索引 16【可选】
+     *       <ul>
+     *           <li>记录了哪些列被统计
+     *           <li>用于验证统计信息的有效性
+     *       </ul>
+     *   <li><b>_EXTERNAL_PATH (String)</b> - 外部路径，索引 17【可选】
+     *       <ul>
+     *           <li>支持外部表场景（数据存储在 Paimon 外部）
+     *           <li>示例：s3://bucket/external-data
+     *       </ul>
+     *   <li><b>_FIRST_ROW_ID (BigInt)</b> - 首行 ID，索引 18【可选】
+     *       <ul>
+     *           <li>文件中第一行的 ID（用于变更追踪）
+     *           <li>支持 CDC (Change Data Capture) 场景
+     *       </ul>
+     *   <li><b>_WRITE_COLS (Array&lt;String&gt;)</b> - 写入列，索引 19【可选】
+     *       <ul>
+     *           <li>记录文件中实际写入的列
+     *           <li>支持部分列写入和列演变
+     *       </ul>
+     * </ol>
+     *
+     * <p><b>设计说明：</b>
+     * <ul>
+     *   <li>字段顺序很重要，反序列化时严格按照索引匹配
+     *   <li>可选字段（marked as nullable）可以为 null，反序列化时需要处理
+     *   <li>字段增加时应该添加到末尾，保持向后兼容性
+     *   <li>更新 Schema 时需要对应增加版本号 (v08, v09, ...)
+     * </ul>
+     */
     RowType SCHEMA =
             new RowType(
                     false,
@@ -114,7 +318,7 @@ public interface DataFileMeta {
                             new DataField(7, "_MIN_SEQUENCE_NUMBER", new BigIntType(false)), // 最小序列号
                             new DataField(8, "_MAX_SEQUENCE_NUMBER", new BigIntType(false)), // 最大序列号
                             new DataField(9, "_SCHEMA_ID", new BigIntType(false)), // Schema ID
-                            new DataField(10, "_LEVEL", new IntType(false)), // LSM 层级
+                            new DataField(10, "_LEVEL", new IntType(false)), // LSM 层级【核心字段】
                             new DataField(
                                     11, "_EXTRA_FILES", new ArrayType(false, newStringType(false))), // 额外文件列表
                             new DataField(12, "_CREATION_TIME", DataTypes.TIMESTAMP_MILLIS()), // 创建时间

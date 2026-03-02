@@ -55,89 +55,269 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * MergeTree 写入器，负责写入记录并生成 CompactIncrement
+ * MergeTree 写入器 - LSM Tree 写入操作的核心实现
  *
- * <p>该类是 Paimon LSM Tree 写入的核心实现，主要职责包括：
+ * <p>这个类负责管理 MergeTree 的写入流程，是 Paimon 数据写入的关键组件。
+ * 主要职责是管理写缓冲区、协调压缩、生成 Level-0 文件以及追踪文件生命周期。
+ *
+ * <p><b>核心职责：</b>
  * <ul>
- *   <li>管理写缓冲区（WriteBuffer），将记录写入内存
- *   <li>当缓冲区满时刷新到磁盘，生成 Level-0 文件
- *   <li>管理压缩过程，协调 CompactManager
- *   <li>根据 ChangelogProducer 配置生成 changelog 文件（INPUT 模式）
- *   <li>跟踪新文件、删除文件、changelog 文件等元数据
+ *   <li><b>缓冲区管理</b>：维护 WriteBuffer，缓存待写入的数据
+ *   <li><b>刷新到磁盘</b>：当缓冲区满时刷新到磁盘，生成 Level-0 文件
+ *   <li><b>压缩协调</b>：协调 CompactManager，触发压缩流程
+ *   <li><b>Changelog 生成</b>：根据配置生成 changelog 文件
+ *   <li><b>元数据跟踪</b>：跟踪新文件、删除文件、changelog 文件等
  * </ul>
  *
- * <p>Changelog 生成模式：
+ * <p><b>Changelog 生成模式：</b>
  * <ul>
- *   <li>INPUT：在 {@link #flushWriteBuffer} 时双写 changelog 文件
- *   <li>FULL_COMPACTION/LOOKUP：在压缩时由 CompactRewriter 生成 changelog
+ *   <li><b>INPUT</b>：在 {@link #flushWriteBuffer} 时双写 changelog 文件
+ *       <ul>
+ *           <li>优点：changelog 实时准确，延迟低
+ *           <li>缺点：增加写入负担，需要额外磁盘 I/O
+ *       </ul>
+ *   <li><b>FULL_COMPACTION</b>：在全量压缩时由 CompactRewriter 生成 changelog
+ *       <ul>
+ *           <li>优点：写入性能好，减少 I/O
+ *           <li>缺点：changelog 生成延迟高
+ *       </ul>
+ *   <li><b>LOOKUP</b>：在 Lookup 压缩时生成 changelog
+ *   <li><b>NONE</b>：不生成 changelog
  * </ul>
  *
- * <p>文件跟踪机制：
+ * <p><b>文件跟踪机制：</b>
+ * <pre>{@code
+ * 写入流程：
+ *   1. 数据进入 WriteBuffer（内存缓冲）
+ *   2. WriteBuffer 满或手动 flush 时刷新到磁盘
+ *   3. 生成 Level-0 文件（dataFile, 可能还有 changelogFile）
+ *   4. 添加到 newFiles 和 newFilesChangelog 集合跟踪
+ *
+ * 压缩流程：
+ *   1. CompactManager 检测压缩条件
+ *   2. 选择文件进行压缩（before 文件）
+ *   3. MergeTreeCompactTask 执行压缩
+ *   4. 生成新文件（after 文件）
+ *   5. 更新 compactBefore 和 compactAfter 集合
+ *
+ * 提交流程（以上都是临时跟踪）：
+ *   1. 所有更改积累到 newFiles, deletedFiles, compactBefore, compactAfter
+ *   2. 调用 getCompactIncrement() 生成最终的提交增量
+ *   3. 将增量写入 Manifest
+ *   4. 清空所有跟踪集合，准备下一轮
+ * }</pre>
+ *
+ * <p><b>核心字段说明：</b>
  * <ul>
- *   <li>newFiles：新生成的数据文件（Level-0）
- *   <li>newFilesChangelog：新生成的 changelog 文件（INPUT 模式）
- *   <li>compactBefore/compactAfter：压缩前后的文件
- *   <li>compactChangelog：压缩生成的 changelog 文件（FULL_COMPACTION/LOOKUP 模式）
+ *   <li><b>newFiles</b>：新生成的数据文件（从 WriteBuffer 刷新产生）
+ *       <ul>
+ *           <li>这些文件都是 Level-0 文件
+ *           <li>通常在刷新时增加
+ *           <li>在压缩时可能被删除（如果被压缩）
+ *       </ul>
+ *   <li><b>deletedFiles</b>：被删除的文件
+ *       <ul>
+ *           <li>包括压缩前被删除的文件
+ *           <li>注意：newFiles 中如果被压缩了，不在此集合，而是在 compactBefore
+ *       </ul>
+ *   <li><b>newFilesChangelog</b>：从 WriteBuffer 刷新产生的 changelog 文件
+ *       <ul>
+ *           <li>只在 INPUT 模式下生成
+ *           <li>与 newFiles 配对存在
+ *       </ul>
+ *   <li><b>compactBefore</b>：压缩前的文件（使用 LinkedHashMap 去重）
+ *       <ul>
+ *           <li>key：文件名（用于去重，相同文件多次压缩时只记录一次）
+ *           <li>value：DataFileMeta
+ *       </ul>
+ *   <li><b>compactAfter</b>：压缩后新生成的文件
+ *       <ul>
+ *           <li>这些文件可能是高层级的
+ *       </ul>
+ *   <li><b>compactChangelog</b>：压缩生成的 changelog 文件
+ *       <ul>
+ *           <li>在 FULL_COMPACTION/LOOKUP 模式下生成
+ *       </ul>
  * </ul>
  *
- * @see RecordWriter
- * @see MemoryOwner
+ * <p><b>使用示例：</b>
+ * <pre>{@code
+ * // 创建 MergeTreeWriter
+ * MergeTreeWriter writer = new MergeTreeWriter(
+ *     keyComparator,
+ *     mergeFunction,
+ *     compactManager,
+ *     ...其他参数...
+ * );
+ *
+ * // 写入数据
+ * for (KeyValue kv : dataStream) {
+ *     writer.write(kv);  // 写入到 WriteBuffer
+ * }
+ *
+ * // 手动刷新（触发 Level-0 文件生成）
+ * writer.flush();  // 生成 Level-0 文件，添加到 newFiles
+ *
+ * // 压缩（由 CompactManager 触发）
+ * // ... CompactManager 检测并执行压缩，更新 compactBefore/compactAfter
+ *
+ * // 获取所有修改
+ * CompactIncrement increment = writer.getCompactIncrement();
+ * // increment 包含所有新增、删除、压缩的文件
+ *
+ * // 提交（原子操作）
+ * fileStoreCommit.commit(increment);  // 一起提交到 Manifest
+ *
+ * // 清空状态，准备下一轮
+ * writer.reset();
+ * }</pre>
+ *
+ * @see RecordWriter 写入器接口
+ * @see MemoryOwner 内存管理接口
+ * @see WriteBuffer 写缓冲区
+ * @see CompactManager 压缩管理器
  */
 public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
 
     // ========== 写缓冲区配置 ==========
-    /** 写缓冲区是否可溢出到磁盘 */
+    /**
+     * 写缓冲区是否可溢出到磁盘
+     *
+     * <p>当缓冲区大小超过内存限制时，是否允许溢出到磁盘临时文件。
+     * <ul>
+     *   <li>true：支持溢出，可以处理超大批量写入（内存足够时速度快）
+     *   <li>false：不支持溢出，内存不足时写入失败
+     * </ul>
+     */
     private final boolean writeBufferSpillable;
-    /** 磁盘溢出的最大大小 */
+
+    /**
+     * 磁盘溢出的最大大小
+     *
+     * <p>当启用缓冲区溢出时，临时文件的最大大小限制。
+     * 超过此大小时，会触发刷新操作。
+     */
     private final MemorySize maxDiskSize;
-    /** 排序的最大扇出（merge sort 的 fan-in） */
+
+    /**
+     * 排序的最大扇出（merge sort 的 fan-in）
+     *
+     * <p>在多路归并时，同时处理的输入流数量上限。
+     * 影响排序性能和内存使用。
+     */
     private final int sortMaxFan;
-    /** 排序时的压缩选项 */
+
+    /**
+     * 排序时的压缩选项
+     *
+     * <p>写缓冲区刷新时，对临时文件的压缩算法设置。
+     */
     private final CompressOptions sortCompression;
-    /** IO 管理器，用于临时文件管理 */
+
+    /**
+     * IO 管理器，用于临时文件管理
+     *
+     * <p>处理写缓冲区溢出到磁盘的临时文件。
+     */
     private final IOManager ioManager;
 
     // ========== 数据类型和比较器 ==========
-    /** 键类型 */
+    /** 键类型 - 用于比较和排序 */
     private final RowType keyType;
-    /** 值类型 */
+
+    /** 值类型 - 记录的非键部分 */
     private final RowType valueType;
-    /** 压缩管理器，负责触发和执行压缩 */
+
+    /**
+     * 压缩管理器，负责触发和执行压缩
+     *
+     * <p>与 MergeTreeWriter 配合，协调压缩流程。
+     */
     private final CompactManager compactManager;
-    /** 键比较器 */
+
+    /** 键比较器 - 用于排序和比较操作 */
     private final Comparator<InternalRow> keyComparator;
-    /** 合并函数，定义如何合并相同 key 的记录 */
+
+    /**
+     * 合并函数，定义如何合并相同 key 的记录
+     *
+     * <p>例如：
+     * <ul>
+     *   <li>DEDUPLICATE：取最新值
+     *   <li>PARTIAL_UPDATE：列级别更新
+     *   <li>AGGREGATING：聚合多个值
+     * </ul>
+     */
     private final MergeFunction<KeyValue> mergeFunction;
-    /** 文件写入器工厂 */
+
+    /** 文件写入器工厂 - 生成文件写入器 */
     private final KeyValueFileWriterFactory writerFactory;
+
     /** 提交时是否强制压缩 */
     private final boolean commitForceCompact;
-    /** Changelog 生成策略（INPUT/FULL_COMPACTION/LOOKUP/NONE） */
+
+    /**
+     * Changelog 生成策略
+     *
+     * <p>决定何时生成 changelog 文件（INPUT/FULL_COMPACTION/LOOKUP/NONE）
+     */
     private final ChangelogProducer changelogProducer;
+
     /** 用户自定义序列号比较器 */
     @Nullable private final FieldsComparator userDefinedSeqComparator;
 
     // ========== 文件跟踪集合 ==========
-    /** 新生成的数据文件（刷新 WriteBuffer 产生的 Level-0 文件） */
+    /**
+     * 新生成的数据文件（刷新 WriteBuffer 产生的 Level-0 文件）
+     *
+     * <p>使用 LinkedHashSet 保持插入顺序，避免重复。
+     * 在提交时会清空，准备下一轮。
+     */
     private final LinkedHashSet<DataFileMeta> newFiles;
-    /** 被删除的文件 */
+
+    /** 被删除的文件（不来自压缩） */
     private final LinkedHashSet<DataFileMeta> deletedFiles;
-    /** 新生成的 changelog 文件（INPUT 模式下刷新时产生） */
+
+    /**
+     * 新生成的 changelog 文件（INPUT 模式下刷新时产生）
+     *
+     * <p>与 newFiles 一一对应。
+     */
     private final LinkedHashSet<DataFileMeta> newFilesChangelog;
-    /** 压缩前的文件（key 是文件名，用于去重） */
+
+    /**
+     * 压缩前的文件（key 是文件名，用于去重）
+     *
+     * <p>使用 LinkedHashMap 是因为：
+     * <ul>
+     *   <li>需要按照压缩顺序追踪（LinkedHashMap 保持插入顺序）
+     *   <li>相同文件多次压缩时只需要记录一次（Map 用 fileName 去重）
+     * </ul>
+     */
     private final LinkedHashMap<String, DataFileMeta> compactBefore;
-    /** 压缩后的文件 */
+
+    /** 压缩后的文件 - 新生成的高层级文件 */
     private final LinkedHashSet<DataFileMeta> compactAfter;
-    /** 压缩生成的 changelog 文件（FULL_COMPACTION/LOOKUP 模式） */
+
+    /**
+     * 压缩生成的 changelog 文件（FULL_COMPACTION/LOOKUP 模式）
+     *
+     * <p>这些文件是在压缩时生成的，不同于 newFilesChangelog。
+     */
     private final LinkedHashSet<DataFileMeta> compactChangelog;
 
     /** 压缩删除文件记录 */
     @Nullable private CompactDeletionFile compactDeletionFile;
 
     // ========== 运行时状态 ==========
-    /** 下一个序列号 */
+    /** 下一个序列号 - 用于标识写入的顺序 */
     private long newSequenceNumber;
-    /** 写缓冲区，存储待刷新的记录 */
+
+    /**
+     * 写缓冲区，存储待刷新的记录
+     *
+     * <p>数据写入时先进入此缓冲，满足条件时刷新到磁盘。
+     */
     private WriteBuffer writeBuffer;
 
     /**

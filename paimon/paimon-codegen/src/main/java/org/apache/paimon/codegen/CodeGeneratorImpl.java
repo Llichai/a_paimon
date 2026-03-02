@@ -24,9 +24,30 @@ import org.apache.paimon.utils.TypeUtils;
 
 import java.util.List;
 
-/** Default implementation of {@link CodeGenerator}. */
+/**
+ * {@link CodeGenerator} 的默认实现。
+ *
+ * <p>这是代码生成器的核心实现类，负责生成各种代码片段，包括投影、排序比较器和相等性检查器。
+ *
+ * <p>主要功能：
+ * <ul>
+ *     <li><b>投影生成</b>：通过 {@link ProjectionCodeGenerator} 生成列投影代码
+ *     <li><b>规范化键计算</b>：通过 {@link SortCodeGenerator} 生成排序键计算器
+ *     <li><b>记录比较</b>：通过 {@link ComparatorCodeGenerator} 生成记录比较器
+ *     <li><b>记录相等性检查</b>：通过 {@link EqualiserCodeGenerator} 生成相等性检查器
+ * </ul>
+ */
 public class CodeGeneratorImpl implements CodeGenerator {
 
+    /**
+     * 生成投影代码。
+     *
+     * <p>根据输入行类型和输入映射，生成投影逻辑代码。投影用于从输入行中选择特定的列。
+     *
+     * @param inputType 输入行类型，包含所有输入列的信息
+     * @param inputMapping 输入列映射数组，指定要选择的列索引
+     * @return 生成的投影类，包含编译后的代码
+     */
     @Override
     public GeneratedClass<Projection> generateProjection(RowType inputType, int[] inputMapping) {
         RowType outputType = TypeUtils.project(inputType, inputMapping);
@@ -34,6 +55,15 @@ public class CodeGeneratorImpl implements CodeGenerator {
                 new CodeGeneratorContext(), "Projection", inputType, outputType, inputMapping);
     }
 
+    /**
+     * 生成规范化键计算器。
+     *
+     * <p>规范化键用于快速排序比较。此方法生成计算规范化键的代码，用于排序操作的优化。
+     *
+     * @param inputTypes 输入列的数据类型列表
+     * @param sortFields 排序字段的索引数组
+     * @return 生成的规范化键计算器类
+     */
     @Override
     public GeneratedClass<NormalizedKeyComputer> generateNormalizedKeyComputer(
             List<DataType> inputTypes, int[] sortFields) {
@@ -43,6 +73,16 @@ public class CodeGeneratorImpl implements CodeGenerator {
                 .generateNormalizedKeyComputer("NormalizedKeyComputer");
     }
 
+    /**
+     * 生成记录比较器。
+     *
+     * <p>生成用于比较两条记录的代码。支持多字段排序，并可指定每个字段的排序方向。
+     *
+     * @param inputTypes 输入列的数据类型列表
+     * @param sortFields 排序字段的索引数组
+     * @param isAscendingOrder 是否按升序排列
+     * @return 生成的记录比较器类
+     */
     @Override
     public GeneratedClass<RecordComparator> generateRecordComparator(
             List<DataType> inputTypes, int[] sortFields, boolean isAscendingOrder) {
@@ -52,6 +92,15 @@ public class CodeGeneratorImpl implements CodeGenerator {
                 getAscendingSortSpec(sortFields, isAscendingOrder));
     }
 
+    /**
+     * 生成记录相等性检查器。
+     *
+     * <p>生成用于检查两条记录是否相等的代码。通常用于去重和分组操作。
+     *
+     * @param fieldTypes 字段的数据类型数组
+     * @param fields 要检查相等性的字段索引数组
+     * @return 生成的相等性检查器类
+     */
     @Override
     public GeneratedClass<RecordEqualiser> generateRecordEqualiser(
             List<DataType> fieldTypes, int[] fields) {
@@ -59,6 +108,15 @@ public class CodeGeneratorImpl implements CodeGenerator {
                 .generateRecordEqualiser("RecordEqualiser");
     }
 
+    /**
+     * 构建排序规范。
+     *
+     * <p>根据排序字段和排序方向构建排序规范对象。此方法内部使用，用于统一处理排序配置。
+     *
+     * @param sortFields 排序字段的索引数组
+     * @param isAscendingOrder 是否按升序排列
+     * @return 排序规范对象
+     */
     private SortSpec getAscendingSortSpec(int[] sortFields, boolean isAscendingOrder) {
         SortSpec.SortSpecBuilder builder = SortSpec.builder();
         for (int sortField : sortFields) {

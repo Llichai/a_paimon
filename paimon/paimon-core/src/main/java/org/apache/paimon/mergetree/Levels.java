@@ -35,44 +35,129 @@ import static java.util.Collections.emptyList;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
- * Levels（层级管理器）
+ * Levels（层级管理器）- LSM Tree 的核心层级组织管理类
  *
- * <p>存储 LSM Tree 所有层级的文件。
+ * <p>这是 Paimon LSM Tree 实现中最重要的类之一，负责管理所有数据文件在不同层级的组织和分布。
  *
- * <p>层级结构：
+ * <p><b>层级结构：</b>
  * <ul>
- *   <li>Level-0：特殊层级，文件按序列号降序排列（最新的在前），键可能重叠
- *   <li>Level-1~N：每层是一个 {@link SortedRun}，文件按键排序且键区间不重叠
+ *   <li><b>Level-0</b>：特殊层级，使用 TreeSet 存储，文件按序列号降序排列（最新的在前）
+ *       <ul>
+ *           <li>键可能重叠（允许新写入的数据与已有数据有重叠）
+ *           <li>一个文件对应一个 SortedRun
+ *           <li>写入性能最高，读取需要查询所有 Level-0 文件
+ *       </ul>
+ *   <li><b>Level-1~N</b>：常规层级，每层是一个 SortedRun，文件按键排序且键区间不重叠
+ *       <ul>
+ *           <li>数据相对稳定，压缩频率较低
+ *           <li>读取性能好，键范围明确
+ *           <li>空间放大最低
+ *       </ul>
  * </ul>
  *
- * <p>Level-0 的排序规则（优先级从高到低）：
+ * <p><b>Level-0 的排序规则（优先级从高到低）：</b>
  * <ol>
- *   <li>maxSequenceNumber：序列号越大越靠前（最新数据）
- *   <li>minSequenceNumber：最小序列号升序
- *   <li>creationTime：创建时间升序
- *   <li>fileName：文件名升序（保证唯一性）
+ *   <li><b>maxSequenceNumber</b>：序列号越大越靠前（最新数据优先）
+ *       <ul>
+ *           <li>确保读取时首先查询最新的数据
+ *           <li>相同主键时，较新的记录会被优先读取
+ *       </ul>
+ *   <li><b>minSequenceNumber</b>：最小序列号升序
+ *       <ul>
+ *           <li>当 maxSequenceNumber 相同时比较
+ *           <li>多个并发写入可能生成相同 maxSequenceNumber 的文件
+ *       </ul>
+ *   <li><b>creationTime</b>：创建时间升序
+ *       <ul>
+ *           <li>进一步区分文件的先后顺序
+ *           <li>时间戳精确到毫秒级
+ *       </ul>
+ *   <li><b>fileName</b>：文件名升序（保证 TreeSet 的唯一性）
+ *       <ul>
+ *           <li>最后的比较器，确保 TreeSet 不会认为两个不同的文件重复
+ *           <li>虽然前面的字段已经可以区分，但 TreeSet 要求 compareTo() 返回 0 仅当两个对象相同
+ *       </ul>
  * </ol>
  *
- * <p>核心操作：
+ * <p><b>核心操作：</b>
  * <ul>
- *   <li>addLevel0File：添加新文件到 Level-0
- *   <li>update：更新层级（删除旧文件，添加新文件）
- *   <li>levelSortedRuns：获取所有层级的 Sorted Run
- *   <li>nonEmptyHighestLevel：获取最高非空层级
+ *   <li>{@link #addLevel0File(DataFileMeta)}：添加新文件到 Level-0（写入时使用）
+ *   <li>{@link #update(List, List)}：更新层级（压缩完成后更新）
+ *   <li>{@link #levelSortedRuns()}：获取所有层级的 Sorted Run（用于读取和压缩决策）
+ *   <li>{@link #nonEmptyHighestLevel()}：获取最高非空层级（压缩策略决策）
+ *   <li>{@link #numberOfSortedRuns()}：获取总的 SortedRun 数量（用于触发压缩）
  * </ul>
+ *
+ * <p><b>使用场景：</b>
+ * <ul>
+ *   <li>写入阶段：MergeTreeWriter 刷新新文件时调用 addLevel0File()
+ *   <li>读取阶段：MergeTreeReaders 根据 levelSortedRuns() 确定要读取的文件
+ *   <li>压缩阶段：CompactStrategy 根据层级结构做出压缩决策，压缩完成后调用 update()
+ *   <li>状态管理：跟踪每层的文件分布，计算统计指标
+ * </ul>
+ *
+ * @see LevelSortedRun
+ * @see SortedRun
+ * @see DataFileMeta
  */
 public class Levels {
 
-    /** 键比较器 */
+    /**
+     * 键比较器 - 用于比较键值大小
+     * 在压缩和读取时用于确定文件的键顺序，确保数据有序性
+     */
     private final Comparator<InternalRow> keyComparator;
 
-    /** Level-0 文件集合（按序列号降序排列） */
+    /**
+     * Level-0 文件集合（按序列号降序排列，使用 TreeSet 自动排序）
+     *
+     * <p><b>存储策略：</b>
+     * <ul>
+     *   <li>TreeSet 自动维护排序顺序，新文件添加时自动插入正确位置
+     *   <li>按 maxSequenceNumber 降序：最新的数据文件在集合前面
+     *   <li>元素总数通常较少（通常 10-100 个文件），TreeSet 的 log(n) 性能可接受
+     * </ul>
+     *
+     * <p><b>生命周期：</b>
+     * <ul>
+     *   <li>MergeTreeWriter.flushWriteBuffer()：生成新的 Level-0 文件，添加到此集合
+     *   <li>UniversalCompaction.pick()：选择 Level-0 文件进行压缩
+     *   <li>MergeTreeCompactTask.doCompact()：压缩 Level-0 文件到更高层级
+     *   <li>update()：压缩完成后删除旧文件
+     * </ul>
+     */
     private final TreeSet<DataFileMeta> level0;
 
-    /** Level-1 到 Level-N 的 SortedRun 列表 */
+    /**
+     * Level-1 到 Level-N 的 SortedRun 列表（ArrayList，索引 i 对应 Level i+1）
+     *
+     * <p><b>数据组织：</b>
+     * <ul>
+     *   <li>levels.get(0) = Level-1 的 SortedRun
+     *   <li>levels.get(1) = Level-2 的 SortedRun
+     *   <li>levels.get(i) = Level-(i+1) 的 SortedRun
+     *   <li>每层最多一个 SortedRun（文件按键排序，键不重叠）
+     * </ul>
+     *
+     * <p><b>特点：</b>
+     * <ul>
+     *   <li>键区间不重叠：同一层的所有文件的键范围是分离的
+     *   <li>相对稳定：只在压缩时更新，写入性能稳定
+     *   <li>读取高效：可以通过二分查找快速定位要读取的文件
+     * </ul>
+     */
     private final List<SortedRun> levels;
 
-    /** 文件删除回调列表 */
+    /**
+     * 文件删除回调列表 - 当文件从 LSM Tree 中删除时回调
+     *
+     * <p><b>用途：</b>
+     * <ul>
+     *   <li>通知外部组件（如 Lookup 缓存）文件已被删除
+     *   <li>清理相关的索引或其他辅助数据结构
+     *   <li>用于 Bloom Filter 缓存的失效处理
+     * </ul>
+     */
     private final List<DropFileCallback> dropFileCallbacks = new ArrayList<>();
 
     /**
@@ -283,20 +368,51 @@ public class Levels {
     /**
      * 更新层级（删除旧文件，添加新文件）
      *
-     * <p>压缩后的核心操作：
+     * <p><b>这是压缩流程中的关键步骤</b>
+     *
+     * <p><b>工作流程：</b>
+     * <ol>
+     *   <li>将输入的文件按层级分组（before 和 after）
+     *   <li>对每个层级执行 updateLevel() 操作
+     *   <li>通知文件删除回调，告知外部组件文件已删除
+     * </ol>
+     *
+     * <p><b>压缩的示例流程：</b>
+     * <pre>{@code
+     * // 压缩前：Level-0 中有 4 个文件，Level-1 中有 1 个文件
+     * before = [file1(L0), file2(L0), file3(L0), file4(L0), file5(L1)]
+     *
+     * // 压缩选择了 L0 的 4 个文件和 L1 的 1 个文件，合并到 L2
+     * after = [file6(L2), file7(L2)]  // 新生成的文件
+     *
+     * // 调用 update(before, after)
+     * update(before, after)
+     *
+     * // 结果：
+     * // - Level-0：4 个文件删除
+     * // - Level-1：1 个文件删除
+     * // - Level-2：添加 2 个新文件
+     * }</pre>
+     *
+     * <p><b>注意事项：</b>
      * <ul>
-     *   <li>before：压缩前的文件（需要删除）
-     *   <li>after：压缩后的文件（需要添加）
+     *   <li>相同文件名的文件在 after 中表示升级（只改层级，不删除），不会触发删除回调
+     *   <li>调用此方法前，压缩任务应已完成，确保新文件已持久化
+     *   <li>此方法是原子操作，不支持分步执行
      * </ul>
      *
-     * @param before 需要删除的文件
-     * @param after 需要添加的文件
+     * @param before 需要删除的文件列表（来自压缩前的文件）
+     * @param after 需要添加的文件列表（来自压缩后的文件，可能在不同的层级）
+     *
+     * @see MergeTreeCompactTask#doCompact() 压缩执行
+     * @see CompactManager#commit(CompactResult) 压缩结果提交
      */
     public void update(List<DataFileMeta> before, List<DataFileMeta> after) {
-        // 按层级分组
+        // 步骤1：按层级分组，便于逐层更新
         Map<Integer, List<DataFileMeta>> groupedBefore = groupByLevel(before);
         Map<Integer, List<DataFileMeta>> groupedAfter = groupByLevel(after);
-        // 更新每个层级
+
+        // 步骤2：遍历所有层级，执行层级更新
         for (int i = 0; i < numberOfLevels(); i++) {
             updateLevel(
                     i,
@@ -304,13 +420,17 @@ public class Levels {
                     groupedAfter.getOrDefault(i, emptyList()));
         }
 
-        // 通知文件删除回调
+        // 步骤3：通知文件删除回调（外部组件可以收到删除通知）
         if (dropFileCallbacks.size() > 0) {
+            // 收集所有被删除的文件名
             Set<String> droppedFiles =
                     before.stream().map(DataFileMeta::fileName).collect(Collectors.toSet());
-            // exclude upgrade files
-            // 排除升级文件（只改层级，不删除）
+
+            // 排除升级文件（升级是指文件层级改变但文件本身未被删除，只是改变了级别）
+            // 例如：file1 从 Level-0 升级到 Level-1，此时 file1 既在 before 也在 after
             after.stream().map(DataFileMeta::fileName).forEach(droppedFiles::remove);
+
+            // 通知所有回调
             for (DropFileCallback callback : dropFileCallbacks) {
                 droppedFiles.forEach(callback::notifyDropFile);
             }
